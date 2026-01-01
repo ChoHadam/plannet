@@ -64,8 +64,7 @@ textarea {
   resize: none;
 }
 
-/* Focus visible for accessibility */
+/* Focus visible - removed blue outline */
 *:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
+  outline: none;
 }

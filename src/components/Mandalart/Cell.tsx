@@ -64,23 +64,18 @@ export function Cell({
         placeholder={placeholder}
         disabled={disabled}
         className={`
-          w-full h-full
+          w-full
           bg-transparent resize-none
           text-center leading-tight
           focus:outline-none
           placeholder:text-slate-400/60
           overflow-hidden
           ${isMainGoal ? 'text-sm font-bold text-slate-800' : ''}
-          ${isSubGoal ? 'text-xs font-semibold text-slate-700' : ''}
+          ${isSubGoal ? 'text-xs font-bold text-slate-700' : ''}
           ${!isMainGoal && !isSubGoal ? 'text-xs text-slate-600' : ''}
           ${disabled ? 'cursor-not-allowed' : ''}
         `}
         rows={1}
-        style={{
-          minHeight: '100%',
-          display: 'flex',
-          alignItems: 'center',
-        }}
       />
     </div>
   );
