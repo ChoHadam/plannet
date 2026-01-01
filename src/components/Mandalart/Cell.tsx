@@ -42,13 +42,21 @@ export function Cell({
     onChange(newValue);
   };
 
+  const handleCellClick = () => {
+    if (!disabled && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
   return (
     <div
+      onClick={handleCellClick}
       className={`
         relative w-full aspect-square p-1.5
         flex items-center justify-center
         border border-slate-200/50
         transition-all duration-200 ease-out
+        cursor-text
         ${!disabled ? 'hover:scale-[1.03] hover:shadow-md hover:z-10' : ''}
         ${!disabled ? 'focus-within:scale-[1.03] focus-within:shadow-lg focus-within:z-10' : ''}
         ${isMainGoal ? 'ring-2 ring-amber-400 shadow-lg z-20' : ''}
