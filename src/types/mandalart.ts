@@ -22,7 +22,7 @@ export interface SubGridData {
 }
 
 // Plan categories (sidebar sections)
-export type PlanCategory = 'annual' | 'monthly' | 'daily';
+export type PlanCategory = 'annual' | 'monthly' | 'weekly' | 'daily';
 
 // Template types
 export type TemplateType = 'mandalart';  // 추후: 'calendar' | 'checklist' 등 추가
@@ -30,6 +30,7 @@ export type TemplateType = 'mandalart';  // 추후: 'calendar' | 'checklist' 등
 export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
   annual: '연간 플랜',
   monthly: '월간 플랜',
+  weekly: '주간 플랜',
   daily: '일간 플랜',
 };
 

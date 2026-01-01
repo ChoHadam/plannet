@@ -10,7 +10,7 @@ import {
   MandalartData,
 } from '@/types/mandalart';
 
-const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'daily'];
+const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
 interface SectionProps {
   category: PlanCategory;
