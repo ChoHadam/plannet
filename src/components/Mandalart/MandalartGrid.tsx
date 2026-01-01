@@ -7,8 +7,21 @@ import { useMandalartStore } from '@/hooks/useMandalart';
 import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP } from '@/types/mandalart';
 
 export function MandalartGrid() {
-  const { data, updateCell, updateGridColor } = useMandalartStore();
+  const data = useMandalartStore((state) => {
+    if (!state.currentId) return null;
+    return state.mandalarts.find(m => m.id === state.currentId) || null;
+  });
+  const updateCell = useMandalartStore((state) => state.updateCell);
+  const updateGridColor = useMandalartStore((state) => state.updateGridColor);
   const [selectedGrid, setSelectedGrid] = useState<GridPosition | null>(null);
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400">
+        사이드바에서 플랜을 선택하거나 새로 만들어주세요
+      </div>
+    );
+  }
 
   const handleCellChange = (gridId: GridPosition, cellIndex: number, value: string) => {
     updateCell(gridId, cellIndex, value);

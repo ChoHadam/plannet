@@ -4,13 +4,20 @@ import { useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 
 export function Header() {
-  const { data, updateTitle, resetAll } = useMandalartStore();
+  const data = useMandalartStore((state) => {
+    if (!state.currentId) return null;
+    return state.mandalarts.find(m => m.id === state.currentId) || null;
+  });
+  const updateTitle = useMandalartStore((state) => state.updateTitle);
+  const resetCurrent = useMandalartStore((state) => state.resetCurrent);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleReset = () => {
-    resetAll();
+    resetCurrent();
     setShowResetConfirm(false);
   };
+
+  if (!data) return null;
 
   return (
     <>
