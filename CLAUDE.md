@@ -1,7 +1,7 @@
 # Claude Code Guidelines
 
 ## Project Overview
-Mandalart - A 9x9 grid goal-setting web application built with Next.js.
+Plannet - A planner web application with various templates for goal setting and productivity.
 
 ## Tech Stack
 - **Framework**: Next.js 14 (App Router)
@@ -35,6 +35,10 @@ src/
 ├── lib/           # Utilities and constants
 └── types/         # TypeScript type definitions
 ```
+
+## Templates
+- **Mandalart**: 9x9 grid goal-setting tool
+- **Weekly Planner**: (Planned)
 
 ## Key Features
 - Auto-save to LocalStorage

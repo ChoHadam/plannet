@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "만다라트 | 나만의 목표 설정",
-  description: "만다라트로 체계적인 목표를 설정하고 관리하세요",
+  title: "Plannet | 나만의 플래너",
+  description: "다양한 템플릿으로 체계적인 목표를 설정하고 관리하세요",
 };
 
 export default function RootLayout({

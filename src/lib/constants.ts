@@ -38,4 +38,4 @@ export const COLOR_PRESETS = [
 ];
 
 // Storage key
-export const STORAGE_KEY = 'mandalart-data';
+export const STORAGE_KEY = 'plannet-mandalart';
