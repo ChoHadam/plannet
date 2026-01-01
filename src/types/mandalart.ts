@@ -21,9 +21,27 @@ export interface SubGridData {
   color: string;
 }
 
+// Plan categories (sidebar sections)
+export type PlanCategory = 'annual' | 'monthly' | 'daily';
+
+// Template types
+export type TemplateType = 'mandalart';  // 추후: 'calendar' | 'checklist' 등 추가
+
+export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
+  annual: '연간 플랜',
+  monthly: '월간 플랜',
+  daily: '일간 플랜',
+};
+
+export const TEMPLATE_LABELS: Record<TemplateType, string> = {
+  mandalart: '만다라트',
+};
+
 export interface MandalartData {
   id: string;
   title: string;
+  category: PlanCategory;
+  template: 'mandalart';
   grids: SubGridData[];
   createdAt: string;
   updatedAt: string;
@@ -67,3 +85,4 @@ export const OUTER_TO_CENTER_MAP: Record<GridPosition, number> = {
   'bottom': 7,
   'bottom-right': 8,
 };
+
