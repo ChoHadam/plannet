@@ -30,9 +30,6 @@ export function Header() {
                 w-full
               "
             />
-            <p className="text-sm text-slate-400 mt-1 text-center sm:text-left">
-              클릭하여 목표를 입력하세요
-            </p>
           </div>
 
           <button
