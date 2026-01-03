@@ -14,6 +14,7 @@ export interface CellData {
   value: string;
   position: number; // 0-8 within 3x3 grid
   completed?: boolean;
+  icon?: string;
 }
 
 export interface SubGridData {
