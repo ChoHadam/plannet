@@ -31,6 +31,7 @@ interface MandalartStore {
 
   // Cell operations (for current plan)
   updateCell: (gridId: GridPosition, cellIndex: number, value: string) => void;
+  toggleCellCompleted: (gridId: GridPosition, cellIndex: number) => void;
   updateGridColor: (gridId: GridPosition, color: string) => void;
   updateTitle: (title: string) => void;
   resetCurrent: () => void;
@@ -151,6 +152,36 @@ export const useMandalartStore = create<MandalartStore>()(
               }
             }
           }
+
+          const newMandalarts = [...state.mandalarts];
+          newMandalarts[mandalartIndex] = {
+            ...mandalart,
+            grids: newGrids,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { mandalarts: newMandalarts };
+        });
+      },
+
+      toggleCellCompleted: (gridId: GridPosition, cellIndex: number) => {
+        const currentId = get().currentId;
+        if (!currentId) return;
+
+        set((state) => {
+          const mandalartIndex = state.mandalarts.findIndex(m => m.id === currentId);
+          if (mandalartIndex === -1) return state;
+
+          const mandalart = state.mandalarts[mandalartIndex];
+          const newGrids = mandalart.grids.map((grid) => {
+            if (grid.id === gridId) {
+              const newCells = grid.cells.map((cell, idx) =>
+                idx === cellIndex ? { ...cell, completed: !cell.completed } : cell
+              );
+              return { ...grid, cells: newCells };
+            }
+            return grid;
+          });
 
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = {

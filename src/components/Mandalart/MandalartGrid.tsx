@@ -12,6 +12,7 @@ export function MandalartGrid() {
     return state.mandalarts.find(m => m.id === state.currentId) || null;
   });
   const updateCell = useMandalartStore((state) => state.updateCell);
+  const toggleCellCompleted = useMandalartStore((state) => state.toggleCellCompleted);
   const updateGridColor = useMandalartStore((state) => state.updateGridColor);
   const [selectedGrid, setSelectedGrid] = useState<GridPosition | null>(null);
 
@@ -25,6 +26,10 @@ export function MandalartGrid() {
 
   const handleCellChange = (gridId: GridPosition, cellIndex: number, value: string) => {
     updateCell(gridId, cellIndex, value);
+  };
+
+  const handleToggleCellCompleted = (gridId: GridPosition, cellIndex: number) => {
+    toggleCellCompleted(gridId, cellIndex);
   };
 
   const handleColorClick = (gridId: GridPosition) => {
@@ -75,6 +80,9 @@ export function MandalartGrid() {
               color={grid.color}
               onCellChange={(cellIndex, value) =>
                 handleCellChange(grid.id, cellIndex, value)
+              }
+              onToggleCellCompleted={(cellIndex) =>
+                handleToggleCellCompleted(grid.id, cellIndex)
               }
               onColorClick={() => handleColorClick(grid.id)}
               isCenter={position === 'center'}

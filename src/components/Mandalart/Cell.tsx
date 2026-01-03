@@ -10,6 +10,8 @@ interface CellProps {
   backgroundColor: string;
   placeholder?: string;
   disabled?: boolean;
+  completed?: boolean;
+  onToggleCompleted?: () => void;
 }
 
 export function Cell({
@@ -20,6 +22,8 @@ export function Cell({
   backgroundColor,
   placeholder = '',
   disabled = false,
+  completed = false,
+  onToggleCompleted,
 }: CellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localValue, setLocalValue] = useState(value);
@@ -52,6 +56,7 @@ export function Cell({
     <div
       onClick={handleCellClick}
       className={`
+        group/cell
         relative w-full aspect-square p-1.5
         flex items-center justify-center
         border border-slate-200/50
@@ -78,13 +83,43 @@ export function Cell({
           focus:outline-none
           placeholder:text-slate-400/60
           overflow-hidden
+          transition-all duration-200
           ${isMainGoal ? 'text-sm font-bold text-slate-800' : ''}
           ${isSubGoal ? 'text-xs font-bold text-slate-700' : ''}
           ${!isMainGoal && !isSubGoal ? 'text-xs text-slate-600' : ''}
           ${disabled ? 'cursor-not-allowed' : ''}
+          ${completed ? 'line-through opacity-50' : ''}
         `}
         rows={1}
       />
+
+      {/* 체크 버튼 (좌측 상단, 호버 시 표시) */}
+      {localValue.trim() && onToggleCompleted && !disabled && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCompleted();
+          }}
+          className={`
+            absolute -top-1.5 -left-1.5
+            w-5 h-5 rounded-full
+            flex items-center justify-center
+            shadow-md border
+            z-20
+            transition-all duration-200
+            ${completed
+              ? 'bg-emerald-500 border-emerald-600 text-white opacity-100'
+              : 'bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-slate-300 hover:text-slate-600'
+            }
+            max-sm:opacity-100
+          `}
+          title={completed ? '완료 취소' : '완료'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

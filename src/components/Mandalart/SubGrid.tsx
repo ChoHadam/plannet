@@ -8,6 +8,7 @@ interface SubGridProps {
   cells: CellData[];
   color: string;
   onCellChange: (cellIndex: number, value: string) => void;
+  onToggleCellCompleted?: (cellIndex: number) => void;
   onColorClick?: () => void;
   isCenter?: boolean;
   disabled?: boolean;
@@ -18,6 +19,7 @@ export function SubGrid({
   cells,
   color,
   onCellChange,
+  onToggleCellCompleted,
   onColorClick,
   isCenter = false,
   disabled = false,
@@ -25,20 +27,14 @@ export function SubGrid({
   return (
     <div
       className={`
+        relative group
         grid grid-cols-3 gap-0.5
         p-1 rounded-lg
         transition-all duration-300
         ${isCenter ? 'ring-2 ring-amber-400/50 shadow-xl' : 'shadow-md'}
-        ${!disabled ? 'cursor-pointer' : 'cursor-not-allowed'}
-        ${disabled ? 'opacity-50 grayscale' : ''}
+        ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}
       `}
       style={{ backgroundColor: color }}
-      onClick={(e) => {
-        // Only trigger if clicking the grid background, not cells
-        if (e.target === e.currentTarget && onColorClick && !disabled) {
-          onColorClick();
-        }
-      }}
     >
       {cells.map((cell, index) => {
         const isMainGoal = isCenter && index === 4;
@@ -54,9 +50,41 @@ export function SubGrid({
             backgroundColor={color}
             placeholder={isMainGoal ? '핵심 목표' : isSubGoal ? '하위 목표' : ''}
             disabled={disabled}
+            completed={cell.completed ?? false}
+            onToggleCompleted={onToggleCellCompleted ? () => onToggleCellCompleted(index) : undefined}
           />
         );
       })}
+
+      {/* 팔레트 버튼 (우측 상단) */}
+      {!disabled && onColorClick && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onColorClick();
+          }}
+          className="
+            absolute -top-2 -right-2
+            w-8 h-8 rounded-full
+            bg-white hover:bg-slate-50
+            opacity-0 group-hover:opacity-100
+            max-sm:opacity-80
+            transition-all duration-200
+            hover:scale-110
+            flex items-center justify-center
+            shadow-lg border border-slate-200
+            z-10
+          "
+          title="색상 변경"
+        >
+          <div className="grid grid-cols-2 gap-0.5">
+            <div className="w-2 h-2 rounded-full bg-rose-400"></div>
+            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+            <div className="w-2 h-2 rounded-full bg-sky-400"></div>
+            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+          </div>
+        </button>
+      )}
     </div>
   );
 }
