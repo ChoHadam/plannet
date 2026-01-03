@@ -60,7 +60,7 @@ export function MandalartGrid() {
 
   return (
     <div className="relative">
-      <div className="grid grid-cols-3 gap-2 p-4 bg-slate-100/50 rounded-2xl shadow-inner max-w-4xl mx-auto">
+      <div id="mandalart-grid" className="grid grid-cols-3 gap-2 p-4 bg-slate-100/50 rounded-2xl shadow-inner max-w-4xl mx-auto">
         {GRID_POSITIONS.map((position) => {
           const grid = getGrid(position);
           if (!grid) return null;
