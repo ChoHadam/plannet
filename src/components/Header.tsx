@@ -26,6 +26,34 @@ export function Header() {
     ) && !data.title.trim();
   };
 
+  // 완료율 계산 (외곽 8개 그리드의 세부 목표만)
+  const calculateProgress = () => {
+    if (!data) return { completed: 0, total: 0, percentage: 0 };
+
+    let completed = 0;
+    let total = 0;
+
+    // 외곽 8개 그리드만 (center 제외)
+    data.grids
+      .filter(grid => grid.id !== 'center')
+      .forEach(grid => {
+        // position 4 (하위 목표) 제외한 8개 셀
+        grid.cells
+          .filter((_, idx) => idx !== 4)
+          .forEach(cell => {
+            if (cell.value.trim()) {
+              total++;
+              if (cell.completed) completed++;
+            }
+          });
+      });
+
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { completed, total, percentage };
+  };
+
+  const progress = calculateProgress();
+
   const handleReset = () => {
     resetCurrent();
     setShowResetConfirm(false);
@@ -92,7 +120,7 @@ export function Header() {
     <>
       <header className="w-full max-w-4xl mx-auto px-4 py-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex-1">
+          <div className="flex-1 flex flex-col sm:flex-row items-center gap-3">
             <input
               type="text"
               value={data.title}
@@ -103,9 +131,24 @@ export function Header() {
                 bg-transparent border-none outline-none
                 placeholder:text-slate-300
                 text-center sm:text-left
-                w-full
+                w-full sm:w-auto sm:flex-1
               "
             />
+
+            {/* 완료율 프로그레스 */}
+            {progress.total > 0 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-20 sm:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-500 ease-out"
+                    style={{ width: `${progress.percentage}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-slate-500 min-w-[3ch]">
+                  {progress.percentage}%
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Menu Button */}
