@@ -171,6 +171,7 @@ export function Sidebar() {
   const deleteMandalart = useMandalartStore((state) => state.deleteMandalart);
 
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MandalartData | null>(null);
 
   const getPlansByCategory = (category: PlanCategory) => {
     return mandalarts.filter((m) => m.category === category);
@@ -185,6 +186,20 @@ export function Sidebar() {
       createMandalart(createCategory);
     }
     setCreateCategory(null);
+  };
+
+  const handleDeleteClick = (id: string) => {
+    const plan = mandalarts.find(m => m.id === id);
+    if (plan) {
+      setDeleteTarget(plan);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteTarget) {
+      deleteMandalart(deleteTarget.id);
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -206,7 +221,7 @@ export function Sidebar() {
               currentId={currentId}
               onSelect={selectMandalart}
               onCreateClick={() => handleCreateClick(category)}
-              onDelete={deleteMandalart}
+              onDelete={handleDeleteClick}
             />
           ))}
         </div>
@@ -226,6 +241,49 @@ export function Sidebar() {
           onSelect={handleTemplateSelect}
           onClose={() => setCreateCategory(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">
+              플랜을 삭제하시겠습니까?
+            </h3>
+            <p className="text-sm text-slate-500 mb-1">
+              <span className="font-medium text-slate-700">{deleteTarget.title || '제목 없음'}</span>
+            </p>
+            <p className="text-sm text-slate-500 mb-6">
+              삭제된 플랜은 복구할 수 없습니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="
+                  flex-1 px-4 py-2 rounded-lg
+                  bg-slate-100 text-slate-600
+                  hover:bg-slate-200
+                  transition-colors duration-200
+                  font-medium
+                "
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="
+                  flex-1 px-4 py-2 rounded-lg
+                  bg-red-500 text-white
+                  hover:bg-red-600
+                  transition-colors duration-200
+                  font-medium
+                "
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
