@@ -26,7 +26,7 @@ export function Header() {
     ) && !data.title.trim();
   };
 
-  // 완료율 계산 (외곽 8개 그리드의 세부 목표만)
+  // 완료율 계산 (외곽 8개 그리드의 세부 목표만, 이모지 셀 제외)
   const calculateProgress = () => {
     if (!data) return { completed: 0, total: 0, percentage: 0 };
 
@@ -37,11 +37,11 @@ export function Header() {
     data.grids
       .filter(grid => grid.id !== 'center')
       .forEach(grid => {
-        // position 4 (하위 목표) 제외한 8개 셀
+        // position 4 (하위 목표) 제외한 8개 셀, 이모지 셀도 제외
         grid.cells
           .filter((_, idx) => idx !== 4)
           .forEach(cell => {
-            if (cell.value.trim()) {
+            if (cell.value.trim() && !cell.icon) {
               total++;
               if (cell.completed) completed++;
             }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SubGrid } from './SubGrid';
 import { ColorPicker } from '../ColorPicker';
+import { EmojiPickerWrapper } from '../EmojiPicker';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
 
@@ -12,9 +13,12 @@ export function MandalartGrid() {
     return state.mandalarts.find(m => m.id === state.currentId) || null;
   });
   const updateCell = useMandalartStore((state) => state.updateCell);
+  const updateCellIcon = useMandalartStore((state) => state.updateCellIcon);
   const toggleCellCompleted = useMandalartStore((state) => state.toggleCellCompleted);
+  const clearCell = useMandalartStore((state) => state.clearCell);
   const updateGridColor = useMandalartStore((state) => state.updateGridColor);
   const [selectedGrid, setSelectedGrid] = useState<GridPosition | null>(null);
+  const [emojiPickerTarget, setEmojiPickerTarget] = useState<{ gridId: GridPosition; cellIndex: number } | null>(null);
 
   if (!data) {
     return (
@@ -44,6 +48,24 @@ export function MandalartGrid() {
 
   const handleClosePicker = () => {
     setSelectedGrid(null);
+  };
+
+  const handleIconClick = (gridId: GridPosition, cellIndex: number) => {
+    setEmojiPickerTarget({ gridId, cellIndex });
+  };
+
+  const handleEmojiSelect = (emoji: string | null) => {
+    if (emojiPickerTarget) {
+      updateCellIcon(emojiPickerTarget.gridId, emojiPickerTarget.cellIndex, emoji);
+    }
+  };
+
+  const handleCloseEmojiPicker = () => {
+    setEmojiPickerTarget(null);
+  };
+
+  const handleClearCell = (gridId: GridPosition, cellIndex: number) => {
+    clearCell(gridId, cellIndex);
   };
 
   // Get grid by position
@@ -99,6 +121,12 @@ export function MandalartGrid() {
               onToggleCellCompleted={(cellIndex) =>
                 handleToggleCellCompleted(grid.id, cellIndex)
               }
+              onIconClick={(cellIndex) =>
+                handleIconClick(grid.id, cellIndex)
+              }
+              onClearCell={(cellIndex) =>
+                handleClearCell(grid.id, cellIndex)
+              }
               onColorClick={() => handleColorClick(grid.id)}
               isCenter={position === 'center'}
               disabled={!enabled}
@@ -113,6 +141,17 @@ export function MandalartGrid() {
           currentColor={getGrid(selectedGrid)?.color || ''}
           onSelect={handleColorSelect}
           onClose={handleClosePicker}
+        />
+      )}
+
+      {/* Emoji Picker Modal */}
+      {emojiPickerTarget && (
+        <EmojiPickerWrapper
+          currentEmoji={
+            getGrid(emojiPickerTarget.gridId)?.cells[emojiPickerTarget.cellIndex]?.icon
+          }
+          onSelect={handleEmojiSelect}
+          onClose={handleCloseEmojiPicker}
         />
       )}
     </div>

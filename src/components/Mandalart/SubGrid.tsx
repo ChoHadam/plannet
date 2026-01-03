@@ -10,6 +10,8 @@ interface SubGridProps {
   cellColors?: Record<number, string>;  // 셀별 개별 색상 (중앙 그리드용)
   onCellChange: (cellIndex: number, value: string) => void;
   onToggleCellCompleted?: (cellIndex: number) => void;
+  onIconClick?: (cellIndex: number) => void;
+  onClearCell?: (cellIndex: number) => void;
   onColorClick?: () => void;
   isCenter?: boolean;
   disabled?: boolean;
@@ -22,6 +24,8 @@ export function SubGrid({
   cellColors,
   onCellChange,
   onToggleCellCompleted,
+  onIconClick,
+  onClearCell,
   onColorClick,
   isCenter = false,
   disabled = false,
@@ -56,6 +60,9 @@ export function SubGrid({
             disabled={disabled}
             completed={cell.completed ?? false}
             onToggleCompleted={onToggleCellCompleted ? () => onToggleCellCompleted(index) : undefined}
+            icon={cell.icon}
+            onIconClick={onIconClick ? () => onIconClick(index) : undefined}
+            onClearCell={onClearCell ? () => onClearCell(index) : undefined}
           />
         );
       })}
