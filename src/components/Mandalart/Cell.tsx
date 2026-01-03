@@ -93,8 +93,8 @@ export function Cell({
         rows={1}
       />
 
-      {/* 체크 버튼 (좌측 상단, 호버 시 표시) */}
-      {localValue.trim() && onToggleCompleted && !disabled && (
+      {/* 체크 버튼 (좌측 상단, 호버 시 표시) - 핵심 목표 제외 */}
+      {localValue.trim() && onToggleCompleted && !disabled && !isMainGoal && (
         <button
           onClick={(e) => {
             e.stopPropagation();

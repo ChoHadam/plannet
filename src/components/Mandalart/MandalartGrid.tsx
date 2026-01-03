@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { SubGrid } from './SubGrid';
 import { ColorPicker } from '../ColorPicker';
 import { useMandalartStore } from '@/hooks/useMandalart';
-import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP } from '@/types/mandalart';
+import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
 
 export function MandalartGrid() {
   const data = useMandalartStore((state) => {
@@ -63,6 +63,20 @@ export function MandalartGrid() {
     return cellValue !== '';
   };
 
+  // 중앙 그리드 하위 목표 셀 색상 (외곽 그리드 색상과 동기화)
+  const getCenterGridCellColors = (): Record<number, string> => {
+    const colors: Record<number, string> = {};
+    // position 0-3, 5-8은 해당 외곽 그리드 색상 사용
+    [0, 1, 2, 3, 5, 6, 7, 8].forEach((cellIndex) => {
+      const outerGridId = CENTER_TO_OUTER_MAP[cellIndex];
+      const outerGrid = data.grids.find((g) => g.id === outerGridId);
+      if (outerGrid) {
+        colors[cellIndex] = outerGrid.color;
+      }
+    });
+    return colors;
+  };
+
   return (
     <div className="relative">
       <div id="mandalart-grid" className="grid grid-cols-3 gap-2 p-4 bg-slate-100/50 rounded-2xl shadow-inner max-w-4xl mx-auto">
@@ -78,6 +92,7 @@ export function MandalartGrid() {
               gridId={grid.id}
               cells={grid.cells}
               color={grid.color}
+              cellColors={position === 'center' ? getCenterGridCellColors() : undefined}
               onCellChange={(cellIndex, value) =>
                 handleCellChange(grid.id, cellIndex, value)
               }

@@ -7,6 +7,7 @@ interface SubGridProps {
   gridId: GridPosition;
   cells: CellData[];
   color: string;
+  cellColors?: Record<number, string>;  // 셀별 개별 색상 (중앙 그리드용)
   onCellChange: (cellIndex: number, value: string) => void;
   onToggleCellCompleted?: (cellIndex: number) => void;
   onColorClick?: () => void;
@@ -18,6 +19,7 @@ export function SubGrid({
   gridId,
   cells,
   color,
+  cellColors,
   onCellChange,
   onToggleCellCompleted,
   onColorClick,
@@ -39,6 +41,8 @@ export function SubGrid({
       {cells.map((cell, index) => {
         const isMainGoal = isCenter && index === 4;
         const isSubGoal = isCenter ? index !== 4 : index === 4;
+        // 중앙 그리드 하위 목표는 해당 외곽 그리드 색상 사용
+        const cellBgColor = cellColors?.[index] ?? color;
 
         return (
           <Cell
@@ -47,7 +51,7 @@ export function SubGrid({
             onChange={(value) => onCellChange(index, value)}
             isMainGoal={isMainGoal}
             isSubGoal={isSubGoal}
-            backgroundColor={color}
+            backgroundColor={cellBgColor}
             placeholder={isMainGoal ? '핵심 목표' : isSubGoal ? '하위 목표' : ''}
             disabled={disabled}
             completed={cell.completed ?? false}
