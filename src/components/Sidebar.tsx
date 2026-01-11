@@ -10,6 +10,7 @@ import {
   MandalartData,
 } from '@/types/mandalart';
 import { formatPlanDate } from './DatePicker';
+import { MandalartGuide } from './MandalartGuide';
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
@@ -106,11 +107,12 @@ interface TemplateModalProps {
   category: PlanCategory;
   onSelect: (template: TemplateType) => void;
   onClose: () => void;
+  onShowGuide: () => void;
 }
 
-function TemplateModal({ category, onSelect, onClose }: TemplateModalProps) {
-  const templates: { type: TemplateType; description: string }[] = [
-    { type: 'mandalart', description: '9x9 그리드로 목표를 세분화' },
+function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateModalProps) {
+  const templates: { type: TemplateType; description: string; hasGuide?: boolean }[] = [
+    { type: 'mandalart', description: '9x9 그리드로 목표를 세분화', hasGuide: true },
     // 추후 추가: calendar, checklist 등
   ];
 
@@ -129,22 +131,45 @@ function TemplateModal({ category, onSelect, onClose }: TemplateModalProps) {
 
         <div className="space-y-2">
           {templates.map((template) => (
-            <button
-              key={template.type}
-              onClick={() => onSelect(template.type)}
-              className="
-                w-full p-3 rounded-lg border border-slate-200
-                text-left hover:border-slate-400 hover:bg-slate-50
-                transition-colors
-              "
-            >
-              <div className="font-medium text-slate-700">
-                {TEMPLATE_LABELS[template.type]}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">
-                {template.description}
-              </div>
-            </button>
+            <div key={template.type} className="flex items-stretch gap-2">
+              <button
+                onClick={() => onSelect(template.type)}
+                className="
+                  flex-1 p-3 rounded-lg border border-slate-200
+                  text-left hover:border-slate-400 hover:bg-slate-50
+                  transition-colors
+                "
+              >
+                <div className="font-medium text-slate-700">
+                  {TEMPLATE_LABELS[template.type]}
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {template.description}
+                </div>
+              </button>
+              {template.hasGuide && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowGuide();
+                  }}
+                  className="
+                    w-10 rounded-lg border border-slate-200
+                    flex items-center justify-center
+                    text-slate-400 hover:text-slate-600
+                    hover:border-slate-400 hover:bg-slate-50
+                    transition-colors
+                  "
+                  title="만다라트 사용법"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                </button>
+              )}
+            </div>
           ))}
         </div>
 
@@ -173,6 +198,7 @@ export function Sidebar() {
 
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MandalartData | null>(null);
+  const [showMandalartGuide, setShowMandalartGuide] = useState(false);
 
   const getPlansByCategory = (category: PlanCategory) => {
     return mandalarts.filter((m) => m.category === category);
@@ -203,6 +229,22 @@ export function Sidebar() {
     }
   };
 
+  const handleShowGuide = () => {
+    setShowMandalartGuide(true);
+  };
+
+  const handleGuideStart = () => {
+    if (createCategory) {
+      createMandalart(createCategory);
+    }
+    setShowMandalartGuide(false);
+    setCreateCategory(null);
+  };
+
+  const handleGuideClose = () => {
+    setShowMandalartGuide(false);
+  };
+
   return (
     <>
       <aside className="w-60 h-screen bg-slate-50 border-r border-slate-200 flex flex-col">
@@ -230,11 +272,20 @@ export function Sidebar() {
       </aside>
 
       {/* Template Selection Modal */}
-      {createCategory && (
+      {createCategory && !showMandalartGuide && (
         <TemplateModal
           category={createCategory}
           onSelect={handleTemplateSelect}
           onClose={() => setCreateCategory(null)}
+          onShowGuide={handleShowGuide}
+        />
+      )}
+
+      {/* Mandalart Guide Modal */}
+      {showMandalartGuide && (
+        <MandalartGuide
+          onStart={handleGuideStart}
+          onClose={handleGuideClose}
         />
       )}
 
