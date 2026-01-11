@@ -227,12 +227,6 @@ export function Sidebar() {
           ))}
         </div>
 
-        {/* Footer */}
-        <div className="p-3 border-t border-slate-200">
-          <p className="text-xs text-slate-400 text-center">
-            데이터는 브라우저에 저장됩니다
-          </p>
-        </div>
       </aside>
 
       {/* Template Selection Modal */}
