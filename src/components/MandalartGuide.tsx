@@ -73,8 +73,8 @@ function GuideStep1() {
         다시 64개의 실천 계획으로 확장하는<br />
         목표 달성 도구입니다.
       </p>
-      <p className="text-xs text-slate-500 mt-4 bg-amber-50 rounded-lg py-2 px-3 inline-block">
-        오타니 쇼헤이도 이 방법으로 MLB 스타가 되었어요!
+      <p className="text-xs text-slate-500 mt-4 bg-slate-100 rounded-lg py-2 px-3 inline-block">
+        예시: "업무 역량 향상" → 자기계발, 시간관리, 소통능력...
       </p>
     </div>
   );
