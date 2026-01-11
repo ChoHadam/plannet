@@ -36,8 +36,38 @@ interface MandalartStore {
   clearCell: (gridId: GridPosition, cellIndex: number) => void;
   updateGridColor: (gridId: GridPosition, color: string) => void;
   updateTitle: (title: string) => void;
+  updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
 }
+
+// Get Monday-based week number within the month
+// Returns 1+ for weeks where Monday is in the current month
+// Returns 1 if the Monday is in the previous month (first partial week)
+const getWeekNumberInMonth = (date: Date): number => {
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-indexed
+  const day = date.getDate();
+  const dayOfWeek = date.getDay(); // 0=일, 1=월, ..., 6=토
+
+  // Find the Monday of the week containing this date
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const mondayDate = day - daysFromMonday;
+
+  // If Monday is in the previous month, return 1 (first week)
+  if (mondayDate < 1) {
+    return 1;
+  }
+
+  // Find the first Monday of the month
+  const firstOfMonth = new Date(year, month, 1);
+  const firstDayOfWeek = firstOfMonth.getDay();
+  const daysToFirstMonday = firstDayOfWeek === 0 ? 1 : (firstDayOfWeek === 1 ? 0 : 8 - firstDayOfWeek);
+  const firstMondayDate = 1 + daysToFirstMonday;
+
+  // Calculate week number (1-based)
+  const weekNum = Math.floor((mondayDate - firstMondayDate) / 7) + 1;
+  return Math.max(1, weekNum);
+};
 
 // Create initial empty mandalart data
 const createInitialMandalart = (category: PlanCategory, title: string = ''): MandalartData => {
@@ -51,6 +81,12 @@ const createInitialMandalart = (category: PlanCategory, title: string = ''): Man
     })),
   }));
 
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = ['monthly', 'weekly', 'daily'].includes(category) ? now.getMonth() + 1 : undefined;
+  const week = category === 'weekly' ? getWeekNumberInMonth(now) : undefined;
+  const day = category === 'daily' ? now.getDate() : undefined;
+
   return {
     id: generateId(),
     title,
@@ -59,6 +95,10 @@ const createInitialMandalart = (category: PlanCategory, title: string = ''): Man
     grids,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    year,
+    month,
+    week,
+    day,
   };
 };
 
@@ -374,6 +414,28 @@ export const useMandalartStore = create<MandalartStore>()(
           newMandalarts[mandalartIndex] = {
             ...newMandalarts[mandalartIndex],
             title: sanitizeInput(title),
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { mandalarts: newMandalarts };
+        });
+      },
+
+      updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => {
+        const currentId = get().currentId;
+        if (!currentId) return;
+
+        set((state) => {
+          const mandalartIndex = state.mandalarts.findIndex(m => m.id === currentId);
+          if (mandalartIndex === -1) return state;
+
+          const newMandalarts = [...state.mandalarts];
+          newMandalarts[mandalartIndex] = {
+            ...newMandalarts[mandalartIndex],
+            year,
+            month,
+            week,
+            day,
             updatedAt: new Date().toISOString(),
           };
 

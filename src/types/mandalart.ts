@@ -48,6 +48,10 @@ export interface MandalartData {
   grids: SubGridData[];
   createdAt: string;
   updatedAt: string;
+  year?: number;   // 모든 플랜
+  month?: number;  // 월간/주간/일간 (1-12)
+  week?: number;   // 주간 (1-53)
+  day?: number;    // 일간 (1-31)
 }
 
 // Grid positions in order (for iteration)

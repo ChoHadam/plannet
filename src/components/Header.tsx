@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { exportToJSON, importFromJSON, exportToImage } from '@/lib/export';
 import { MandalartData } from '@/types/mandalart';
+import { DatePicker, formatPlanDate } from './DatePicker';
 
 export function Header() {
   const data = useMandalartStore((state) => {
@@ -11,12 +12,14 @@ export function Header() {
     return state.mandalarts.find(m => m.id === state.currentId) || null;
   });
   const updateTitle = useMandalartStore((state) => state.updateTitle);
+  const updatePlanDate = useMandalartStore((state) => state.updatePlanDate);
   const resetCurrent = useMandalartStore((state) => state.resetCurrent);
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [pendingImport, setPendingImport] = useState<MandalartData | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // 현재 플랜이 비어있는지 체크
   const isCurrentPlanEmpty = () => {
@@ -134,6 +137,22 @@ export function Header() {
                 w-full sm:w-auto sm:flex-1
               "
             />
+
+            {/* 날짜 뱃지 */}
+            <button
+              onClick={() => setShowDatePicker(true)}
+              className="
+                px-3 py-1 rounded-full
+                bg-slate-100 text-slate-600
+                hover:bg-slate-200
+                transition-colors duration-200
+                text-sm font-medium
+                shrink-0
+              "
+              title="날짜 변경"
+            >
+              {formatPlanDate(data.category, data.year, data.month, data.week, data.day)}
+            </button>
 
             {/* 완료율 프로그레스 */}
             {progress.total > 0 && (
@@ -311,6 +330,21 @@ export function Header() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <DatePicker
+          category={data.category}
+          year={data.year}
+          month={data.month}
+          week={data.week}
+          day={data.day}
+          onSelect={(year, month, week, day) => {
+            updatePlanDate(year, month, week, day);
+          }}
+          onClose={() => setShowDatePicker(false)}
+        />
       )}
     </>
   );

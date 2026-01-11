@@ -9,6 +9,7 @@ import {
   TEMPLATE_LABELS,
   MandalartData,
 } from '@/types/mandalart';
+import { formatPlanDate } from './DatePicker';
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
@@ -72,7 +73,7 @@ function Section({ category, plans, currentId, onSelect, onCreateClick, onDelete
                   {plan.title || '제목 없음'}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {TEMPLATE_LABELS[plan.template]}
+                  {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day, true)}
                 </span>
               </div>
               <button
