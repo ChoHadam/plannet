@@ -5,6 +5,7 @@ import { useMandalartStore } from '@/hooks/useMandalart';
 import { exportToJSON, importFromJSON, exportToImage } from '@/lib/export';
 import { MandalartData } from '@/types/mandalart';
 import { DatePicker, formatPlanDate } from './DatePicker';
+import { MandalartGuide } from './MandalartGuide';
 
 export function Header() {
   const data = useMandalartStore((state) => {
@@ -20,6 +21,7 @@ export function Header() {
   const [pendingImport, setPendingImport] = useState<MandalartData | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   // 현재 플랜이 비어있는지 체크
   const isCurrentPlanEmpty = () => {
@@ -196,6 +198,18 @@ export function Header() {
                   onClick={() => setShowMenu(false)}
                 />
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
+                  <button
+                    onClick={() => { setShowMenu(false); setShowGuide(true); }}
+                    className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    가이드
+                  </button>
+                  <div className="border-t border-slate-100 my-1"></div>
                   <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">저장</div>
                   <button
                     onClick={handleExportJSON}
@@ -344,6 +358,14 @@ export function Header() {
             updatePlanDate(year, month, week, day);
           }}
           onClose={() => setShowDatePicker(false)}
+        />
+      )}
+
+      {/* Guide Modal */}
+      {showGuide && (
+        <MandalartGuide
+          onStart={() => setShowGuide(false)}
+          onClose={() => setShowGuide(false)}
         />
       )}
     </>
