@@ -74,7 +74,7 @@ function GuideStep1() {
         목표 달성 도구입니다.
       </p>
       <p className="text-xs text-slate-500 mt-4 bg-slate-100 rounded-lg py-2 px-3 inline-block">
-        예시: "업무 역량 향상" → 자기계발, 시간관리, 소통능력...
+        예시: "역량향상" → 전문성, 외국어, 건강 등 8가지 세부 목표
       </p>
     </div>
   );
@@ -120,8 +120,151 @@ function GuideStep3() {
   );
 }
 
-// Step 4: Ready
+// Example data for the filled grid
+const EXAMPLE_DATA = {
+  centerGoal: '역량향상',
+  subGoals: ['전문성', '데이터', '외국어', '생산성', '소통', '리더십', '트렌드', '건강'],
+  // "외국어" 확장 (index 2 in subGoals, which maps to grid index 5)
+  expandedGoal: '외국어',
+  expandedActions: ['단어5개', '전화영어', '팟캐스트', '학습지', '미드시청', '원서읽기', '회화모임', '듀오링고'],
+  expandedGridIdx: 5, // middle right position
+};
+
+// Grid position mapping: subGoal index -> grid index
+const SUB_GOAL_TO_GRID: Record<number, number> = {
+  0: 1, // 전문성 -> top center
+  1: 2, // 데이터 -> top right
+  2: 5, // 외국어 -> middle right (will be highlighted)
+  3: 8, // 생산성 -> bottom right
+  4: 7, // 소통 -> bottom center
+  5: 6, // 리더십 -> bottom left
+  6: 3, // 트렌드 -> middle left
+  7: 0, // 건강 -> top left
+};
+
+// Cell position mapping: action index -> cell index (excluding center which is 4)
+const ACTION_TO_CELL: Record<number, number> = {
+  0: 1, 1: 2, 2: 5, 3: 8, 4: 7, 5: 6, 6: 3, 7: 0,
+};
+
+// Example Grid with text
+function ExampleGrid() {
+  const getCellContent = (gridIdx: number, cellIdx: number) => {
+    // Center grid (index 4)
+    if (gridIdx === 4) {
+      if (cellIdx === 4) {
+        return { text: EXAMPLE_DATA.centerGoal, isCenter: true };
+      }
+      // Find which subGoal goes in this cell
+      for (const [subIdx, gIdx] of Object.entries(SUB_GOAL_TO_GRID)) {
+        // Convert grid position to cell position in center grid
+        const cellPosition = parseInt(Object.keys(SUB_GOAL_TO_GRID).find(
+          k => SUB_GOAL_TO_GRID[parseInt(k)] === parseInt(subIdx)
+        ) || '-1');
+        if (ACTION_TO_CELL[parseInt(subIdx)] === cellIdx || SUB_GOAL_TO_GRID[parseInt(subIdx)] === cellIdx) {
+          // Map subGoal index to cell index
+          const subGoalIdx = Object.entries(SUB_GOAL_TO_GRID).find(([, g]) => g === cellIdx)?.[0];
+          if (subGoalIdx !== undefined) {
+            return {
+              text: EXAMPLE_DATA.subGoals[parseInt(subGoalIdx)],
+              isSubGoal: true,
+              isHighlighted: EXAMPLE_DATA.subGoals[parseInt(subGoalIdx)] === EXAMPLE_DATA.expandedGoal
+            };
+          }
+        }
+      }
+      return null;
+    }
+
+    // Expanded grid (외국어)
+    if (gridIdx === EXAMPLE_DATA.expandedGridIdx) {
+      if (cellIdx === 4) {
+        return { text: EXAMPLE_DATA.expandedGoal, isSubGoal: true, isHighlighted: true };
+      }
+      const actionIdx = Object.entries(ACTION_TO_CELL).find(([, c]) => c === cellIdx)?.[0];
+      if (actionIdx !== undefined) {
+        return { text: EXAMPLE_DATA.expandedActions[parseInt(actionIdx)], isAction: true };
+      }
+    }
+
+    return null;
+  };
+
+  const getCellStyle = (gridIdx: number, cellIdx: number) => {
+    const content = getCellContent(gridIdx, cellIdx);
+    if (!content) return 'bg-slate-100';
+    if (content.isCenter) return 'bg-amber-400';
+    if (content.isHighlighted) return 'bg-blue-400';
+    if (content.isSubGoal) return 'bg-blue-300';
+    if (content.isAction) return 'bg-emerald-200';
+    return 'bg-slate-200';
+  };
+
+  return (
+    <div className="grid grid-cols-3 gap-1 w-fit mx-auto">
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((gridIdx) => (
+        <div
+          key={gridIdx}
+          className={`
+            grid grid-cols-3 gap-0.5 p-0.5 rounded
+            ${gridIdx === 4 || gridIdx === EXAMPLE_DATA.expandedGridIdx ? 'bg-slate-200' : 'bg-slate-100'}
+          `}
+        >
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((cellIdx) => {
+            const content = getCellContent(gridIdx, cellIdx);
+            return (
+              <div
+                key={cellIdx}
+                className={`
+                  w-7 h-7 sm:w-8 sm:h-8 rounded-sm
+                  flex items-center justify-center
+                  transition-colors duration-300
+                  ${getCellStyle(gridIdx, cellIdx)}
+                `}
+              >
+                {content && (
+                  <span className={`
+                    text-[6px] sm:text-[7px] font-medium text-center leading-tight
+                    ${content.isCenter ? 'text-amber-900' : ''}
+                    ${content.isSubGoal ? 'text-blue-900' : ''}
+                    ${content.isAction ? 'text-emerald-900' : ''}
+                  `}>
+                    {content.text}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Step 4: Example
 function GuideStep4() {
+  return (
+    <div className="text-center">
+      <div className="mb-4">
+        <ExampleGrid />
+      </div>
+      <h3 className="text-lg font-semibold text-slate-800 mb-2">
+        작성 예시
+      </h3>
+      <p className="text-xs text-slate-600 leading-relaxed">
+        <span className="inline-block w-2.5 h-2.5 bg-amber-400 rounded-sm align-middle mr-1" />
+        핵심 목표 →
+        <span className="inline-block w-2.5 h-2.5 bg-blue-400 rounded-sm align-middle mx-1" />
+        세부 목표 →
+        <span className="inline-block w-2.5 h-2.5 bg-emerald-200 rounded-sm align-middle mx-1" />
+        실천 계획
+      </p>
+    </div>
+  );
+}
+
+// Step 5: Ready
+function GuideStep5() {
   return (
     <div className="text-center">
       <div className="mb-6">
@@ -135,11 +278,14 @@ function GuideStep4() {
         중심부터 시작해서 차근차근 채워나가면<br />
         목표가 더 구체적으로 보일 거예요.
       </p>
+      <p className="text-xs text-slate-500 mt-4 bg-slate-100 rounded-lg py-2 px-3 inline-block">
+        💡 다 못 채워도 괜찮아요! 빈 칸은 이모지로 꾸며보세요
+      </p>
     </div>
   );
 }
 
-const STEPS = [GuideStep1, GuideStep2, GuideStep3, GuideStep4];
+const STEPS = [GuideStep1, GuideStep2, GuideStep3, GuideStep4, GuideStep5];
 
 export function MandalartGuide({ onStart, onClose }: MandalartGuideProps) {
   const [currentStep, setCurrentStep] = useState(0);
