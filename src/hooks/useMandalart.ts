@@ -245,7 +245,7 @@ export const useMandalartStore = create<MandalartStore>()(
           if (mandalartIndex === -1) return state;
 
           const mandalart = state.mandalarts[mandalartIndex];
-          const newGrids = mandalart.grids.map((grid) => {
+          let newGrids = mandalart.grids.map((grid) => {
             if (grid.id === gridId) {
               const newCells = grid.cells.map((cell, idx) =>
                 idx === cellIndex
@@ -256,6 +256,26 @@ export const useMandalartStore = create<MandalartStore>()(
             }
             return grid;
           });
+
+          // 중앙 그리드의 하위 목표(position 0-3, 5-8) 삭제 시 → 해당 외곽 그리드 전체 비우기
+          if (gridId === 'center' && cellIndex !== 4) {
+            const targetGridId = CENTER_TO_OUTER_MAP[cellIndex];
+            if (targetGridId) {
+              newGrids = newGrids.map((grid) =>
+                grid.id === targetGridId
+                  ? {
+                      ...grid,
+                      cells: grid.cells.map((cell) => ({
+                        ...cell,
+                        value: '',
+                        icon: undefined,
+                        completed: false,
+                      })),
+                    }
+                  : grid
+              );
+            }
+          }
 
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = {
