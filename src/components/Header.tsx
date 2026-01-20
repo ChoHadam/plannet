@@ -7,7 +7,11 @@ import { MandalartData } from '@/types/mandalart';
 import { DatePicker, formatPlanDate } from './DatePicker';
 import { MandalartGuide } from './MandalartGuide';
 
-export function Header() {
+interface HeaderProps {
+  onOpenAIChat?: () => void;
+}
+
+export function Header({ onOpenAIChat }: HeaderProps) {
   const data = useMandalartStore((state) => {
     if (!state.currentId) return null;
     return state.mandalarts.find(m => m.id === state.currentId) || null;
@@ -155,6 +159,36 @@ export function Header() {
             >
               {formatPlanDate(data.category, data.year, data.month, data.week, data.day)}
             </button>
+
+            {/* AI 어시스턴트 버튼 */}
+            {onOpenAIChat && (
+              <button
+                onClick={onOpenAIChat}
+                className="
+                  px-3 py-1.5 rounded-lg
+                  bg-violet-500 text-white text-sm font-medium
+                  hover:bg-violet-600 transition-colors
+                  flex items-center gap-1.5
+                "
+                title="AI 어시스턴트"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h2a4 4 0 0 1 4 4 4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4 4 4 0 0 1 4-4h2V9.4A4 4 0 0 1 12 2z" />
+                </svg>
+                AI
+                <span className="text-xs px-1 py-0.5 bg-white/20 rounded">Beta</span>
+              </button>
+            )}
 
             {/* 완료율 프로그레스 */}
             {progress.total > 0 && (
