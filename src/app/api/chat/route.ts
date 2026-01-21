@@ -1,52 +1,56 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { NextRequest, NextResponse } from 'next/server';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
+const openai = new OpenAI({
+  apiKey: process.env.OPENGATEWAY_API_KEY || '',
+  baseURL: process.env.OPENGATEWAY_BASE_URL || 'http://localhost:8080/v1',
 });
 
-// Tool 정의 - API 레벨에서 JSON 스키마 보장
-const tools: Anthropic.Tool[] = [
+// OpenAI Function Calling 정의
+const tools: OpenAI.ChatCompletionTool[] = [
   {
-    name: 'respond_to_user',
-    description: '사용자에게 응답합니다. action이 generate_actions일 때는 반드시 subGoal과 actions(8개) 배열을 함께 포함해야 합니다.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        message: {
-          type: 'string',
-          description: `사용자에게 보여줄 메시지 (한국어). action별 필수 형식:
+    type: 'function',
+    function: {
+      name: 'respond_to_user',
+      description: '사용자에게 응답합니다. action이 generate_actions일 때는 반드시 subGoal과 actions(8개) 배열을 함께 포함해야 합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: {
+            type: 'string',
+            description: `사용자에게 보여줄 메시지 (한국어). action별 필수 형식:
 - generate_actions (assistedCount=0): "'{subGoal}'의 실천 계획을 만들었어요!\\n\\n두 번째 하위 목표도 도와드릴까요?\\n\\n예시: 독서, 저축, 자격증 취득 등"
 - generate_actions (assistedCount=1): "'{subGoal}'의 실천 계획도 완성했어요!\\n\\n이제 나머지 하위 목표는 직접 채워보세요."
 - 확인 질문 금지! "~해볼까요?", "~할까요?" 형태의 질문 대신 완료형으로 작성`,
+          },
+          action: {
+            type: 'string',
+            enum: ['none', 'set_core_goal', 'generate_actions', 'end_conversation'],
+            description: '수행할 액션 타입. 사용자가 하위 목표를 언급하면 즉시 generate_actions 사용 (확인 질문 없이!)',
+          },
+          coreGoal: {
+            type: 'string',
+            description: '핵심 목표 (action이 set_core_goal일 때만 사용)',
+          },
+          subGoal: {
+            type: 'string',
+            description: '하위 목표 (action이 generate_actions일 때만 사용)',
+          },
+          actions: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 8,
+            maxItems: 8,
+            description: '실천 계획 8개 배열. action이 generate_actions일 때 반드시 포함해야 함! 각 항목은 10자 이내의 구체적이고 실행 가능한 행동. 예: ["아침 스트레칭", "주3회 헬스장", ...]',
+          },
         },
-        action: {
-          type: 'string',
-          enum: ['none', 'set_core_goal', 'generate_actions', 'end_conversation'],
-          description: '수행할 액션 타입. 사용자가 하위 목표를 언급하면 즉시 generate_actions 사용 (확인 질문 없이!)',
-        },
-        coreGoal: {
-          type: 'string',
-          description: '핵심 목표 (action이 set_core_goal일 때만 사용)',
-        },
-        subGoal: {
-          type: 'string',
-          description: '하위 목표 (action이 generate_actions일 때만 사용)',
-        },
-        actions: {
-          type: 'array',
-          items: { type: 'string' },
-          minItems: 8,
-          maxItems: 8,
-          description: '실천 계획 8개 배열. action이 generate_actions일 때 반드시 포함해야 함! 각 항목은 10자 이내의 구체적이고 실행 가능한 행동. 예: ["아침 스트레칭", "주3회 헬스장", ...]',
-        },
+        required: ['message', 'action'],
       },
-      required: ['message', 'action'],
     },
   },
 ];
 
-// 시스템 프롬프트 - JSON 형식 관련 지시 제거 (Tool Use가 처리)
+// 시스템 프롬프트
 const SYSTEM_PROMPT = `당신은 만다라트 목표 설정을 도와주는 친근한 AI 어시스턴트입니다.
 
 <만다라트_설명>
@@ -65,7 +69,7 @@ const SYSTEM_PROMPT = `당신은 만다라트 목표 설정을 도와주는 친�
 2. 친근하고 격려하는 톤을 유지하세요
 3. 응답은 간결하게 유지하세요
 4. 최대 2개의 하위 목표까지만 도와주세요
-5. 반드시 respond_to_user 도구를 사용하여 응답하세요
+5. 반드시 respond_to_user 함수를 호출하여 응답하세요
 </대화_규칙>
 
 <대화_흐름>
@@ -109,7 +113,7 @@ const SYSTEM_PROMPT = `당신은 만다라트 목표 설정을 도와주는 친�
    - 예시 메시지: "좋아요! 새로운 하위 목표를 채워볼까요?\n\n어떤 하위 목표를 추가하고 싶으세요?\n\n예시: 운동, 독서, 저축, 자격증 취득 등"
 </대화_흐름>
 
-<Tool_호출_예시>
+<Function_호출_예시>
 예시1 - 하위 목표 요청:
 사용자: "운동을 하고 싶어"
 올바른 응답 (assistedCount=0):
@@ -133,7 +137,7 @@ const SYSTEM_PROMPT = `당신은 만다라트 목표 설정을 도와주는 친�
   "message": "좋아요! 새로운 하위 목표를 채워볼까요?\n\n어떤 하위 목표를 추가하고 싶으세요?\n\n예시: 운동, 독서, 저축, 자격증 취득 등",
   "action": "none"
 }
-</Tool_호출_예시>
+</Function_호출_예시>
 
 <중요_규칙>
 - 사용자가 하위 목표를 말하면 확인 질문 없이 즉시 generate_actions 실행
@@ -149,7 +153,7 @@ interface Message {
   content: string;
 }
 
-interface ToolInput {
+interface FunctionArgs {
   message: string;
   action: 'none' | 'set_core_goal' | 'generate_actions' | 'end_conversation';
   coreGoal?: string;
@@ -171,7 +175,7 @@ export async function POST(req: NextRequest) {
       gridState?: GridState;
     };
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.OPENGATEWAY_API_KEY) {
       return NextResponse.json(
         { error: 'API key not configured' },
         { status: 500 }
@@ -206,41 +210,45 @@ export async function POST(req: NextRequest) {
 
     const startTime = Date.now();
 
-    const response = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT + '\n\n' + contextMessage,
-      tools,
-      tool_choice: { type: 'tool', name: 'respond_to_user' }, // 항상 이 도구 사용 강제
-      messages: messages.map((m: Message) => ({
+    // OpenAI 형식으로 메시지 변환
+    const openaiMessages: OpenAI.ChatCompletionMessageParam[] = [
+      { role: 'system', content: SYSTEM_PROMPT + '\n\n' + contextMessage },
+      ...messages.map((m): OpenAI.ChatCompletionMessageParam => ({
         role: m.role,
         content: m.content,
       })),
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENGATEWAY_MODEL || 'anthropic/claude-3-haiku-20240307',
+      max_tokens: 1024,
+      messages: openaiMessages,
+      tools,
+      tool_choice: { type: 'function', function: { name: 'respond_to_user' } },
     });
 
     const endTime = Date.now();
 
     // 토큰 사용량
     const usage = {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+      inputTokens: response.usage?.prompt_tokens || 0,
+      outputTokens: response.usage?.completion_tokens || 0,
+      totalTokens: response.usage?.total_tokens || 0,
       latencyMs: endTime - startTime,
       estimatedCostUSD: (
-        (response.usage.input_tokens * 0.25) / 1_000_000 +
-        (response.usage.output_tokens * 1.25) / 1_000_000
+        ((response.usage?.prompt_tokens || 0) * 0.25) / 1_000_000 +
+        ((response.usage?.completion_tokens || 0) * 1.25) / 1_000_000
       ).toFixed(6),
     };
 
     console.log('[AI Chat Usage]', JSON.stringify(usage, null, 2));
 
-    // Tool Use 응답 처리
-    const toolUseBlock = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
-    );
+    // Function Call 응답 처리
+    const choice = response.choices[0];
+    const toolCall = choice?.message?.tool_calls?.[0];
 
-    if (!toolUseBlock || toolUseBlock.name !== 'respond_to_user') {
-      console.error('[AI Error] No tool_use block found:', response.content);
+    if (!toolCall || toolCall.type !== 'function' || toolCall.function.name !== 'respond_to_user') {
+      console.error('[AI Error] No function call found:', choice?.message);
       return NextResponse.json({
         message: '죄송해요, 응답 처리 중 문제가 발생했어요. 다시 말씀해주시겠어요?',
         action: 'none',
@@ -249,15 +257,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Tool input은 이미 유효한 JSON 객체
-    const input = toolUseBlock.input as ToolInput;
+    // Function arguments 파싱
+    let input: FunctionArgs;
+    try {
+      input = JSON.parse(toolCall.function.arguments);
+    } catch (parseError) {
+      console.error('[AI Error] Failed to parse function arguments:', toolCall.function.arguments);
+      return NextResponse.json({
+        message: '응답을 처리하는 중 문제가 발생했어요. 다시 말씀해주세요.',
+        action: 'none',
+        data: {},
+        usage,
+      });
+    }
 
-    // 디버깅: Tool 응답 전체 로깅
-    console.log('[AI Tool Response]', JSON.stringify(input, null, 2));
+    // 디버깅: Function 응답 전체 로깅
+    console.log('[AI Function Response]', JSON.stringify(input, null, 2));
 
     // message 누락 체크
     if (!input.message) {
-      console.error('[AI Warning] message is missing from tool response!', input);
+      console.error('[AI Warning] message is missing from function response!', input);
       return NextResponse.json({
         message: '응답을 처리하는 중 문제가 발생했어요. 다시 말씀해주세요.',
         action: 'none',
