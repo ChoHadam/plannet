@@ -2,7 +2,7 @@
 
 import { useState, useRef, KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { TodoItem as TodoItemType } from '@/types/block6';
+import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { DraggableTodoItem } from './DraggableTodoItem';
 
 interface DroppableTodoListProps {
@@ -14,7 +14,8 @@ interface DroppableTodoListProps {
   onToggleTodo: (todoId: string) => void;
   onUpdateTodo: (todoId: string, text: string) => void;
   onDeleteTodo: (todoId: string) => void;
-  maxTodos?: number;
+  onColorChange?: (todoId: string, color: TodoColor) => void;
+  onDuplicate?: (todoId: string) => void;
   placeholder?: string;
 }
 
@@ -27,7 +28,8 @@ export function DroppableTodoList({
   onToggleTodo,
   onUpdateTodo,
   onDeleteTodo,
-  maxTodos = 5,
+  onColorChange,
+  onDuplicate,
   placeholder = '+ 할 일 추가',
 }: DroppableTodoListProps) {
   const [newTodoText, setNewTodoText] = useState('');
@@ -50,22 +52,24 @@ export function DroppableTodoList({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Prevent duplicate submission during IME composition (Korean, Japanese, etc.)
+    if (e.nativeEvent.isComposing || e.keyCode === 229) {
+      return;
+    }
     if (e.key === 'Enter') {
       handleAddTodo();
     }
   };
 
-  const canAddMore = !maxTodos || todos.length < maxTodos;
-
   return (
     <div
       ref={setNodeRef}
       className={`
-        flex-1 flex flex-col min-h-0 rounded-md transition-colors p-1 -m-1
+        flex flex-col rounded-md transition-colors p-1 -m-1
         ${isOver ? 'bg-blue-50 ring-2 ring-blue-300' : ''}
       `}
     >
-      <div className="flex-1 overflow-y-auto space-y-0.5">
+      <div className="space-y-0.5">
         {todos.map((todo) => (
           <DraggableTodoItem
             key={todo.id}
@@ -75,6 +79,8 @@ export function DroppableTodoList({
             onToggle={() => onToggleTodo(todo.id)}
             onUpdate={(text) => onUpdateTodo(todo.id, text)}
             onDelete={() => onDeleteTodo(todo.id)}
+            onColorChange={onColorChange ? (color) => onColorChange(todo.id, color) : undefined}
+            onDuplicate={onDuplicate ? () => onDuplicate(todo.id) : undefined}
           />
         ))}
 
@@ -85,34 +91,33 @@ export function DroppableTodoList({
         )}
       </div>
 
-      {canAddMore && (
-        <div className="mt-1 flex items-center gap-1">
-          <input
-            ref={inputRef}
-            type="text"
-            value={newTodoText}
-            onChange={(e) => setNewTodoText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
+      {/* Add todo input */}
+      <div className="mt-1 flex items-center gap-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={newTodoText}
+          onChange={(e) => setNewTodoText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="
+            flex-1 text-xs text-slate-500 placeholder:text-slate-400
+            bg-transparent border-none outline-none
+            focus:placeholder:text-slate-300
+          "
+        />
+        {newTodoText.trim() && (
+          <button
+            onClick={handleAddTodo}
             className="
-              flex-1 text-xs text-slate-500 placeholder:text-slate-400
-              bg-transparent border-none outline-none
-              focus:placeholder:text-slate-300
+              text-xs text-slate-400 hover:text-slate-600
+              transition-colors
             "
-          />
-          {newTodoText.trim() && (
-            <button
-              onClick={handleAddTodo}
-              className="
-                text-xs text-slate-400 hover:text-slate-600
-                transition-colors
-              "
-            >
-              추가
-            </button>
-          )}
-        </div>
-      )}
+          >
+            추가
+          </button>
+        )}
+      </div>
     </div>
   );
 }

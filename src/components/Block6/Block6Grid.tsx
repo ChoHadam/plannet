@@ -11,16 +11,20 @@ import {
   TIME_OF_DAY_LABELS,
   TimeOfDay,
   TodoItem,
+  BLOCK_TIME_OF_DAY,
 } from '@/types/block6';
 import { BLOCK6_TIME_COLORS, BLOCK6_TIME_BORDER_COLORS } from '@/lib/constants';
 import { BlockCard } from './BlockCard';
 import { TodoBacklog } from './TodoBacklog';
 
-// Group blocks by time of day for visual separation
-const TIME_GROUPS: { time: TimeOfDay; blocks: BlockNumber[] }[] = [
-  { time: 'morning', blocks: [1, 2] },
-  { time: 'afternoon', blocks: [3, 4] },
-  { time: 'evening', blocks: [5, 6] },
+// All block numbers in order
+const BLOCK_NUMBERS: BlockNumber[] = [1, 2, 3, 4, 5, 6];
+
+// Group blocks by time of day for legend
+const TIME_GROUPS: { time: TimeOfDay; label: string }[] = [
+  { time: 'morning', label: TIME_OF_DAY_LABELS.morning },
+  { time: 'afternoon', label: TIME_OF_DAY_LABELS.afternoon },
+  { time: 'evening', label: TIME_OF_DAY_LABELS.evening },
 ];
 
 export function Block6Grid() {
@@ -32,7 +36,6 @@ export function Block6Grid() {
   const data = block6Plans.find((p) => p.id === currentBlock6Id) || null;
 
   // Block operations
-  const updateBlockKeyword = useBlock6Store((state) => state.updateBlockKeyword);
   const addTodo = useBlock6Store((state) => state.addTodo);
   const toggleTodo = useBlock6Store((state) => state.toggleTodo);
   const updateTodo = useBlock6Store((state) => state.updateTodo);
@@ -43,6 +46,12 @@ export function Block6Grid() {
   const toggleBacklogTodo = useBlock6Store((state) => state.toggleBacklogTodo);
   const updateBacklogTodo = useBlock6Store((state) => state.updateBacklogTodo);
   const deleteBacklogTodo = useBlock6Store((state) => state.deleteBacklogTodo);
+  const updateBacklogTodoColor = useBlock6Store((state) => state.updateBacklogTodoColor);
+  const duplicateBacklogTodo = useBlock6Store((state) => state.duplicateBacklogTodo);
+
+  // Todo color and duplicate (for blocks)
+  const updateTodoColor = useBlock6Store((state) => state.updateTodoColor);
+  const duplicateTodo = useBlock6Store((state) => state.duplicateTodo);
 
   // Drag and drop
   const moveTodo = useBlock6Store((state) => state.moveTodo);
@@ -100,15 +109,18 @@ export function Block6Grid() {
           onToggleTodo={toggleBacklogTodo}
           onUpdateTodo={updateBacklogTodo}
           onDeleteTodo={deleteBacklogTodo}
+          onColorChange={updateBacklogTodoColor}
+          onDuplicate={duplicateBacklogTodo}
         />
 
-        {/* Main Grid */}
-        <div className="flex-1">
-          {/* Day Headers */}
-          <div className="grid grid-cols-8 gap-1 mb-2">
-            {/* Empty corner cell for row labels */}
+        {/* Main Grid - Column-based layout */}
+        <div className="flex-1 overflow-x-auto">
+          {/* Grid container: row labels column + 7 day columns */}
+          <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-1 min-w-[800px]">
+            {/* Header Row */}
+            {/* Empty corner for row labels */}
             <div className="h-8" />
-
+            {/* Day Headers */}
             {DAYS_OF_WEEK.map((day) => (
               <div
                 key={day}
@@ -121,28 +133,29 @@ export function Block6Grid() {
                 {DAY_LABELS[day]}
               </div>
             ))}
-          </div>
 
-          {/* Time Groups */}
-          {TIME_GROUPS.map(({ time, blocks }) => (
-            <div key={time} className="mb-3">
-              {/* Time Group Rows */}
-              {blocks.map((blockNumber, blockIndex) => (
-                <div key={blockNumber} className="grid grid-cols-8 gap-1 mb-1">
-                  {/* Row Label (Time of day + Block number) */}
+            {/* Block Rows */}
+            {BLOCK_NUMBERS.map((blockNumber) => {
+              const timeOfDay = BLOCK_TIME_OF_DAY[blockNumber];
+              const isFirstInGroup = blockNumber === 1 || blockNumber === 3 || blockNumber === 5;
+
+              return (
+                <>
+                  {/* Row Label */}
                   <div
+                    key={`label-${blockNumber}`}
                     className="
                       flex flex-col items-center justify-center
-                      text-xs font-medium rounded-lg px-1 py-2
+                      text-xs font-medium rounded-lg px-1 py-2 min-h-[120px]
                     "
                     style={{
-                      backgroundColor: BLOCK6_TIME_COLORS[time],
-                      borderLeft: `3px solid ${BLOCK6_TIME_BORDER_COLORS[time]}`,
+                      backgroundColor: BLOCK6_TIME_COLORS[timeOfDay],
+                      borderLeft: `3px solid ${BLOCK6_TIME_BORDER_COLORS[timeOfDay]}`,
                     }}
                   >
-                    {blockIndex === 0 && (
+                    {isFirstInGroup && (
                       <span className="text-slate-500 mb-0.5">
-                        {TIME_OF_DAY_LABELS[time]}
+                        {TIME_OF_DAY_LABELS[timeOfDay]}
                       </span>
                     )}
                     <span className="text-slate-400">Block {blockNumber}</span>
@@ -151,35 +164,36 @@ export function Block6Grid() {
                   {/* Block Cards for each day */}
                   {DAYS_OF_WEEK.map((day) => {
                     const block = getBlock(day, blockNumber);
-                    if (!block) return <div key={day} className="h-32" />;
+                    if (!block) return <div key={`${day}-${blockNumber}`} />;
 
                     return (
-                      <div key={day} className="h-32">
+                      <div key={`${day}-${blockNumber}`}>
                         <BlockCard
                           block={block}
-                          onKeywordChange={(keyword) => updateBlockKeyword(block.id, keyword)}
                           onAddTodo={(text) => addTodo(block.id, text)}
                           onToggleTodo={(todoId) => toggleTodo(block.id, todoId)}
                           onUpdateTodo={(todoId, text) => updateTodo(block.id, todoId, text)}
                           onDeleteTodo={(todoId) => deleteTodo(block.id, todoId)}
+                          onTodoColorChange={(todoId, color) => updateTodoColor(block.id, todoId, color)}
+                          onDuplicateTodo={(todoId) => duplicateTodo(block.id, todoId)}
                         />
                       </div>
                     );
                   })}
-                </div>
-              ))}
-            </div>
-          ))}
+                </>
+              );
+            })}
+          </div>
 
           {/* Legend */}
           <div className="flex items-center justify-center gap-6 mt-4 text-xs text-slate-500">
-            {TIME_GROUPS.map(({ time }) => (
+            {TIME_GROUPS.map(({ time, label }) => (
               <div key={time} className="flex items-center gap-1.5">
                 <div
                   className="w-3 h-3 rounded"
                   style={{ backgroundColor: BLOCK6_TIME_COLORS[time] }}
                 />
-                <span>{TIME_OF_DAY_LABELS[time]}</span>
+                <span>{label}</span>
               </div>
             ))}
           </div>

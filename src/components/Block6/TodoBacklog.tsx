@@ -2,7 +2,7 @@
 
 import { useState, KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { TodoItem as TodoItemType } from '@/types/block6';
+import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { DraggableTodoItem } from './DraggableTodoItem';
 
 interface TodoBacklogProps {
@@ -11,6 +11,8 @@ interface TodoBacklogProps {
   onToggleTodo: (todoId: string) => void;
   onUpdateTodo: (todoId: string, text: string) => void;
   onDeleteTodo: (todoId: string) => void;
+  onColorChange?: (todoId: string, color: TodoColor) => void;
+  onDuplicate?: (todoId: string) => void;
 }
 
 export function TodoBacklog({
@@ -19,6 +21,8 @@ export function TodoBacklog({
   onToggleTodo,
   onUpdateTodo,
   onDeleteTodo,
+  onColorChange,
+  onDuplicate,
 }: TodoBacklogProps) {
   const [newTodoText, setNewTodoText] = useState('');
   const completedCount = todos.filter((t) => t.completed).length;
@@ -41,6 +45,10 @@ export function TodoBacklog({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Prevent duplicate submission during IME composition (Korean, Japanese, etc.)
+    if (e.nativeEvent.isComposing || e.keyCode === 229) {
+      return;
+    }
     if (e.key === 'Enter') {
       handleAddTodo();
     }
@@ -109,6 +117,8 @@ export function TodoBacklog({
               onToggle={() => onToggleTodo(todo.id)}
               onUpdate={(text) => onUpdateTodo(todo.id, text)}
               onDelete={() => onDeleteTodo(todo.id)}
+              onColorChange={onColorChange ? (color) => onColorChange(todo.id, color) : undefined}
+              onDuplicate={onDuplicate ? () => onDuplicate(todo.id) : undefined}
             />
           ))
         )}
