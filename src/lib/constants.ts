@@ -1,4 +1,5 @@
 import { GridPosition } from '@/types/mandalart';
+import { TimeOfDay } from '@/types/block6';
 
 // Default color palette (pastel tones)
 export const DEFAULT_COLORS: Record<GridPosition, string> = {
@@ -39,3 +40,17 @@ export const COLOR_PRESETS = [
 
 // Storage key
 export const STORAGE_KEY = 'plannet-mandalart';
+
+// Block 6 time-based colors
+export const BLOCK6_TIME_COLORS: Record<TimeOfDay, string> = {
+  morning: '#FEF3C7',   // amber-100 (warm morning)
+  afternoon: '#DBEAFE', // blue-100 (cool afternoon)
+  evening: '#EDE9FE',   // violet-100 (calm evening)
+};
+
+// Block 6 time-based border colors (for visual emphasis)
+export const BLOCK6_TIME_BORDER_COLORS: Record<TimeOfDay, string> = {
+  morning: '#FCD34D',   // amber-300
+  afternoon: '#93C5FD', // blue-300
+  evening: '#C4B5FD',   // violet-300
+};
