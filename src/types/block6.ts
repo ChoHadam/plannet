@@ -40,11 +40,15 @@ export const TIME_OF_DAY_LABELS: Record<TimeOfDay, string> = {
   evening: '저녁',
 };
 
+// Todo color type
+export type TodoColor = 'none' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'gray';
+
 // Todo item within a block
 export interface TodoItem {
   id: string;
   text: string;
   completed: boolean;
+  color?: TodoColor;
 }
 
 // Individual block data

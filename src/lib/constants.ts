@@ -1,5 +1,5 @@
 import { GridPosition } from '@/types/mandalart';
-import { TimeOfDay } from '@/types/block6';
+import { TimeOfDay, TodoColor } from '@/types/block6';
 
 // Default color palette (pastel tones)
 export const DEFAULT_COLORS: Record<GridPosition, string> = {
@@ -54,3 +54,47 @@ export const BLOCK6_TIME_BORDER_COLORS: Record<TimeOfDay, string> = {
   afternoon: '#93C5FD', // blue-300
   evening: '#C4B5FD',   // violet-300
 };
+
+// Todo item colors - bar color (left border)
+export const TODO_COLOR_BAR: Record<TodoColor, string> = {
+  none: 'transparent',
+  red: '#EF4444',      // red-500
+  orange: '#F97316',   // orange-500
+  yellow: '#EAB308',   // yellow-500
+  green: '#22C55E',    // green-500
+  blue: '#3B82F6',     // blue-500
+  purple: '#8B5CF6',   // violet-500
+  pink: '#EC4899',     // pink-500
+  gray: '#6B7280',     // gray-500
+};
+
+// Todo item colors - background color (light)
+export const TODO_COLOR_BG: Record<TodoColor, string> = {
+  none: 'transparent',
+  red: '#FEF2F2',      // red-50
+  orange: '#FFF7ED',   // orange-50
+  yellow: '#FEFCE8',   // yellow-50
+  green: '#F0FDF4',    // green-50
+  blue: '#EFF6FF',     // blue-50
+  purple: '#F5F3FF',   // violet-50
+  pink: '#FDF2F8',     // pink-50
+  gray: '#F9FAFB',     // gray-50
+};
+
+// Todo color labels (Korean)
+export const TODO_COLOR_LABELS: Record<TodoColor, string> = {
+  none: '없음',
+  red: '빨강',
+  orange: '주황',
+  yellow: '노랑',
+  green: '초록',
+  blue: '파랑',
+  purple: '보라',
+  pink: '분홍',
+  gray: '회색',
+};
+
+// Todo colors array for picker
+export const TODO_COLORS: TodoColor[] = [
+  'none', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'
+];

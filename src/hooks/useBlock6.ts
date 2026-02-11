@@ -11,6 +11,7 @@ import {
   DayOfWeek,
   DAYS_OF_WEEK,
   TodoItem,
+  TodoColor,
 } from '@/types/block6';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 
@@ -39,12 +40,16 @@ interface Block6Store {
   updateTodo: (blockId: string, todoId: string, text: string) => void;
   toggleTodo: (blockId: string, todoId: string) => void;
   deleteTodo: (blockId: string, todoId: string) => void;
+  updateTodoColor: (blockId: string, todoId: string, color: TodoColor) => void;
+  duplicateTodo: (blockId: string, todoId: string) => void;
 
   // Backlog operations
   addBacklogTodo: (text: string) => void;
   updateBacklogTodo: (todoId: string, text: string) => void;
   toggleBacklogTodo: (todoId: string) => void;
   deleteBacklogTodo: (todoId: string) => void;
+  updateBacklogTodoColor: (todoId: string, color: TodoColor) => void;
+  duplicateBacklogTodo: (todoId: string) => void;
 
   // Drag and drop operations
   moveTodo: (
@@ -334,6 +339,77 @@ export const useBlock6Store = create<Block6Store>()(
         });
       },
 
+      updateTodoColor: (blockId: string, todoId: string, color: TodoColor) => {
+        const currentId = get().currentBlock6Id;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.block6Plans[planIndex];
+          const newBlocks = plan.blocks.map((block) =>
+            block.id === blockId
+              ? {
+                  ...block,
+                  todos: block.todos.map((todo) =>
+                    todo.id === todoId ? { ...todo, color } : todo
+                  ),
+                }
+              : block
+          );
+
+          const newPlans = [...state.block6Plans];
+          newPlans[planIndex] = {
+            ...plan,
+            blocks: newBlocks,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { block6Plans: newPlans };
+        });
+      },
+
+      duplicateTodo: (blockId: string, todoId: string) => {
+        const currentId = get().currentBlock6Id;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.block6Plans[planIndex];
+          const newBlocks = plan.blocks.map((block) => {
+            if (block.id !== blockId) return block;
+
+            const originalTodo = block.todos.find((t) => t.id === todoId);
+            if (!originalTodo) return block;
+
+            const duplicatedTodo: TodoItem = {
+              id: generateId(),
+              text: originalTodo.text,
+              completed: false,
+              color: originalTodo.color,
+            };
+
+            const todoIndex = block.todos.findIndex((t) => t.id === todoId);
+            const newTodos = [...block.todos];
+            newTodos.splice(todoIndex + 1, 0, duplicatedTodo);
+
+            return { ...block, todos: newTodos };
+          });
+
+          const newPlans = [...state.block6Plans];
+          newPlans[planIndex] = {
+            ...plan,
+            blocks: newBlocks,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { block6Plans: newPlans };
+        });
+      },
+
       // Backlog operations
       addBacklogTodo: (text: string) => {
         const currentId = get().currentBlock6Id;
@@ -419,6 +495,64 @@ export const useBlock6Store = create<Block6Store>()(
 
           const plan = state.block6Plans[planIndex];
           const newBacklog = plan.backlog.filter((todo) => todo.id !== todoId);
+
+          const newPlans = [...state.block6Plans];
+          newPlans[planIndex] = {
+            ...plan,
+            backlog: newBacklog,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { block6Plans: newPlans };
+        });
+      },
+
+      updateBacklogTodoColor: (todoId: string, color: TodoColor) => {
+        const currentId = get().currentBlock6Id;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.block6Plans[planIndex];
+          const newBacklog = plan.backlog.map((todo) =>
+            todo.id === todoId ? { ...todo, color } : todo
+          );
+
+          const newPlans = [...state.block6Plans];
+          newPlans[planIndex] = {
+            ...plan,
+            backlog: newBacklog,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { block6Plans: newPlans };
+        });
+      },
+
+      duplicateBacklogTodo: (todoId: string) => {
+        const currentId = get().currentBlock6Id;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.block6Plans[planIndex];
+          const originalTodo = plan.backlog.find((t) => t.id === todoId);
+          if (!originalTodo) return state;
+
+          const duplicatedTodo: TodoItem = {
+            id: generateId(),
+            text: originalTodo.text,
+            completed: false,
+            color: originalTodo.color,
+          };
+
+          const todoIndex = plan.backlog.findIndex((t) => t.id === todoId);
+          const newBacklog = [...plan.backlog];
+          newBacklog.splice(todoIndex + 1, 0, duplicatedTodo);
 
           const newPlans = [...state.block6Plans];
           newPlans[planIndex] = {
