@@ -83,9 +83,9 @@ export function Cell({
           {localValue && (
             <span className={`
               text-center leading-tight truncate max-w-full
-              ${isMainGoal ? 'text-xs font-bold text-slate-800' : ''}
-              ${isSubGoal ? 'text-[10px] font-bold text-slate-700' : ''}
-              ${!isMainGoal && !isSubGoal ? 'text-[10px] text-slate-600' : ''}
+              ${isMainGoal ? 'text-xs font-bold text-slate-700' : ''}
+              ${isSubGoal ? 'text-[10px] font-bold text-slate-600' : ''}
+              ${!isMainGoal && !isSubGoal ? 'text-[10px] text-slate-500' : ''}
               ${completed ? 'line-through' : ''}
             `}>
               {localValue}
@@ -107,9 +107,9 @@ export function Cell({
             placeholder:text-slate-400/60
             overflow-hidden
             transition-all duration-200
-            ${isMainGoal ? 'text-sm font-bold text-slate-800' : ''}
-            ${isSubGoal ? 'text-xs font-bold text-slate-700' : ''}
-            ${!isMainGoal && !isSubGoal ? 'text-xs text-slate-600' : ''}
+            ${isMainGoal ? 'text-sm font-bold text-slate-700' : ''}
+            ${isSubGoal ? 'text-xs font-bold text-slate-600' : ''}
+            ${!isMainGoal && !isSubGoal ? 'text-xs text-slate-500' : ''}
             ${disabled ? 'cursor-not-allowed' : ''}
             ${completed ? 'line-through opacity-50' : ''}
           `}
