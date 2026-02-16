@@ -117,7 +117,7 @@ export function DraggableTodoItem({
         borderLeft: todoColor !== 'none' ? `3px solid ${barColor}` : undefined,
       }}
       className={`
-        group flex items-center gap-1 py-0.5 px-1 rounded relative
+        group flex items-center gap-1 py-1.5 px-1 rounded relative
         ${isDragging ? 'z-50 bg-white shadow-lg' : ''}
         ${todoColor !== 'none' ? 'pl-1' : ''}
       `}
