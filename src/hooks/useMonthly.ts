@@ -8,7 +8,6 @@ import {
   MonthlyData,
   MonthlyGoal,
   WeeklyFocus,
-  CalendarEvent,
   createInitialWeeklyFocus,
 } from '@/types/monthly';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
@@ -40,12 +39,6 @@ interface MonthlyStore {
   // Weekly focus operations
   updateWeeklyFocus: (weekNumber: number, text: string) => void;
 
-  // Event operations
-  addEvent: (date: number, text: string, color?: string) => void;
-  updateEvent: (eventId: string, text: string) => void;
-  updateEventColor: (eventId: string, color: string) => void;
-  deleteEvent: (eventId: string) => void;
-
   // Memo
   updateMemo: (memo: string) => void;
 
@@ -74,7 +67,6 @@ const createInitialMonthlyPlan = (
     month: planMonth,
     goals: [],
     weeklyFocus: createInitialWeeklyFocus(),
-    events: [],
     memo: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -325,113 +317,6 @@ export const useMonthlyStore = create<MonthlyStore>()(
           newPlans[planIndex] = {
             ...plan,
             weeklyFocus: newWeeklyFocus,
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { monthlyPlans: newPlans };
-        });
-      },
-
-      // Event operations
-      addEvent: (date: number, text: string, color?: string) => {
-        const currentId = get().currentMonthlyId;
-        if (!currentId) return;
-
-        const trimmedText = sanitizeInput(text);
-        if (!trimmedText) return;
-
-        set((state) => {
-          const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const plan = state.monthlyPlans[planIndex];
-          const newEvent: CalendarEvent = {
-            id: generateId(),
-            date,
-            text: trimmedText,
-            color,
-          };
-
-          const newPlans = [...state.monthlyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            events: [...plan.events, newEvent],
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { monthlyPlans: newPlans };
-        });
-      },
-
-      updateEvent: (eventId: string, text: string) => {
-        const currentId = get().currentMonthlyId;
-        if (!currentId) return;
-
-        const trimmedText = sanitizeInput(text);
-
-        set((state) => {
-          const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const plan = state.monthlyPlans[planIndex];
-          const eventIndex = plan.events.findIndex((e) => e.id === eventId);
-          if (eventIndex === -1) return state;
-
-          const newEvents = [...plan.events];
-          newEvents[eventIndex] = { ...newEvents[eventIndex], text: trimmedText };
-
-          const newPlans = [...state.monthlyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            events: newEvents,
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { monthlyPlans: newPlans };
-        });
-      },
-
-      updateEventColor: (eventId: string, color: string) => {
-        const currentId = get().currentMonthlyId;
-        if (!currentId) return;
-
-        set((state) => {
-          const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const plan = state.monthlyPlans[planIndex];
-          const eventIndex = plan.events.findIndex((e) => e.id === eventId);
-          if (eventIndex === -1) return state;
-
-          const newEvents = [...plan.events];
-          newEvents[eventIndex] = { ...newEvents[eventIndex], color };
-
-          const newPlans = [...state.monthlyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            events: newEvents,
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { monthlyPlans: newPlans };
-        });
-      },
-
-      deleteEvent: (eventId: string) => {
-        const currentId = get().currentMonthlyId;
-        if (!currentId) return;
-
-        set((state) => {
-          const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const plan = state.monthlyPlans[planIndex];
-          const newEvents = plan.events.filter((e) => e.id !== eventId);
-
-          const newPlans = [...state.monthlyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            events: newEvents,
             updatedAt: new Date().toISOString(),
           };
 

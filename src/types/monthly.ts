@@ -13,13 +13,6 @@ export interface WeeklyFocus {
   text: string;
 }
 
-export interface CalendarEvent {
-  id: string;
-  date: number; // day of month (1-31)
-  text: string;
-  color?: string;
-}
-
 export interface MonthlyData {
   id: string;
   title: string;
@@ -29,7 +22,6 @@ export interface MonthlyData {
   month: number; // 1-12
   goals: MonthlyGoal[]; // max 5
   weeklyFocus: WeeklyFocus[]; // 5 weeks (W1-W5)
-  events: CalendarEvent[];
   memo: string;
   createdAt: string;
   updatedAt: string;

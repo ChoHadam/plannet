@@ -1,25 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarEvent, getDaysInMonth, getFirstDayOfMonth } from '@/types/monthly';
-import { useMonthlyStore } from '@/hooks/useMonthly';
+import { WeeklyFocus, getDaysInMonth, getFirstDayOfMonth } from '@/types/monthly';
 import { MONTHLY_COLORS } from '@/lib/constants';
 
 interface CompactCalendarProps {
   year: number;
   month: number;
-  events: CalendarEvent[];
+  weeklyFocus: WeeklyFocus[];
 }
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
-export function CompactCalendar({ year, month, events }: CompactCalendarProps) {
-  const [selectedDate, setSelectedDate] = useState<number | null>(null);
-  const [newEventText, setNewEventText] = useState('');
-
-  const addEvent = useMonthlyStore((state) => state.addEvent);
-  const deleteEvent = useMonthlyStore((state) => state.deleteEvent);
-
+export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarProps) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDayOfMonth = getFirstDayOfMonth(year, month);
 
@@ -28,35 +20,38 @@ export function CompactCalendar({ year, month, events }: CompactCalendarProps) {
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   const todayDate = isCurrentMonth ? today.getDate() : null;
 
-  // Create calendar grid
-  const calendarDays: (number | null)[] = [];
+  // Create calendar grid organized by weeks
+  const weeks: (number | null)[][] = [];
+  let currentWeek: (number | null)[] = [];
 
   // Add empty cells for days before the first day of month
   for (let i = 0; i < firstDayOfMonth; i++) {
-    calendarDays.push(null);
+    currentWeek.push(null);
   }
 
   // Add days of month
   for (let day = 1; day <= daysInMonth; day++) {
-    calendarDays.push(day);
+    currentWeek.push(day);
+
+    // Start new week on Sunday (after Saturday)
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
   }
 
-  // Get events for a specific date
-  const getEventsForDate = (date: number) => {
-    return events.filter((e) => e.date === date);
-  };
-
-  const handleAddEvent = () => {
-    if (selectedDate && newEventText.trim()) {
-      addEvent(selectedDate, newEventText.trim());
-      setNewEventText('');
+  // Add remaining days to last week
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) {
+      currentWeek.push(null);
     }
-  };
+    weeks.push(currentWeek);
+  }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-      handleAddEvent();
-    }
+  // Get weekly focus text for a given week index
+  const getWeekFocusText = (weekIndex: number): string => {
+    const focus = weeklyFocus.find((w) => w.weekNumber === weekIndex + 1);
+    return focus?.text || '';
   };
 
   return (
@@ -76,121 +71,73 @@ export function CompactCalendar({ year, month, events }: CompactCalendarProps) {
         ))}
       </div>
 
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-1">
-        {calendarDays.map((day, idx) => {
-          if (day === null) {
-            return <div key={`empty-${idx}`} className="aspect-square" />;
-          }
-
-          const dayEvents = getEventsForDate(day);
-          const hasEvents = dayEvents.length > 0;
-          const isToday = day === todayDate;
-          const isSelected = day === selectedDate;
-          const dayOfWeek = (firstDayOfMonth + day - 1) % 7;
-          const isSunday = dayOfWeek === 0;
-          const isSaturday = dayOfWeek === 6;
+      {/* Calendar grid by weeks */}
+      <div className="space-y-1">
+        {weeks.map((week, weekIndex) => {
+          const focusText = getWeekFocusText(weekIndex);
 
           return (
-            <button
-              key={day}
-              onClick={() => setSelectedDate(day === selectedDate ? null : day)}
-              className={`
-                aspect-square rounded-lg flex flex-col items-center justify-center
-                text-sm transition-all relative
-                ${isToday ? 'ring-2 ring-red-400 ring-offset-1' : ''}
-                ${isSelected ? 'bg-slate-800 text-white' : 'hover:bg-slate-100'}
-                ${!isSelected && isSunday ? 'text-red-500' : ''}
-                ${!isSelected && isSaturday ? 'text-blue-500' : ''}
-                ${!isSelected && !isSunday && !isSaturday ? 'text-slate-700' : ''}
-              `}
-            >
-              <span className="font-medium">{day}</span>
-              {hasEvents && (
-                <div className="absolute bottom-1 flex gap-0.5">
-                  {dayEvents.slice(0, 3).map((event, i) => (
-                    <span
-                      key={i}
-                      className="w-1 h-1 rounded-full"
-                      style={{ backgroundColor: event.color || MONTHLY_COLORS.eventDot }}
-                    />
-                  ))}
-                </div>
-              )}
-            </button>
+            <div key={weekIndex} className="flex items-center gap-2">
+              {/* Days row */}
+              <div className="grid grid-cols-7 gap-1 flex-shrink-0" style={{ width: '196px' }}>
+                {week.map((day, dayIndex) => {
+                  if (day === null) {
+                    return <div key={`empty-${weekIndex}-${dayIndex}`} className="w-7 h-7" />;
+                  }
+
+                  const isToday = day === todayDate;
+                  const dayOfWeek = (firstDayOfMonth + day - 1) % 7;
+                  const isSunday = dayOfWeek === 0;
+                  const isSaturday = dayOfWeek === 6;
+
+                  return (
+                    <div
+                      key={day}
+                      className={`
+                        w-7 h-7 rounded-md flex items-center justify-center
+                        text-xs font-medium
+                        ${isToday ? 'ring-2 ring-red-400 ring-offset-1 bg-red-50' : ''}
+                        ${isSunday ? 'text-red-500' : ''}
+                        ${isSaturday ? 'text-blue-500' : ''}
+                        ${!isSunday && !isSaturday ? 'text-slate-700' : ''}
+                      `}
+                    >
+                      {day}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Weekly focus text */}
+              <div className="flex-1 min-w-0">
+                {focusText ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-slate-400 flex-shrink-0">
+                      W{weekIndex + 1}
+                    </span>
+                    <span className="text-xs text-slate-600 truncate">
+                      {focusText}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-slate-300">
+                    W{weekIndex + 1}
+                  </span>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
 
-      {/* Selected date events */}
-      {selectedDate && (
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <h4 className="text-sm font-medium text-slate-700 mb-2">
-            {month}월 {selectedDate}일
-          </h4>
-
-          {/* Event list */}
-          <div className="space-y-1 mb-3">
-            {getEventsForDate(selectedDate).length > 0 ? (
-              getEventsForDate(selectedDate).map((event) => (
-                <div
-                  key={event.id}
-                  className="flex items-center gap-2 text-xs text-slate-600 py-1 px-2 bg-slate-50 rounded group"
-                >
-                  <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: event.color || MONTHLY_COLORS.eventDot }}
-                  />
-                  <span className="flex-1 truncate">{event.text}</span>
-                  <button
-                    onClick={() => deleteEvent(event.id)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-slate-400">이벤트가 없습니다</p>
-            )}
-          </div>
-
-          {/* Add event input */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newEventText}
-              onChange={(e) => setNewEventText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="이벤트 추가..."
-              className="flex-1 text-xs px-2 py-1.5 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
-            />
-            <button
-              onClick={handleAddEvent}
-              disabled={!newEventText.trim()}
-              className="px-2 py-1.5 text-xs bg-slate-800 text-white rounded hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              추가
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Legend */}
       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500">
         <div className="flex items-center gap-1">
-          <span
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: MONTHLY_COLORS.eventDot }}
-          />
-          <span>이벤트</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-4 h-4 rounded border-2 border-red-400" />
+          <span className="w-4 h-4 rounded border-2 border-red-400 bg-red-50" />
           <span>오늘</span>
+        </div>
+        <div className="flex items-center gap-1 text-slate-400">
+          <span>W1~W5: 주간 포커스</span>
         </div>
       </div>
     </div>

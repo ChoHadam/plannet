@@ -38,8 +38,8 @@ Mandalart(목표 설정)와 Block 6(일일 실행)를 연결하는 전략적 월
 │  │ 25 26 27 28 │  │   │ W2: ____________________________    │   │
 │  └─────────────┘  │   │ W3: ____________________________    │   │
 │                   │   │ W4: ____________________________    │   │
-│   • 이벤트 있음   │   │ W5: ____________________________    │   │
-│   ○ 오늘          │   └─────────────────────────────────────┘   │
+│   (주간 포커스가  │   │ W5: ____________________________    │   │
+│    캘린더에 표시) │   └─────────────────────────────────────┘   │
 │                   │                                             │
 │                   │   ┌─────────────────────────────────────┐   │
 │                   │   │ 메모                                 │   │
@@ -71,13 +71,6 @@ export interface WeeklyFocus {
   text: string;
 }
 
-export interface CalendarEvent {
-  id: string;
-  date: number; // day of month (1-31)
-  text: string;
-  color?: string;
-}
-
 export interface MonthlyData {
   id: string;
   title: string;
@@ -87,7 +80,6 @@ export interface MonthlyData {
   month: number; // 1-12
   goals: MonthlyGoal[]; // 최대 5개
   weeklyFocus: WeeklyFocus[]; // 5개 (W1-W5)
-  events: CalendarEvent[];
   memo: string;
   createdAt: string;
   updatedAt: string;
@@ -138,11 +130,6 @@ interface MonthlyStore {
   // Weekly Focus
   updateWeeklyFocus: (weekNumber: number, text: string) => void;
 
-  // Events
-  addEvent: (date: number, text: string) => void;
-  updateEvent: (eventId: string, text: string) => void;
-  deleteEvent: (eventId: string) => void;
-
   // Memo
   updateMemo: (memo: string) => void;
 
@@ -161,7 +148,7 @@ interface MonthlyStore {
 |------|------|
 | `index.ts` | 배럴 export |
 | `MonthlyGrid.tsx` | 메인 레이아웃 (좌: 캘린더, 우: 대시보드) |
-| `CompactCalendar.tsx` | 월간 캘린더 (이벤트 표시) |
+| `CompactCalendar.tsx` | 월간 캘린더 (주간 포커스 표시) |
 | `MonthlyGoals.tsx` | 이달의 목표 (진행률 바 + 만다라트 불러오기) |
 | `WeeklyFocus.tsx` | 주간 포커스 입력 영역 |
 | `MemoSection.tsx` | 메모 영역 |
@@ -171,10 +158,10 @@ interface MonthlyStore {
 ### 컴포넌트 상세
 
 **CompactCalendar.tsx:**
-- 7열 x 5~6행 그리드
-- 이벤트 있는 날짜에 색상 점 표시
+- 7열 x 5~6행 그리드 (주 단위로 구성)
+- 각 주(row) 옆에 주간 포커스 텍스트 표시
 - 오늘 날짜 강조
-- 날짜 클릭 시 이벤트 추가/편집
+- WeeklyFocus 컴포넌트에서 입력한 내용이 캘린더에 반영
 
 **MonthlyGoals.tsx:**
 - 최대 5개 목표
@@ -271,7 +258,6 @@ const currentTemplate = currentMandalartId ? 'mandalart'
 export const MONTHLY_COLORS = {
   goalProgress: '#3B82F6', // blue-500
   goalComplete: '#22C55E', // green-500
-  eventDot: '#F59E0B',     // amber-500
   today: '#EF4444',        // red-500
 };
 ```
@@ -284,9 +270,8 @@ export const MONTHLY_COLORS = {
 
 1. **월간 나침반 소개**: 한 달의 방향을 설정하는 도구
 2. **이달의 목표**: 3~5개의 핵심 목표 설정
-3. **주간 포커스**: 각 주에 집중할 영역 기입
-4. **캘린더**: 중요 이벤트/마감일 표시
-5. **시작하기** 버튼
+3. **주간 포커스**: 각 주에 집중할 영역 기입 (캘린더에 표시됨)
+4. **시작하기** 버튼
 
 ---
 
@@ -330,10 +315,9 @@ export const MONTHLY_COLORS = {
 
 1. **기본 동작**: Sidebar에서 월간 플래너 선택 후 새 플랜 생성
 2. **목표 관리**: 추가, 진행률 조절, 완료 토글, 삭제
-3. **주간 포커스**: 각 주 텍스트 입력/수정
-4. **캘린더**: 이벤트 추가, 날짜별 표시 확인
-5. **데이터 저장**: 새로고침 후 데이터 유지
-6. **월 이동**: 이전/다음 월 네비게이션
+3. **주간 포커스**: 각 주 텍스트 입력/수정 → 캘린더에 표시 확인
+4. **데이터 저장**: 새로고침 후 데이터 유지
+5. **월 이동**: 이전/다음 월 네비게이션
 
 ---
 

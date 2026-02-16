@@ -103,6 +103,5 @@ export const TODO_COLORS: TodoColor[] = [
 export const MONTHLY_COLORS = {
   goalProgress: '#3B82F6', // blue-500
   goalComplete: '#22C55E', // green-500
-  eventDot: '#F59E0B',     // amber-500
   today: '#EF4444',        // red-500
 };

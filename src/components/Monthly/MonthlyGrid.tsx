@@ -61,7 +61,7 @@ export function MonthlyGrid() {
           <CompactCalendar
             year={data.year}
             month={data.month}
-            events={data.events}
+            weeklyFocus={data.weeklyFocus}
           />
         </div>
 
