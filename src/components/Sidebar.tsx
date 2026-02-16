@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useBlock6Store } from '@/hooks/useBlock6';
+import { useMonthlyStore } from '@/hooks/useMonthly';
 import {
   PlanCategory,
   PLAN_CATEGORY_LABELS,
@@ -11,12 +12,14 @@ import {
   MandalartData,
 } from '@/types/mandalart';
 import { Block6Data } from '@/types/block6';
+import { MonthlyData } from '@/types/monthly';
 import { formatPlanDate } from './DatePicker';
 import { MandalartGuide } from './MandalartGuide';
 import { Block6Guide } from './Block6';
+import { MonthlyGuide } from './Monthly';
 
 // Union type for all plan types
-type PlanData = MandalartData | Block6Data;
+type PlanData = MandalartData | Block6Data | MonthlyData;
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
@@ -87,13 +90,15 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                       text-[10px] px-1.5 py-0.5 rounded-full
                       ${plan.template === 'block6'
                         ? 'bg-violet-100 text-violet-600'
+                        : plan.template === 'monthly'
+                        ? 'bg-blue-100 text-blue-600'
                         : 'bg-amber-100 text-amber-600'}
                     `}>
                       {TEMPLATE_LABELS[plan.template]}
                     </span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day, true)}
+                    {formatPlanDate(plan.category, plan.year, plan.month, 'week' in plan ? plan.week : undefined, 'day' in plan ? plan.day : undefined, true)}
                   </span>
                 </div>
                 <button
@@ -134,6 +139,7 @@ function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateMod
   const templates: { type: TemplateType; description: string; hasGuide?: boolean }[] = [
     { type: 'mandalart', description: '9x9 그리드로 목표를 세분화', hasGuide: true },
     { type: 'block6', description: '하루 6블록 시간 관리', hasGuide: true },
+    { type: 'monthly', description: '월간 목표와 주간 계획', hasGuide: true },
   ];
 
   return (
@@ -224,20 +230,29 @@ export function Sidebar() {
   const selectBlock6Plan = useBlock6Store((state) => state.selectBlock6Plan);
   const deleteBlock6Plan = useBlock6Store((state) => state.deleteBlock6Plan);
 
+  // Monthly store
+  const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
+  const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
+  const createMonthlyPlan = useMonthlyStore((state) => state.createMonthlyPlan);
+  const selectMonthlyPlan = useMonthlyStore((state) => state.selectMonthlyPlan);
+  const deleteMonthlyPlan = useMonthlyStore((state) => state.deleteMonthlyPlan);
+
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ plan: PlanData; template: TemplateType } | null>(null);
   const [showMandalartGuide, setShowMandalartGuide] = useState(false);
   const [showBlock6Guide, setShowBlock6Guide] = useState(false);
+  const [showMonthlyGuide, setShowMonthlyGuide] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<TemplateType | null>(null);
 
   // Determine current template based on which store has a selection
-  const currentTemplate: TemplateType | null = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : null;
-  const currentId = currentMandalartId || currentBlock6Id;
+  const currentTemplate: TemplateType | null = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : currentMonthlyId ? 'monthly' : null;
+  const currentId = currentMandalartId || currentBlock6Id || currentMonthlyId;
 
   const getPlansByCategory = (category: PlanCategory): PlanData[] => {
     const mandalartPlans = mandalarts.filter((m) => m.category === category);
     const block6CategoryPlans = block6Plans.filter((p) => p.category === category);
-    return [...mandalartPlans, ...block6CategoryPlans];
+    const monthlyCategoryPlans = monthlyPlans.filter((p) => p.category === category);
+    return [...mandalartPlans, ...block6CategoryPlans, ...monthlyCategoryPlans];
   };
 
   const handleCreateClick = (category: PlanCategory) => {
@@ -250,22 +265,25 @@ export function Sidebar() {
       setShowMandalartGuide(true);
     } else if (template === 'block6') {
       setShowBlock6Guide(true);
+    } else if (template === 'monthly') {
+      setShowMonthlyGuide(true);
     }
   };
 
   const handleSelect = (id: string, template: TemplateType) => {
+    // Clear all other selections
     if (template === 'mandalart') {
-      // Clear block6 selection when selecting mandalart
-      if (currentBlock6Id) {
-        useBlock6Store.setState({ currentBlock6Id: null });
-      }
+      if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
+      if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
       selectMandalart(id);
     } else if (template === 'block6') {
-      // Clear mandalart selection when selecting block6
-      if (currentMandalartId) {
-        useMandalartStore.setState({ currentId: null });
-      }
+      if (currentMandalartId) useMandalartStore.setState({ currentId: null });
+      if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
       selectBlock6Plan(id);
+    } else if (template === 'monthly') {
+      if (currentMandalartId) useMandalartStore.setState({ currentId: null });
+      if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
+      selectMonthlyPlan(id);
     }
   };
 
@@ -273,8 +291,10 @@ export function Sidebar() {
     let plan: PlanData | undefined;
     if (template === 'mandalart') {
       plan = mandalarts.find(m => m.id === id);
-    } else {
+    } else if (template === 'block6') {
       plan = block6Plans.find(p => p.id === id);
+    } else if (template === 'monthly') {
+      plan = monthlyPlans.find(p => p.id === id);
     }
     if (plan) {
       setDeleteTarget({ plan, template });
@@ -285,8 +305,10 @@ export function Sidebar() {
     if (deleteTarget) {
       if (deleteTarget.template === 'mandalart') {
         deleteMandalart(deleteTarget.plan.id);
-      } else {
+      } else if (deleteTarget.template === 'block6') {
         deleteBlock6Plan(deleteTarget.plan.id);
+      } else if (deleteTarget.template === 'monthly') {
+        deleteMonthlyPlan(deleteTarget.plan.id);
       }
       setDeleteTarget(null);
     }
@@ -298,14 +320,19 @@ export function Sidebar() {
       setShowMandalartGuide(true);
     } else if (template === 'block6') {
       setShowBlock6Guide(true);
+    } else if (template === 'monthly') {
+      setShowMonthlyGuide(true);
     }
   };
 
   const handleMandalartGuideStart = () => {
     if (createCategory) {
-      // Clear block6 selection
+      // Clear other selections
       if (currentBlock6Id) {
         useBlock6Store.setState({ currentBlock6Id: null });
+      }
+      if (currentMonthlyId) {
+        useMonthlyStore.setState({ currentMonthlyId: null });
       }
       createMandalart(createCategory);
     }
@@ -320,6 +347,9 @@ export function Sidebar() {
       if (currentMandalartId) {
         useMandalartStore.setState({ currentId: null });
       }
+      if (currentMonthlyId) {
+        useMonthlyStore.setState({ currentMonthlyId: null });
+      }
       createBlock6Plan(createCategory);
     }
     setShowBlock6Guide(false);
@@ -327,9 +357,26 @@ export function Sidebar() {
     setPendingTemplate(null);
   };
 
+  const handleMonthlyGuideStart = () => {
+    if (createCategory) {
+      // Clear other selections
+      if (currentMandalartId) {
+        useMandalartStore.setState({ currentId: null });
+      }
+      if (currentBlock6Id) {
+        useBlock6Store.setState({ currentBlock6Id: null });
+      }
+      createMonthlyPlan(createCategory);
+    }
+    setShowMonthlyGuide(false);
+    setCreateCategory(null);
+    setPendingTemplate(null);
+  };
+
   const handleGuideClose = () => {
     setShowMandalartGuide(false);
     setShowBlock6Guide(false);
+    setShowMonthlyGuide(false);
     setPendingTemplate(null);
   };
 
@@ -361,7 +408,7 @@ export function Sidebar() {
       </aside>
 
       {/* Template Selection Modal */}
-      {createCategory && !showMandalartGuide && !showBlock6Guide && (
+      {createCategory && !showMandalartGuide && !showBlock6Guide && !showMonthlyGuide && (
         <TemplateModal
           category={createCategory}
           onSelect={handleTemplateSelect}
@@ -382,6 +429,14 @@ export function Sidebar() {
       {showBlock6Guide && (
         <Block6Guide
           onStart={handleBlock6GuideStart}
+          onClose={handleGuideClose}
+        />
+      )}
+
+      {/* Monthly Guide Modal */}
+      {showMonthlyGuide && (
+        <MonthlyGuide
+          onStart={handleMonthlyGuideStart}
           onClose={handleGuideClose}
         />
       )}

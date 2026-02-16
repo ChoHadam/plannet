@@ -5,23 +5,27 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { MandalartGrid } from '@/components/Mandalart';
 import { Block6Grid } from '@/components/Block6';
+import { MonthlyGrid } from '@/components/Monthly';
 import { AIChatSidebar } from '@/components/AIChatSidebar';
 import { useHydration, useMandalartStore } from '@/hooks/useMandalart';
 import { useBlock6Hydration, useBlock6Store } from '@/hooks/useBlock6';
+import { useMonthlyHydration, useMonthlyStore } from '@/hooks/useMonthly';
 
 export default function Home() {
   const mandalartHydrated = useHydration();
   const block6Hydrated = useBlock6Hydration();
+  const monthlyHydrated = useMonthlyHydration();
   const [showAIChat, setShowAIChat] = useState(false);
 
-  // Get current selections from both stores
+  // Get current selections from all stores
   const currentMandalartId = useMandalartStore((state) => state.currentId);
   const currentBlock6Id = useBlock6Store((state) => state.currentBlock6Id);
+  const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
 
   // Determine which template is currently active
-  const currentTemplate = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : null;
+  const currentTemplate = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : currentMonthlyId ? 'monthly' : null;
 
-  if (!mandalartHydrated || !block6Hydrated) {
+  if (!mandalartHydrated || !block6Hydrated || !monthlyHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-slate-400">로딩 중...</div>
@@ -39,6 +43,7 @@ export default function Home() {
         {/* Conditional rendering based on current template */}
         {currentTemplate === 'mandalart' && <MandalartGrid />}
         {currentTemplate === 'block6' && <Block6Grid />}
+        {currentTemplate === 'monthly' && <MonthlyGrid />}
         {!currentTemplate && (
           <div className="flex items-center justify-center h-96 text-slate-400">
             <div className="text-center">
@@ -54,6 +59,9 @@ export default function Home() {
           )}
           {currentTemplate === 'block6' && (
             <p>각 블록에 키워드와 할 일을 입력하세요</p>
+          )}
+          {currentTemplate === 'monthly' && (
+            <p>이달의 목표를 설정하고 주간 포커스를 작성하세요</p>
           )}
         </footer>
       </main>

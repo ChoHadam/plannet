@@ -27,7 +27,7 @@ export interface SubGridData {
 export type PlanCategory = 'annual' | 'monthly' | 'weekly' | 'daily';
 
 // Template types
-export type TemplateType = 'mandalart' | 'block6';
+export type TemplateType = 'mandalart' | 'block6' | 'monthly';
 
 export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
   annual: '연간 플랜',
@@ -39,6 +39,7 @@ export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
 export const TEMPLATE_LABELS: Record<TemplateType, string> = {
   mandalart: '만다라트',
   block6: 'Block 6',
+  monthly: '월간 플래너',
 };
 
 export interface MandalartData {
