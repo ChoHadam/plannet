@@ -1,7 +1,7 @@
 'use client';
 
+import React, { useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent } from '@dnd-kit/core';
-import { useState } from 'react';
 import { useBlock6Store } from '@/hooks/useBlock6';
 import {
   DAYS_OF_WEEK,
@@ -140,10 +140,9 @@ export function Block6Grid() {
               const isFirstInGroup = blockNumber === 1 || blockNumber === 3 || blockNumber === 5;
 
               return (
-                <>
+                <React.Fragment key={blockNumber}>
                   {/* Row Label */}
                   <div
-                    key={`label-${blockNumber}`}
                     className="
                       flex flex-col items-center justify-center
                       text-xs font-medium rounded-lg px-1 py-2 min-h-[120px]
@@ -180,7 +179,7 @@ export function Block6Grid() {
                       </div>
                     );
                   })}
-                </>
+                </React.Fragment>
               );
             })}
           </div>
