@@ -233,7 +233,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
           newGoals[goalIndex] = {
             ...goal,
             completed: newCompleted,
-            progress: newCompleted ? 100 : goal.progress,
+            progress: newCompleted ? 100 : 0,
           };
 
           const newPlans = [...state.monthlyPlans];
