@@ -234,6 +234,7 @@ export const useBlock6Store = create<Block6Store>()(
             id: generateId(),
             text: sanitizeInput(text),
             completed: false,
+            color: 'gray',
           };
 
           const newBlocks = plan.blocks.map((block) =>
@@ -424,6 +425,7 @@ export const useBlock6Store = create<Block6Store>()(
             id: generateId(),
             text: sanitizeInput(text),
             completed: false,
+            color: 'gray',
           };
 
           const newPlans = [...state.block6Plans];

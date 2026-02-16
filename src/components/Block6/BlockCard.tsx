@@ -1,7 +1,6 @@
 'use client';
 
-import { BlockData, BLOCK_TIME_OF_DAY, TimeOfDay, TodoColor } from '@/types/block6';
-import { BLOCK6_TIME_COLORS } from '@/lib/constants';
+import { BlockData, TodoColor } from '@/types/block6';
 import { DroppableTodoList } from './DroppableTodoList';
 
 interface BlockCardProps {
@@ -23,8 +22,6 @@ export function BlockCard({
   onTodoColorChange,
   onDuplicateTodo,
 }: BlockCardProps) {
-  const timeOfDay: TimeOfDay = BLOCK_TIME_OF_DAY[block.blockNumber];
-  const backgroundColor = block.color || BLOCK6_TIME_COLORS[timeOfDay];
 
   // Calculate completion rate
   const completedCount = block.todos.filter((t) => t.completed).length;
@@ -33,10 +30,9 @@ export function BlockCard({
   return (
     <div
       className="
-        flex flex-col p-2 rounded-lg border border-slate-200/50
-        transition-all hover:shadow-sm min-h-[120px]
+        flex flex-col p-2 rounded-lg border border-slate-200
+        transition-all hover:shadow-sm min-h-[120px] bg-[#FAF9F6]
       "
-      style={{ backgroundColor }}
     >
       {/* Completion indicator (only show if there are todos) */}
       {totalCount > 0 && (
