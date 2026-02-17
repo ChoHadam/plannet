@@ -1,7 +1,6 @@
 'use client';
 
 import { WeeklyFocus, getDaysInMonth, getFirstDayOfMonth } from '@/types/monthly';
-import { MONTHLY_COLORS } from '@/lib/constants';
 
 interface CompactCalendarProps {
   year: number;
@@ -10,6 +9,9 @@ interface CompactCalendarProps {
 }
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 7열 그리드 공통 스타일 (요일 헤더 + 날짜 행 공유)
+const GRID_CLASS = 'grid grid-cols-7 gap-1 flex-shrink-0 w-[196px]';
 
 export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarProps) {
   const daysInMonth = getDaysInMonth(year, month);
@@ -57,7 +59,7 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       {/* Calendar header */}
-      <div className="grid grid-cols-7 gap-1 mb-2" style={{ width: '196px' }}>
+      <div className={`${GRID_CLASS} mb-2`}>
         {DAY_LABELS.map((day, idx) => (
           <div
             key={day}
@@ -79,7 +81,7 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
           return (
             <div key={weekIndex} className="flex items-center gap-2">
               {/* Days row */}
-              <div className="grid grid-cols-7 gap-1 flex-shrink-0" style={{ width: '196px' }}>
+              <div className={GRID_CLASS}>
                 {week.map((day, dayIndex) => {
                   if (day === null) {
                     return <div key={`empty-${weekIndex}-${dayIndex}`} className="w-7 h-7" />;
