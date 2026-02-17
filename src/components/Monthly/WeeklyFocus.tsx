@@ -33,9 +33,13 @@ export function WeeklyFocus({ weeklyFocus }: WeeklyFocusProps) {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h3 className="text-sm font-semibold text-slate-700 mb-3">
+      <h3 className="text-sm font-semibold text-slate-700 mb-1">
         주간 포커스
       </h3>
+      <p className="text-xs text-slate-400 mb-3">
+        각 주에 집중할 핵심 과업이나 영역을 적어보세요.
+        {' '}<span className="font-semibold text-slate-500">주간 플랜과 자동 연동되어</span> 매일 목표를 놓치지 않아요.
+      </p>
 
       <div className="space-y-2">
         {weeklyFocus.map((week) => (
@@ -73,11 +77,6 @@ export function WeeklyFocus({ weeklyFocus }: WeeklyFocusProps) {
           </div>
         ))}
       </div>
-
-      {/* Help text */}
-      <p className="mt-3 text-xs text-slate-400">
-        각 주에 집중할 핵심 과업이나 영역을 적어보세요
-      </p>
     </div>
   );
 }

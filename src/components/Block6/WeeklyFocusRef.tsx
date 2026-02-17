@@ -67,9 +67,7 @@ export function WeeklyFocusRef() {
               strokeLinejoin="round"
               className="text-slate-400"
             >
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
             <span className="text-xs font-semibold text-slate-500">
               주간 포커스
@@ -102,9 +100,7 @@ export function WeeklyFocusRef() {
               strokeLinejoin="round"
               className="text-slate-400"
             >
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
             <span className="text-xs font-semibold text-slate-500">
               주간 포커스
@@ -122,7 +118,7 @@ export function WeeklyFocusRef() {
   const planMonthName = MONTH_NAMES[monthlyPlan.month - 1];
 
   return (
-    <div className="w-48 flex-shrink-0 bg-blue-50 rounded-xl border border-blue-200 p-3 mb-3">
+    <div className="w-48 flex-shrink-0 bg-indigo-50 rounded-xl border border-indigo-200 p-3 mb-3">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
@@ -136,13 +132,11 @@ export function WeeklyFocusRef() {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="text-blue-500"
+            className="text-indigo-500"
           >
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
-          <span className="text-xs font-semibold text-blue-700">
+          <span className="text-xs font-semibold text-indigo-700">
             이번 주 포커스
           </span>
         </div>
@@ -150,12 +144,12 @@ export function WeeklyFocusRef() {
       </div>
 
       {/* Focus Text */}
-      <p className="text-sm text-slate-700 leading-snug mb-2">
+      <p className="text-sm text-slate-600 leading-snug mb-2">
         {focus.text}
       </p>
 
       {/* Source Info */}
-      <p className="text-[10px] text-blue-400">
+      <p className="text-[10px] text-indigo-400">
         {planMonthName} W{weekNumber} · {monthlyPlan.title || '월간 플래너'}
       </p>
     </div>
