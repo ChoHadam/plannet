@@ -57,12 +57,12 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       {/* Calendar header */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
+      <div className="grid grid-cols-7 gap-1 mb-2" style={{ width: '196px' }}>
         {DAY_LABELS.map((day, idx) => (
           <div
             key={day}
             className={`
-              text-center text-xs font-medium py-1
+              w-7 text-center text-xs font-medium py-1
               ${idx === 0 ? 'text-red-400' : idx === 6 ? 'text-blue-400' : 'text-slate-500'}
             `}
           >
