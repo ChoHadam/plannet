@@ -16,6 +16,7 @@ import {
 import { BLOCK6_TIME_COLORS, BLOCK6_TIME_BORDER_COLORS } from '@/lib/constants';
 import { BlockCard } from './BlockCard';
 import { TodoBacklog } from './TodoBacklog';
+import { WeeklyFocusRef } from './WeeklyFocusRef';
 
 // All block numbers in order
 const BLOCK_NUMBERS: BlockNumber[] = [1, 2, 3, 4, 5, 6];
@@ -102,16 +103,22 @@ export function Block6Grid() {
   return (
     <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex w-full max-w-7xl mx-auto">
-        {/* Backlog (Left Sidebar) */}
-        <TodoBacklog
-          todos={data.backlog}
-          onAddTodo={addBacklogTodo}
-          onToggleTodo={toggleBacklogTodo}
-          onUpdateTodo={updateBacklogTodo}
-          onDeleteTodo={deleteBacklogTodo}
-          onColorChange={updateBacklogTodoColor}
-          onDuplicate={duplicateBacklogTodo}
-        />
+        {/* Left Sidebar */}
+        <div className="flex flex-col mr-4">
+          {/* Weekly Focus from Monthly Planner */}
+          <WeeklyFocusRef />
+
+          {/* Backlog */}
+          <TodoBacklog
+            todos={data.backlog}
+            onAddTodo={addBacklogTodo}
+            onToggleTodo={toggleBacklogTodo}
+            onUpdateTodo={updateBacklogTodo}
+            onDeleteTodo={deleteBacklogTodo}
+            onColorChange={updateBacklogTodoColor}
+            onDuplicate={duplicateBacklogTodo}
+          />
+        </div>
 
         {/* Main Grid - Column-based layout */}
         <div className="flex-1 overflow-x-auto">

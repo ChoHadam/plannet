@@ -6,3 +6,4 @@ export { Block6Guide } from './Block6Guide';
 export { TodoBacklog } from './TodoBacklog';
 export { DraggableTodoItem } from './DraggableTodoItem';
 export { DroppableTodoList } from './DroppableTodoList';
+export { WeeklyFocusRef } from './WeeklyFocusRef';
