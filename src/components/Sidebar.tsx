@@ -13,7 +13,7 @@ import {
 } from '@/types/mandalart';
 import { Block6Data } from '@/types/block6';
 import { MonthlyData } from '@/types/monthly';
-import { formatPlanDate } from './DatePicker';
+import { DatePicker, formatPlanDate } from './DatePicker';
 import { MandalartGuide } from './MandalartGuide';
 import { Block6Guide } from './Block6';
 import { MonthlyGuide } from './Monthly';
@@ -98,7 +98,11 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                     </span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {formatPlanDate(plan.category, plan.year, plan.month, 'week' in plan ? plan.week : undefined, 'day' in plan ? plan.day : undefined, true)}
+                    {/* 월간 템플릿은 항상 년+월 표시 */}
+                    {plan.template === 'monthly'
+                      ? formatPlanDate('monthly', plan.year, plan.month, undefined, undefined, true)
+                      : formatPlanDate(plan.category, plan.year, plan.month, 'week' in plan ? plan.week : undefined, 'day' in plan ? plan.day : undefined, true)
+                    }
                   </span>
                 </div>
                 <button
@@ -243,6 +247,13 @@ export function Sidebar() {
   const [showBlock6Guide, setShowBlock6Guide] = useState(false);
   const [showMonthlyGuide, setShowMonthlyGuide] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<TemplateType | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingDate, setPendingDate] = useState<{
+    year?: number;
+    month?: number;
+    week?: number;
+    day?: number;
+  }>({});
 
   // Determine current template based on which store has a selection
   const currentTemplate: TemplateType | null = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : currentMonthlyId ? 'monthly' : null;
@@ -261,13 +272,26 @@ export function Sidebar() {
 
   const handleTemplateSelect = (template: TemplateType) => {
     setPendingTemplate(template);
-    if (template === 'mandalart') {
+    // 먼저 날짜 선택 모달 표시
+    setShowDatePicker(true);
+  };
+
+  const handleDateSelect = (year?: number, month?: number, week?: number, day?: number) => {
+    setPendingDate({ year, month, week, day });
+    setShowDatePicker(false);
+    // 날짜 선택 후 가이드 모달 표시
+    if (pendingTemplate === 'mandalart') {
       setShowMandalartGuide(true);
-    } else if (template === 'block6') {
+    } else if (pendingTemplate === 'block6') {
       setShowBlock6Guide(true);
-    } else if (template === 'monthly') {
+    } else if (pendingTemplate === 'monthly') {
       setShowMonthlyGuide(true);
     }
+  };
+
+  const handleDatePickerClose = () => {
+    setShowDatePicker(false);
+    // 취소 시 템플릿 선택 모달로 돌아감
   };
 
   const handleSelect = (id: string, template: TemplateType) => {
@@ -335,10 +359,20 @@ export function Sidebar() {
         useMonthlyStore.setState({ currentMonthlyId: null });
       }
       createMandalart(createCategory);
+      // 선택한 날짜 적용
+      if (pendingDate.year !== undefined) {
+        useMandalartStore.getState().updatePlanDate(
+          pendingDate.year,
+          pendingDate.month,
+          pendingDate.week,
+          pendingDate.day
+        );
+      }
     }
     setShowMandalartGuide(false);
     setCreateCategory(null);
     setPendingTemplate(null);
+    setPendingDate({});
   };
 
   const handleBlock6GuideStart = () => {
@@ -351,10 +385,20 @@ export function Sidebar() {
         useMonthlyStore.setState({ currentMonthlyId: null });
       }
       createBlock6Plan(createCategory);
+      // 선택한 날짜 적용
+      if (pendingDate.year !== undefined) {
+        useBlock6Store.getState().updatePlanDate(
+          pendingDate.year,
+          pendingDate.month,
+          pendingDate.week,
+          pendingDate.day
+        );
+      }
     }
     setShowBlock6Guide(false);
     setCreateCategory(null);
     setPendingTemplate(null);
+    setPendingDate({});
   };
 
   const handleMonthlyGuideStart = () => {
@@ -366,11 +410,13 @@ export function Sidebar() {
       if (currentBlock6Id) {
         useBlock6Store.setState({ currentBlock6Id: null });
       }
-      createMonthlyPlan(createCategory);
+      // Monthly는 생성 시 year, month를 직접 전달
+      createMonthlyPlan(createCategory, pendingDate.year, pendingDate.month);
     }
     setShowMonthlyGuide(false);
     setCreateCategory(null);
     setPendingTemplate(null);
+    setPendingDate({});
   };
 
   const handleGuideClose = () => {
@@ -378,6 +424,7 @@ export function Sidebar() {
     setShowBlock6Guide(false);
     setShowMonthlyGuide(false);
     setPendingTemplate(null);
+    setPendingDate({});
   };
 
   return (
@@ -408,12 +455,21 @@ export function Sidebar() {
       </aside>
 
       {/* Template Selection Modal */}
-      {createCategory && !showMandalartGuide && !showBlock6Guide && !showMonthlyGuide && (
+      {createCategory && !showDatePicker && !showMandalartGuide && !showBlock6Guide && !showMonthlyGuide && (
         <TemplateModal
           category={createCategory}
           onSelect={handleTemplateSelect}
           onClose={() => setCreateCategory(null)}
           onShowGuide={handleShowGuide}
+        />
+      )}
+
+      {/* Date Picker Modal */}
+      {showDatePicker && createCategory && (
+        <DatePicker
+          category={createCategory}
+          onSelect={handleDateSelect}
+          onClose={handleDatePickerClose}
         />
       )}
 
