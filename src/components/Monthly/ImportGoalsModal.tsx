@@ -71,17 +71,17 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
   const handleImport = () => {
     if (selectedPlans.size === 0) return;
 
-    // 선택된 실천 계획 텍스트 수집
-    const selectedTexts: string[] = [];
+    // 선택된 실천 계획 수집 (텍스트 + cellId)
+    const selectedItems: Array<{ text: string; cellId: string }> = [];
     groupedPlans.forEach(group => {
       group.actionPlans.forEach(plan => {
         if (selectedPlans.has(plan.id)) {
-          selectedTexts.push(plan.text);
+          selectedItems.push({ text: plan.text, cellId: plan.id });
         }
       });
     });
 
-    importActionPlans(selectedTexts, selectedMandalartId || undefined);
+    importActionPlans(selectedItems, selectedMandalartId || undefined);
     onClose();
   };
 

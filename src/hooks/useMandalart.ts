@@ -38,6 +38,9 @@ interface MandalartStore {
   updateTitle: (title: string) => void;
   updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
+
+  // External sync (for Monthly planner integration)
+  setCellCompleted: (mandalartId: string, cellId: string, completed: boolean) => boolean;
 }
 
 // Get Monday-based week number within the month
@@ -277,6 +280,24 @@ export const useMandalartStore = create<MandalartStore>()(
             }
           }
 
+          // 외곽 그리드의 중앙 셀(하위 목표) 삭제 시 → 중앙 그리드 해당 셀도 비우기
+          if (gridId !== 'center' && cellIndex === 4) {
+            const centerCellIndex = OUTER_TO_CENTER_MAP[gridId];
+            if (centerCellIndex !== undefined && centerCellIndex !== 4) {
+              const centerGridIndex = newGrids.findIndex((g) => g.id === 'center');
+              if (centerGridIndex !== -1) {
+                newGrids[centerGridIndex] = {
+                  ...newGrids[centerGridIndex],
+                  cells: newGrids[centerGridIndex].cells.map((cell, idx) =>
+                    idx === centerCellIndex
+                      ? { ...cell, value: '', icon: undefined, completed: false }
+                      : cell
+                  ),
+                };
+              }
+            }
+          }
+
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = {
             ...mandalart,
@@ -480,6 +501,59 @@ export const useMandalartStore = create<MandalartStore>()(
 
           return { mandalarts: newMandalarts };
         });
+      },
+
+      // External sync: Monthly planner에서 호출하여 만다라트 셀 완료 상태 동기화
+      setCellCompleted: (mandalartId: string, cellId: string, completed: boolean): boolean => {
+        // cellId 파싱: "top-left-3" → gridId="top-left", cellIndex=3
+        const lastDashIndex = cellId.lastIndexOf('-');
+        if (lastDashIndex === -1) return false;
+
+        const gridId = cellId.substring(0, lastDashIndex) as GridPosition;
+        const cellIndex = parseInt(cellId.substring(lastDashIndex + 1), 10);
+
+        if (isNaN(cellIndex) || cellIndex < 0 || cellIndex > 8) return false;
+
+        const state = get();
+        const mandalartIndex = state.mandalarts.findIndex(m => m.id === mandalartId);
+        if (mandalartIndex === -1) return false;
+
+        const mandalart = state.mandalarts[mandalartIndex];
+        const grid = mandalart.grids.find(g => g.id === gridId);
+        if (!grid) return false;
+
+        const cell = grid.cells[cellIndex];
+        // 셀이 없거나 텍스트가 비어있으면 동기화하지 않음
+        if (!cell || !cell.value.trim()) return false;
+
+        set((state) => {
+          const mandalartIndex = state.mandalarts.findIndex(m => m.id === mandalartId);
+          if (mandalartIndex === -1) return state;
+
+          const mandalart = state.mandalarts[mandalartIndex];
+          const newGrids = mandalart.grids.map((grid) => {
+            if (grid.id === gridId) {
+              return {
+                ...grid,
+                cells: grid.cells.map((cell, idx) =>
+                  idx === cellIndex ? { ...cell, completed } : cell
+                ),
+              };
+            }
+            return grid;
+          });
+
+          const newMandalarts = [...state.mandalarts];
+          newMandalarts[mandalartIndex] = {
+            ...mandalart,
+            grids: newGrids,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { mandalarts: newMandalarts };
+        });
+
+        return true;
       },
     }),
     {

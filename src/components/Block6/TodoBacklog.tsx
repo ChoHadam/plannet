@@ -104,7 +104,7 @@ export function TodoBacklog({
         `}
       >
         {todos.length === 0 ? (
-          <p className="text-[10px] text-slate-400 text-center py-4">
+          <p className="text-xs text-slate-400 text-center py-4">
             할 일을 추가하고<br />블록으로 드래그하세요
           </p>
         ) : (

@@ -75,7 +75,7 @@ export function WeeklyFocusRef() {
           </div>
           <SyncButton isRefreshing={isRefreshing} onClick={handleSync} />
         </div>
-        <p className="text-[10px] text-slate-400">
+        <p className="text-xs text-slate-400">
           {monthName} 월간 플래너가 없습니다
         </p>
       </div>
@@ -108,7 +108,7 @@ export function WeeklyFocusRef() {
           </div>
           <SyncButton isRefreshing={isRefreshing} onClick={handleSync} />
         </div>
-        <p className="text-[10px] text-slate-400">
+        <p className="text-xs text-slate-400">
           {monthName} W{weekNumber} 포커스 미설정
         </p>
       </div>
@@ -149,7 +149,7 @@ export function WeeklyFocusRef() {
       </p>
 
       {/* Source Info */}
-      <p className="text-[10px] text-indigo-400">
+      <p className="text-xs text-indigo-400">
         {planMonthName} W{weekNumber} · {monthlyPlan.title || '월간 플래너'}
       </p>
     </div>

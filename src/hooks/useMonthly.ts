@@ -11,6 +11,7 @@ import {
   createInitialWeeklyFocus,
 } from '@/types/monthly';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
+import { useMandalartStore } from './useMandalart';
 
 const MONTHLY_STORAGE_KEY = 'plannet-monthly';
 
@@ -34,7 +35,7 @@ interface MonthlyStore {
   updateGoalProgress: (goalId: string, progress: number) => void;
   toggleGoalCompleted: (goalId: string) => void;
   deleteGoal: (goalId: string) => void;
-  importActionPlans: (actionPlans: string[], sourceMandalartId?: string) => void;
+  importActionPlans: (plans: Array<{ text: string; cellId: string }>, sourceMandalartId?: string) => void;
 
   // Weekly focus operations
   updateWeeklyFocus: (weekNumber: number, text: string) => void;
@@ -210,6 +211,12 @@ export const useMonthlyStore = create<MonthlyStore>()(
         const currentId = get().currentMonthlyId;
         if (!currentId) return;
 
+        // 먼저 goal 정보를 가져와서 만다라트 동기화에 사용
+        const state = get();
+        const plan = state.monthlyPlans.find((p) => p.id === currentId);
+        const goal = plan?.goals.find((g) => g.id === goalId);
+        const newCompleted = goal ? !goal.completed : false;
+
         set((state) => {
           const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
           if (planIndex === -1) return state;
@@ -219,7 +226,6 @@ export const useMonthlyStore = create<MonthlyStore>()(
           if (goalIndex === -1) return state;
 
           const goal = plan.goals[goalIndex];
-          const newCompleted = !goal.completed;
 
           const newGoals = [...plan.goals];
           newGoals[goalIndex] = {
@@ -237,6 +243,15 @@ export const useMonthlyStore = create<MonthlyStore>()(
 
           return { monthlyPlans: newPlans };
         });
+
+        // Mandalart 동기화 (source 정보가 있을 때만)
+        if (goal?.sourceMandalartId && goal?.sourceCellId) {
+          useMandalartStore.getState().setCellCompleted(
+            goal.sourceMandalartId,
+            goal.sourceCellId,
+            newCompleted
+          );
+        }
       },
 
       deleteGoal: (goalId: string) => {
@@ -261,7 +276,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
         });
       },
 
-      importActionPlans: (actionPlans: string[], sourceMandalartId?: string) => {
+      importActionPlans: (plans: Array<{ text: string; cellId: string }>, sourceMandalartId?: string) => {
         const currentId = get().currentMonthlyId;
         if (!currentId) return;
 
@@ -274,14 +289,15 @@ export const useMonthlyStore = create<MonthlyStore>()(
           if (availableSlots <= 0) return state;
 
           // 최대 남은 슬롯만큼만 추가
-          const plansToAdd = actionPlans.slice(0, availableSlots);
+          const plansToAdd = plans.slice(0, availableSlots);
 
-          const newGoals: MonthlyGoal[] = plansToAdd.map((text) => ({
+          const newGoals: MonthlyGoal[] = plansToAdd.map((item) => ({
             id: generateId(),
-            text: sanitizeInput(text),
+            text: sanitizeInput(item.text),
             progress: 0,
             completed: false,
             sourceMandalartId,
+            sourceCellId: item.cellId,
           }));
 
           const newPlans = [...state.monthlyPlans];

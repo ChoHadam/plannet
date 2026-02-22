@@ -6,6 +6,7 @@ export interface MonthlyGoal {
   progress: number; // 0-100
   completed: boolean;
   sourceMandalartId?: string; // 출처 만다라트 ID (불러오기 추적용)
+  sourceCellId?: string; // 출처 셀 ID (예: "top-left-3", 동기화용)
 }
 
 export interface WeeklyFocus {
