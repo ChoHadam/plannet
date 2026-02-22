@@ -87,7 +87,7 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                       {plan.title || '제목 없음'}
                     </span>
                     <span className={`
-                      text-[10px] px-1.5 py-0.5 rounded-full
+                      flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full
                       ${plan.template === 'block6'
                         ? 'bg-violet-100 text-violet-600'
                         : plan.template === 'monthly'
