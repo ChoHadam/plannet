@@ -54,10 +54,10 @@ export function MonthlyGrid() {
         </button>
       </div>
 
-      {/* Main layout: Calendar (30%) + Dashboard (70%) */}
-      <div className="flex gap-6">
+      {/* Main layout: Calendar + Dashboard (responsive) */}
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* Left: Compact Calendar */}
-        <div className="w-[30%] min-w-[280px]">
+        <div className="w-full lg:w-[30%] lg:min-w-[280px]">
           <CompactCalendar
             year={data.year}
             month={data.month}

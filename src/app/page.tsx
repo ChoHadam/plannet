@@ -16,6 +16,7 @@ export default function Home() {
   const block6Hydrated = useBlock6Hydration();
   const monthlyHydrated = useMonthlyHydration();
   const [showAIChat, setShowAIChat] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Get current selections from all stores
   const currentMandalartId = useMandalartStore((state) => state.currentId);
@@ -34,10 +35,13 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
+    <div className="flex min-h-screen min-w-[1024px]">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
 
-      <main className="flex-1 py-8 px-4 overflow-auto">
+      <main className="flex-1 py-8 px-4 overflow-x-auto">
         <Header onOpenAIChat={() => setShowAIChat(true)} />
 
         {/* Conditional rendering based on current template */}
