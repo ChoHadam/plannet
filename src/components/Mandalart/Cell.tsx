@@ -100,7 +100,7 @@ export function Cell({
           placeholder={placeholder}
           disabled={disabled}
           className={`
-            w-full
+            w-full p-0
             bg-transparent resize-none
             text-center leading-tight
             focus:outline-none
