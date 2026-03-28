@@ -26,6 +26,44 @@ type PlanData = MandalartData | Block6Data | MonthlyData | DailyData;
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
+function generateDefaultTitle(
+  category: PlanCategory,
+  date: { year?: number; month?: number; week?: number; day?: number },
+  existingTitles: string[]
+): string {
+  const now = new Date();
+  const y = date.year ?? now.getFullYear();
+  const m = date.month ?? now.getMonth() + 1;
+  const mm = String(m).padStart(2, '0');
+
+  let base: string;
+  switch (category) {
+    case 'annual':
+      base = `${y}`;
+      break;
+    case 'monthly':
+      base = `${y}.${mm}`;
+      break;
+    case 'weekly': {
+      const w = date.week ?? 1;
+      base = `${y}.${mm} W${w}`;
+      break;
+    }
+    case 'daily': {
+      const d = date.day ?? now.getDate();
+      const dd = String(d).padStart(2, '0');
+      base = `${y}.${mm}.${dd}`;
+      break;
+    }
+  }
+
+  if (!existingTitles.includes(base)) return base;
+
+  let n = 2;
+  while (existingTitles.includes(`${base} (${n})`)) n++;
+  return `${base} (${n})`;
+}
+
 interface SectionProps {
   category: PlanCategory;
   plans: PlanData[];
@@ -259,6 +297,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const selectDailyPlan = useDailyStore((state) => state.selectDailyPlan);
   const deleteDailyPlan = useDailyStore((state) => state.deleteDailyPlan);
 
+  const allTitles = [...mandalarts, ...block6Plans, ...monthlyPlans, ...dailyPlans].map((p) => p.title);
+
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ plan: PlanData; template: TemplateType } | null>(null);
   const [showMandalartGuide, setShowMandalartGuide] = useState(false);
@@ -398,6 +438,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         useDailyStore.setState({ currentDailyId: null });
       }
       createMandalart(createCategory);
+      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
+      useMandalartStore.getState().updateTitle(defaultTitle);
       // 선택한 날짜 적용
       if (pendingDate.year !== undefined) {
         useMandalartStore.getState().updatePlanDate(
@@ -427,6 +469,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         useDailyStore.setState({ currentDailyId: null });
       }
       createBlock6Plan(createCategory);
+      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
+      useBlock6Store.getState().updateTitle(defaultTitle);
       // 선택한 날짜 적용
       if (pendingDate.year !== undefined) {
         useBlock6Store.getState().updatePlanDate(
@@ -457,6 +501,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       }
       // Monthly는 생성 시 year, month를 직접 전달
       createMonthlyPlan(createCategory, pendingDate.year, pendingDate.month);
+      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
+      useMonthlyStore.getState().updateTitle(defaultTitle);
     }
     setShowMonthlyGuide(false);
     setCreateCategory(null);
@@ -478,6 +524,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       }
       // Daily는 생성 시 year, month, day를 직접 전달
       createDailyPlan(createCategory, pendingDate.year, pendingDate.month, pendingDate.day);
+      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
+      useDailyStore.getState().updateTitle(defaultTitle);
     }
     setShowDailyGuide(false);
     setCreateCategory(null);
