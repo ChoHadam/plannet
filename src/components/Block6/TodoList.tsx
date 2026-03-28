@@ -10,7 +10,6 @@ interface TodoListProps {
   onToggleTodo: (todoId: string) => void;
   onUpdateTodo: (todoId: string, text: string) => void;
   onDeleteTodo: (todoId: string) => void;
-  maxTodos?: number;
 }
 
 export function TodoList({
@@ -19,7 +18,6 @@ export function TodoList({
   onToggleTodo,
   onUpdateTodo,
   onDeleteTodo,
-  maxTodos = 5,
 }: TodoListProps) {
   const [newTodoText, setNewTodoText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,8 +36,6 @@ export function TodoList({
     }
   };
 
-  const canAddMore = todos.length < maxTodos;
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 overflow-y-auto space-y-0.5">
@@ -54,8 +50,7 @@ export function TodoList({
         ))}
       </div>
 
-      {canAddMore && (
-        <div className="mt-1 flex items-center gap-1">
+      <div className="mt-1 flex items-center gap-1">
           <input
             ref={inputRef}
             type="text"
@@ -81,7 +76,6 @@ export function TodoList({
             </button>
           )}
         </div>
-      )}
     </div>
   );
 }

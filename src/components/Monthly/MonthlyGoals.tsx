@@ -23,7 +23,7 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
   const deleteGoal = useMonthlyStore((state) => state.deleteGoal);
 
   const handleAddGoal = () => {
-    if (newGoalText.trim() && goals.length < 5) {
+    if (newGoalText.trim()) {
       addGoal(newGoalText.trim());
       setNewGoalText('');
     }
@@ -55,7 +55,7 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
         <h3 className="text-sm font-semibold text-slate-700">
           이달의 목표
         </h3>
-        <span className="text-xs text-slate-400">{goals.length}/5</span>
+        <span className="text-xs text-slate-400">{goals.length}개</span>
       </div>
 
       {/* Goals list */}
@@ -84,8 +84,7 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
       </div>
 
       {/* Add goal input */}
-      {goals.length < 5 && (
-        <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="mt-3 pt-3 border-t border-slate-100">
           <div className="flex gap-2">
             <input
               type="text"
@@ -116,7 +115,6 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
             만다라트에서 불러오기
           </button>
         </div>
-      )}
 
       {/* Import Goals Modal */}
       <ImportGoalsModal

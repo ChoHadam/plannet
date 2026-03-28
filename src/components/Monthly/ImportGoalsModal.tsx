@@ -20,7 +20,6 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
   const mandalarts = useMandalartStore((state) => state.mandalarts);
   const importActionPlans = useMonthlyStore((state) => state.importActionPlans);
 
-  const availableSlots = 5 - currentGoalsCount;
 
   // 만다라트 선택 시 실천 계획 추출
   useEffect(() => {
@@ -50,10 +49,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
     if (newSelected.has(planId)) {
       newSelected.delete(planId);
     } else {
-      // 최대 슬롯 제한
-      if (newSelected.size < availableSlots) {
-        newSelected.add(planId);
-      }
+      newSelected.add(planId);
     }
     setSelectedPlans(newSelected);
   };
@@ -185,21 +181,15 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                     <div className="divide-y divide-slate-100">
                       {group.actionPlans.map((plan) => {
                         const isSelected = selectedPlans.has(plan.id);
-                        const isDisabled = !isSelected && selectedPlans.size >= availableSlots;
-
                         return (
                           <label
                             key={plan.id}
-                            className={`
-                              flex items-center gap-3 px-4 py-2 cursor-pointer
-                              ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}
-                            `}
+                            className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-slate-50"
                           >
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => togglePlan(plan.id, plan.text)}
-                              disabled={isDisabled}
                               className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                             />
                             <span className="text-sm text-slate-600 flex-1">
@@ -218,22 +208,11 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-100">
-          {/* Slot warning */}
-          <div className="mb-3 text-xs text-slate-500">
-            {availableSlots === 0 ? (
-              <span className="text-amber-600">
-                목표가 이미 5개입니다. 더 이상 추가할 수 없습니다.
-              </span>
-            ) : (
-              <>
-                현재 {currentGoalsCount}개 목표.
-                <span className="font-medium"> 최대 {availableSlots}개</span> 더 불러올 수 있습니다.
-                {selectedPlans.size > 0 && (
-                  <span className="text-blue-500"> ({selectedPlans.size}개 선택됨)</span>
-                )}
-              </>
-            )}
-          </div>
+          {selectedPlans.size > 0 && (
+            <div className="mb-3 text-xs text-blue-500">
+              {selectedPlans.size}개 선택됨
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2">
             <button

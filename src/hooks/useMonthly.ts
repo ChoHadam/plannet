@@ -127,7 +127,6 @@ export const useMonthlyStore = create<MonthlyStore>()(
           if (planIndex === -1) return state;
 
           const plan = state.monthlyPlans[planIndex];
-          if (plan.goals.length >= 5) return state; // Max 5 goals
 
           const newGoal: MonthlyGoal = {
             id: generateId(),
@@ -285,13 +284,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
           if (planIndex === -1) return state;
 
           const plan = state.monthlyPlans[planIndex];
-          const availableSlots = 5 - plan.goals.length;
-          if (availableSlots <= 0) return state;
-
-          // 최대 남은 슬롯만큼만 추가
-          const plansToAdd = plans.slice(0, availableSlots);
-
-          const newGoals: MonthlyGoal[] = plansToAdd.map((item) => ({
+          const newGoals: MonthlyGoal[] = plans.map((item) => ({
             id: generateId(),
             text: sanitizeInput(item.text),
             progress: 0,
