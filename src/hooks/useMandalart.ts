@@ -11,6 +11,8 @@ import {
   CENTER_TO_OUTER_MAP,
   OUTER_TO_CENTER_MAP,
   PlanCategory,
+  CellSchedule,
+  RepeatCycle,
 } from '@/types/mandalart';
 import { DEFAULT_COLORS, STORAGE_KEY } from '@/lib/constants';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
@@ -39,8 +41,8 @@ interface MandalartStore {
   updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
 
-  // Daily habit toggle
-  toggleCellDaily: (gridId: GridPosition, cellIndex: number) => void;
+  // Cell schedule
+  updateCellSchedule: (gridId: GridPosition, cellIndex: number, schedule: CellSchedule | undefined) => void;
 
   // External sync (for Monthly planner integration)
   setCellCompleted: (mandalartId: string, cellId: string, completed: boolean) => boolean;
@@ -506,7 +508,7 @@ export const useMandalartStore = create<MandalartStore>()(
         });
       },
 
-      toggleCellDaily: (gridId: GridPosition, cellIndex: number) => {
+      updateCellSchedule: (gridId: GridPosition, cellIndex: number, schedule: CellSchedule | undefined) => {
         const currentId = get().currentId;
         if (!currentId) return;
 
@@ -518,7 +520,7 @@ export const useMandalartStore = create<MandalartStore>()(
           const newGrids = mandalart.grids.map((grid) => {
             if (grid.id === gridId) {
               const newCells = grid.cells.map((cell, idx) =>
-                idx === cellIndex ? { ...cell, isDaily: !cell.isDaily } : cell
+                idx === cellIndex ? { ...cell, schedule } : cell
               );
               return { ...grid, cells: newCells };
             }
@@ -591,7 +593,7 @@ export const useMandalartStore = create<MandalartStore>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 2,
+      version: 3,
       skipHydration: true,
       partialize: (state) => ({
         mandalarts: state.mandalarts,
@@ -600,6 +602,24 @@ export const useMandalartStore = create<MandalartStore>()(
       migrate: (persistedState: unknown, version: number) => {
         if (version < 2) {
           return { mandalarts: [], currentId: null };
+        }
+        if (version === 2) {
+          // Migrate isDaily -> schedule.repeat = 'daily'
+          const state = persistedState as { mandalarts: MandalartData[]; currentId: string | null };
+          const migratedMandalarts = state.mandalarts.map(m => ({
+            ...m,
+            grids: m.grids.map(g => ({
+              ...g,
+              cells: g.cells.map(cell => {
+                const { isDaily, ...rest } = cell as any;
+                if (isDaily) {
+                  return { ...rest, schedule: { repeat: 'daily' as RepeatCycle } };
+                }
+                return rest;
+              }),
+            })),
+          }));
+          return { mandalarts: migratedMandalarts, currentId: state.currentId };
         }
         return persistedState as { mandalarts: MandalartData[]; currentId: string | null };
       },

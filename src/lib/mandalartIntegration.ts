@@ -1,4 +1,4 @@
-import { MandalartData, CENTER_TO_OUTER_MAP, GridPosition } from '@/types/mandalart';
+import { MandalartData, CENTER_TO_OUTER_MAP, GridPosition, CellSchedule } from '@/types/mandalart';
 
 export interface ActionPlanItem {
   id: string;          // 고유 ID (선택 추적용)
@@ -67,38 +67,87 @@ export function extractAllActionPlans(
 }
 
 /**
- * 만다라트에서 매일 반복(isDaily) 플래그가 설정된 셀 추출
+ * 스케줄이 설정된 셀 정보
  */
-export interface DailyHabitItem {
+export interface ScheduledCellItem {
   cellId: string;       // e.g. "top-left-3"
   text: string;
   subGoalText: string;  // 부모 서브골 텍스트
+  schedule: CellSchedule;
 }
 
-export function extractDailyHabits(
+// DailyHabitItem은 기존 호환용 (Block6 등에서 사용)
+export type DailyHabitItem = Pick<ScheduledCellItem, 'cellId' | 'text' | 'subGoalText'>;
+
+const ACTION_POSITIONS = [0, 1, 2, 3, 5, 6, 7, 8];
+
+/**
+ * 스케줄이 설정된 모든 액션 셀 추출
+ */
+export function extractScheduledCells(
   mandalartData: MandalartData
-): DailyHabitItem[] {
-  const habits: DailyHabitItem[] = [];
-  const actionPositions = [0, 1, 2, 3, 5, 6, 7, 8];
+): ScheduledCellItem[] {
+  const items: ScheduledCellItem[] = [];
 
   for (const grid of mandalartData.grids) {
     if (grid.id === 'center') continue;
 
     const subGoalText = grid.cells[4]?.value || '';
 
-    for (const pos of actionPositions) {
+    for (const pos of ACTION_POSITIONS) {
       const cell = grid.cells[pos];
-      if (cell?.isDaily && cell.value.trim()) {
-        habits.push({
+      if (cell?.schedule && cell.value.trim()) {
+        items.push({
           cellId: `${grid.id}-${pos}`,
           text: cell.value,
           subGoalText,
+          schedule: cell.schedule,
         });
       }
     }
   }
 
-  return habits;
+  return items;
+}
+
+/**
+ * 매일 반복(repeat === 'daily') 셀 추출 (기존 호환)
+ */
+export function extractDailyHabits(
+  mandalartData: MandalartData
+): DailyHabitItem[] {
+  return extractScheduledCells(mandalartData)
+    .filter(item => item.schedule.repeat === 'daily')
+    .map(({ cellId, text, subGoalText }) => ({ cellId, text, subGoalText }));
+}
+
+/**
+ * 특정 월에 해당하는 셀 추출
+ * - targetMonths에 해당 월 포함 OR
+ * - startDate~endDate 범위가 해당 월과 겹침
+ */
+export function extractCellsForMonth(
+  mandalartData: MandalartData,
+  year: number,
+  month: number
+): ScheduledCellItem[] {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0); // 해당 월 마지막 날
+
+  return extractScheduledCells(mandalartData).filter(item => {
+    const { targetMonths, startDate, endDate } = item.schedule;
+
+    if (targetMonths?.includes(month)) return true;
+
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : new Date(0);
+      const end = endDate ? new Date(endDate) : new Date(9999, 11, 31);
+      // 기간이 해당 월과 겹치는지 확인
+      return start <= monthEnd && end >= monthStart;
+    }
+
+    return false;
+  });
 }
 
 /**

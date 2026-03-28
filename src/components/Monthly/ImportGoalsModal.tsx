@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useMonthlyStore } from '@/hooks/useMonthly';
-import { extractGroupedActionPlans, GroupedActionPlans } from '@/lib/mandalartIntegration';
+import { extractGroupedActionPlans, extractCellsForMonth, GroupedActionPlans, ScheduledCellItem } from '@/lib/mandalartIntegration';
 
 interface ImportGoalsModalProps {
   isOpen: boolean;
@@ -19,7 +19,18 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
 
   const mandalarts = useMandalartStore((state) => state.mandalarts);
   const importActionPlans = useMonthlyStore((state) => state.importActionPlans);
+  const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
+  const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
 
+  const currentMonthly = monthlyPlans.find(p => p.id === currentMonthlyId);
+
+  // 이번 달 추천 항목 (모든 만다라트에서 현재 월 대상 셀 추출)
+  const recommendedCells = useMemo<ScheduledCellItem[]>(() => {
+    if (!currentMonthly) return [];
+    return mandalarts.flatMap(m =>
+      extractCellsForMonth(m, currentMonthly.year, currentMonthly.month)
+    );
+  }, [mandalarts, currentMonthly]);
 
   // 만다라트 선택 시 실천 계획 추출
   useEffect(() => {
@@ -69,10 +80,22 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
 
     // 선택된 실천 계획 수집 (텍스트 + cellId)
     const selectedItems: Array<{ text: string; cellId: string }> = [];
+    const addedIds = new Set<string>();
+
+    // 추천 셀에서 수집
+    recommendedCells.forEach(cell => {
+      if (selectedPlans.has(cell.cellId) && !addedIds.has(cell.cellId)) {
+        selectedItems.push({ text: cell.text, cellId: cell.cellId });
+        addedIds.add(cell.cellId);
+      }
+    });
+
+    // 그룹 플랜에서 수집
     groupedPlans.forEach(group => {
       group.actionPlans.forEach(plan => {
-        if (selectedPlans.has(plan.id)) {
+        if (selectedPlans.has(plan.id) && !addedIds.has(plan.id)) {
           selectedItems.push({ text: plan.text, cellId: plan.id });
+          addedIds.add(plan.id);
         }
       });
     });
@@ -144,6 +167,48 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
             </div>
           ) : (
             <div className="space-y-3">
+              {/* 이번 달 추천 */}
+              {recommendedCells.length > 0 && (
+                <div className="border border-blue-200 rounded-lg overflow-hidden bg-blue-50/50">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-blue-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span className="font-medium text-sm text-blue-700 flex-1">
+                      {currentMonthly?.month}월 추천
+                    </span>
+                    <span className="text-xs text-blue-400">
+                      {recommendedCells.length}개
+                    </span>
+                  </div>
+                  <div className="divide-y divide-blue-100">
+                    {recommendedCells.map((cell) => {
+                      const isSelected = selectedPlans.has(cell.cellId);
+                      return (
+                        <label
+                          key={`rec-${cell.cellId}`}
+                          className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-blue-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => togglePlan(cell.cellId, cell.text)}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-slate-600 block">{cell.text}</span>
+                            <span className="text-xs text-slate-400">{cell.subGoalText}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {groupedPlans.map((group) => (
                 <div key={group.subGoalText} className="border border-slate-200 rounded-lg overflow-hidden">
                   {/* Group header */}

@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { SubGrid } from './SubGrid';
+import { CellSchedulePopover } from './CellSchedulePopover';
 import { ColorPicker } from '../ColorPicker';
 import { EmojiPickerWrapper } from '../EmojiPicker';
 import { useMandalartStore } from '@/hooks/useMandalart';
-import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
+import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP, CellSchedule } from '@/types/mandalart';
 
 export function MandalartGrid() {
   const data = useMandalartStore((state) => {
@@ -16,10 +17,11 @@ export function MandalartGrid() {
   const updateCellIcon = useMandalartStore((state) => state.updateCellIcon);
   const toggleCellCompleted = useMandalartStore((state) => state.toggleCellCompleted);
   const clearCell = useMandalartStore((state) => state.clearCell);
-  const toggleCellDaily = useMandalartStore((state) => state.toggleCellDaily);
+  const updateCellSchedule = useMandalartStore((state) => state.updateCellSchedule);
   const updateGridColor = useMandalartStore((state) => state.updateGridColor);
   const [selectedGrid, setSelectedGrid] = useState<GridPosition | null>(null);
   const [emojiPickerTarget, setEmojiPickerTarget] = useState<{ gridId: GridPosition; cellIndex: number } | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<{ gridId: GridPosition; cellIndex: number } | null>(null);
 
   if (!data) {
     return (
@@ -128,8 +130,8 @@ export function MandalartGrid() {
               onClearCell={(cellIndex) =>
                 handleClearCell(grid.id, cellIndex)
               }
-              onToggleCellDaily={(cellIndex) =>
-                toggleCellDaily(grid.id, cellIndex)
+              onScheduleClick={(cellIndex) =>
+                setScheduleTarget({ gridId: grid.id, cellIndex })
               }
               onColorClick={() => handleColorClick(grid.id)}
               isCenter={position === 'center'}
@@ -156,6 +158,18 @@ export function MandalartGrid() {
           }
           onSelect={handleEmojiSelect}
           onClose={handleCloseEmojiPicker}
+        />
+      )}
+
+      {/* Schedule Popover */}
+      {scheduleTarget && (
+        <CellSchedulePopover
+          schedule={getGrid(scheduleTarget.gridId)?.cells[scheduleTarget.cellIndex]?.schedule}
+          onSave={(schedule) => {
+            updateCellSchedule(scheduleTarget.gridId, scheduleTarget.cellIndex, schedule);
+            setScheduleTarget(null);
+          }}
+          onClose={() => setScheduleTarget(null)}
         />
       )}
     </div>

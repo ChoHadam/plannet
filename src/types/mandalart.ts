@@ -9,13 +9,23 @@ export type GridPosition =
   | 'bottom'
   | 'bottom-right';
 
+export type RepeatCycle = 'daily' | 'weekly' | 'monthly';
+
+export interface CellSchedule {
+  targetMonths?: number[];   // 대상 월 (1-12), 복수 선택 가능
+  startDate?: string;        // 시작일 (ISO date, "2026-04-01")
+  endDate?: string;          // 종료일
+  repeat?: RepeatCycle;      // 반복 주기
+  repeatDays?: number[];     // 주간 반복 시 요일 (0=일, 1=월, ..., 6=토)
+}
+
 export interface CellData {
   id: string;
   value: string;
   position: number; // 0-8 within 3x3 grid
   completed?: boolean;
   icon?: string;
-  isDaily?: boolean;
+  schedule?: CellSchedule;
 }
 
 export interface SubGridData {

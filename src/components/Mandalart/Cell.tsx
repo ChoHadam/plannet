@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { CellSchedule } from '@/types/mandalart';
 
 interface CellProps {
   value: string;
@@ -15,8 +16,13 @@ interface CellProps {
   icon?: string;
   onIconClick?: () => void;
   onClearCell?: () => void;
-  isDaily?: boolean;
-  onToggleDaily?: () => void;
+  schedule?: CellSchedule;
+  onScheduleClick?: () => void;
+}
+
+function hasSchedule(schedule?: CellSchedule): boolean {
+  if (!schedule) return false;
+  return !!(schedule.repeat || schedule.targetMonths?.length || schedule.startDate || schedule.endDate);
 }
 
 export function Cell({
@@ -32,8 +38,8 @@ export function Cell({
   icon,
   onIconClick,
   onClearCell,
-  isDaily = false,
-  onToggleDaily,
+  schedule,
+  onScheduleClick,
 }: CellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localValue, setLocalValue] = useState(value);
@@ -129,10 +135,10 @@ export function Cell({
             onToggleCompleted();
           }}
           className={`
-            absolute -top-1.5 -left-1.5
-            w-5 h-5 rounded-full
+            absolute top-0.5 left-0.5
+            w-4 h-4 rounded-full
             flex items-center justify-center
-            shadow-md border
+            shadow-sm border
             z-20
             transition-all duration-200
             ${completed
@@ -143,7 +149,7 @@ export function Cell({
           `}
           title={completed ? '완료 취소' : '완료'}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </button>
@@ -157,10 +163,10 @@ export function Cell({
             onIconClick();
           }}
           className={`
-            absolute -top-1.5 -right-1.5
-            w-5 h-5 rounded-full
+            absolute top-0.5 right-0.5
+            w-4 h-4 rounded-full
             flex items-center justify-center
-            shadow-md border
+            shadow-sm border
             z-20
             transition-all duration-200
             ${icon
@@ -171,37 +177,46 @@ export function Cell({
           `}
           title="이모지 선택"
         >
-          <span className="text-xs">{icon || '😊'}</span>
+          <span className="text-[10px]">{icon || '😊'}</span>
         </button>
       )}
 
-      {/* 매일 반복 버튼 (좌측 하단, 호버 시 표시) - action item 셀만 */}
-      {localValue.trim() && !icon && onToggleDaily && !disabled && !isMainGoal && !isSubGoal && (
+      {/* 스케줄 버튼 (좌측 하단, 호버 시 표시) - action item 셀만 */}
+      {localValue.trim() && !icon && onScheduleClick && !disabled && !isMainGoal && !isSubGoal && (
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onToggleDaily();
+            onScheduleClick();
           }}
           className={`
-            absolute -bottom-1.5 -left-1.5
-            w-5 h-5 rounded-full
+            absolute bottom-0.5 left-0.5
+            w-4 h-4 rounded-full
             flex items-center justify-center
-            shadow-md border
+            shadow-sm border
             z-20
             transition-all duration-200
-            ${isDaily
+            ${hasSchedule(schedule)
               ? 'bg-indigo-500 border-indigo-600 text-white opacity-100'
               : 'bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50'
             }
             max-sm:opacity-100
           `}
-          title={isDaily ? '매일 반복 해제' : '매일 반복'}
+          title={hasSchedule(schedule) ? '스케줄 편집' : '스케줄 설정'}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <polyline points="1 20 1 14 7 14"></polyline>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-          </svg>
+          {schedule?.repeat ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          )}
         </button>
       )}
 
@@ -219,16 +234,16 @@ export function Cell({
             }
           }}
           className={`
-            absolute -bottom-1.5 -right-1.5
+            absolute bottom-0.5 right-0.5
             rounded-full
             flex items-center justify-center
-            shadow-md border
+            shadow-sm border
             z-20
             transition-all duration-200
             max-sm:opacity-100
             ${confirmClear
-              ? 'w-auto h-5 px-2 bg-red-500 border-red-600 text-white opacity-100'
-              : 'w-5 h-5 bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-red-300 hover:text-red-500 hover:bg-red-50'
+              ? 'w-auto h-4 px-1.5 bg-red-500 border-red-600 text-white opacity-100'
+              : 'w-4 h-4 bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-red-300 hover:text-red-500 hover:bg-red-50'
             }
           `}
           title={confirmClear ? '클릭하여 삭제' : '초기화'}
