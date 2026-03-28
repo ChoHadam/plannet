@@ -15,6 +15,7 @@ export interface CellData {
   position: number; // 0-8 within 3x3 grid
   completed?: boolean;
   icon?: string;
+  isDaily?: boolean;
 }
 
 export interface SubGridData {
@@ -27,7 +28,7 @@ export interface SubGridData {
 export type PlanCategory = 'annual' | 'monthly' | 'weekly' | 'daily';
 
 // Template types
-export type TemplateType = 'mandalart' | 'block6' | 'monthly';
+export type TemplateType = 'mandalart' | 'block6' | 'monthly' | 'daily';
 
 export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
   annual: '연간 플랜',
@@ -40,6 +41,7 @@ export const TEMPLATE_LABELS: Record<TemplateType, string> = {
   mandalart: '만다라트',
   block6: 'Block 6',
   monthly: '월간 플래너',
+  daily: '투두리스트',
 };
 
 export interface MandalartData {

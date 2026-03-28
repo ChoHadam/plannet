@@ -67,6 +67,41 @@ export function extractAllActionPlans(
 }
 
 /**
+ * 만다라트에서 매일 반복(isDaily) 플래그가 설정된 셀 추출
+ */
+export interface DailyHabitItem {
+  cellId: string;       // e.g. "top-left-3"
+  text: string;
+  subGoalText: string;  // 부모 서브골 텍스트
+}
+
+export function extractDailyHabits(
+  mandalartData: MandalartData
+): DailyHabitItem[] {
+  const habits: DailyHabitItem[] = [];
+  const actionPositions = [0, 1, 2, 3, 5, 6, 7, 8];
+
+  for (const grid of mandalartData.grids) {
+    if (grid.id === 'center') continue;
+
+    const subGoalText = grid.cells[4]?.value || '';
+
+    for (const pos of actionPositions) {
+      const cell = grid.cells[pos];
+      if (cell?.isDaily && cell.value.trim()) {
+        habits.push({
+          cellId: `${grid.id}-${pos}`,
+          text: cell.value,
+          subGoalText,
+        });
+      }
+    }
+  }
+
+  return habits;
+}
+
+/**
  * 만다라트의 핵심 목표 텍스트 추출
  */
 export function getMainGoalText(mandalartData: MandalartData): string {

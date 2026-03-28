@@ -16,6 +16,7 @@ export function MandalartGrid() {
   const updateCellIcon = useMandalartStore((state) => state.updateCellIcon);
   const toggleCellCompleted = useMandalartStore((state) => state.toggleCellCompleted);
   const clearCell = useMandalartStore((state) => state.clearCell);
+  const toggleCellDaily = useMandalartStore((state) => state.toggleCellDaily);
   const updateGridColor = useMandalartStore((state) => state.updateGridColor);
   const [selectedGrid, setSelectedGrid] = useState<GridPosition | null>(null);
   const [emojiPickerTarget, setEmojiPickerTarget] = useState<{ gridId: GridPosition; cellIndex: number } | null>(null);
@@ -126,6 +127,9 @@ export function MandalartGrid() {
               }
               onClearCell={(cellIndex) =>
                 handleClearCell(grid.id, cellIndex)
+              }
+              onToggleCellDaily={(cellIndex) =>
+                toggleCellDaily(grid.id, cellIndex)
               }
               onColorClick={() => handleColorClick(grid.id)}
               isCenter={position === 'center'}

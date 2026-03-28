@@ -15,6 +15,8 @@ interface CellProps {
   icon?: string;
   onIconClick?: () => void;
   onClearCell?: () => void;
+  isDaily?: boolean;
+  onToggleDaily?: () => void;
 }
 
 export function Cell({
@@ -30,6 +32,8 @@ export function Cell({
   icon,
   onIconClick,
   onClearCell,
+  isDaily = false,
+  onToggleDaily,
 }: CellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localValue, setLocalValue] = useState(value);
@@ -168,6 +172,36 @@ export function Cell({
           title="이모지 선택"
         >
           <span className="text-xs">{icon || '😊'}</span>
+        </button>
+      )}
+
+      {/* 매일 반복 버튼 (좌측 하단, 호버 시 표시) - action item 셀만 */}
+      {localValue.trim() && !icon && onToggleDaily && !disabled && !isMainGoal && !isSubGoal && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleDaily();
+          }}
+          className={`
+            absolute -bottom-1.5 -left-1.5
+            w-5 h-5 rounded-full
+            flex items-center justify-center
+            shadow-md border
+            z-20
+            transition-all duration-200
+            ${isDaily
+              ? 'bg-indigo-500 border-indigo-600 text-white opacity-100'
+              : 'bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50'
+            }
+            max-sm:opacity-100
+          `}
+          title={isDaily ? '매일 반복 해제' : '매일 반복'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
         </button>
       )}
 

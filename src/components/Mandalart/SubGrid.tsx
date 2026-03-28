@@ -12,6 +12,7 @@ interface SubGridProps {
   onToggleCellCompleted?: (cellIndex: number) => void;
   onIconClick?: (cellIndex: number) => void;
   onClearCell?: (cellIndex: number) => void;
+  onToggleCellDaily?: (cellIndex: number) => void;
   onColorClick?: () => void;
   isCenter?: boolean;
   disabled?: boolean;
@@ -26,6 +27,7 @@ export function SubGrid({
   onToggleCellCompleted,
   onIconClick,
   onClearCell,
+  onToggleCellDaily,
   onColorClick,
   isCenter = false,
   disabled = false,
@@ -63,6 +65,12 @@ export function SubGrid({
             icon={cell.icon}
             onIconClick={onIconClick ? () => onIconClick(index) : undefined}
             onClearCell={onClearCell ? () => onClearCell(index) : undefined}
+            isDaily={cell.isDaily ?? false}
+            onToggleDaily={
+              onToggleCellDaily && !isCenter && index !== 4
+                ? () => onToggleCellDaily(index)
+                : undefined
+            }
           />
         );
       })}

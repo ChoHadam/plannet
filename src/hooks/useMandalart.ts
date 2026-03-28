@@ -39,6 +39,9 @@ interface MandalartStore {
   updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
 
+  // Daily habit toggle
+  toggleCellDaily: (gridId: GridPosition, cellIndex: number) => void;
+
   // External sync (for Monthly planner integration)
   setCellCompleted: (mandalartId: string, cellId: string, completed: boolean) => boolean;
 }
@@ -498,6 +501,36 @@ export const useMandalartStore = create<MandalartStore>()(
 
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = newMandalart;
+
+          return { mandalarts: newMandalarts };
+        });
+      },
+
+      toggleCellDaily: (gridId: GridPosition, cellIndex: number) => {
+        const currentId = get().currentId;
+        if (!currentId) return;
+
+        set((state) => {
+          const mandalartIndex = state.mandalarts.findIndex(m => m.id === currentId);
+          if (mandalartIndex === -1) return state;
+
+          const mandalart = state.mandalarts[mandalartIndex];
+          const newGrids = mandalart.grids.map((grid) => {
+            if (grid.id === gridId) {
+              const newCells = grid.cells.map((cell, idx) =>
+                idx === cellIndex ? { ...cell, isDaily: !cell.isDaily } : cell
+              );
+              return { ...grid, cells: newCells };
+            }
+            return grid;
+          });
+
+          const newMandalarts = [...state.mandalarts];
+          newMandalarts[mandalartIndex] = {
+            ...mandalart,
+            grids: newGrids,
+            updatedAt: new Date().toISOString(),
+          };
 
           return { mandalarts: newMandalarts };
         });
