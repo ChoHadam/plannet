@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, KeyboardEvent } from 'react';
+import { useState, useMemo, KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { DraggableTodoItem } from './DraggableTodoItem';
+import { useMandalartStore } from '@/hooks/useMandalart';
+import { extractDailyHabits } from '@/lib/mandalartIntegration';
 
 interface TodoBacklogProps {
   todos: TodoItemType[];
@@ -25,8 +27,31 @@ export function TodoBacklog({
   onDuplicate,
 }: TodoBacklogProps) {
   const [newTodoText, setNewTodoText] = useState('');
+  const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const mandalarts = useMandalartStore((state) => state.mandalarts);
   const completedCount = todos.filter((t) => t.completed).length;
   const totalCount = todos.length;
+
+  const allDailyHabits = useMemo(() => {
+    return mandalarts.flatMap((m) =>
+      extractDailyHabits(m).map((h) => ({ ...h, mandalartId: m.id }))
+    );
+  }, [mandalarts]);
+
+  const handleImportHabits = () => {
+    if (allDailyHabits.length === 0) return;
+    // Dedup: check if habit text already exists in backlog
+    const existingTexts = new Set(todos.map((t) => t.text));
+    const newHabits = allDailyHabits.filter((h) => !existingTexts.has(h.text));
+
+    if (newHabits.length === 0) {
+      setImportFeedback('이미 모두 추가되어 있습니다');
+    } else {
+      newHabits.forEach((h) => onAddTodo(h.text));
+      setImportFeedback(`${newHabits.length}개 습관 추가됨`);
+    }
+    setTimeout(() => setImportFeedback(null), 2000);
+  };
 
   const { isOver, setNodeRef } = useDroppable({
     id: 'backlog',
@@ -94,6 +119,30 @@ export function TodoBacklog({
           </button>
         )}
       </div>
+
+      {/* Import daily habits */}
+      {allDailyHabits.length > 0 && (
+        <div className="mb-2 pb-2 border-b border-slate-200">
+          <button
+            onClick={handleImportHabits}
+            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded
+                     bg-indigo-50 text-indigo-600 text-xs font-medium
+                     hover:bg-indigo-100 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            습관 불러오기
+          </button>
+          {importFeedback && (
+            <p className="text-[10px] text-indigo-500 text-center mt-1 animate-pulse">
+              {importFeedback}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Todo List */}
       <div

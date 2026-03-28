@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useBlock6Store } from '@/hooks/useBlock6';
 import { useMonthlyStore } from '@/hooks/useMonthly';
+import { useDailyStore } from '@/hooks/useDaily';
 import {
   PlanCategory,
   PLAN_CATEGORY_LABELS,
@@ -13,13 +14,15 @@ import {
 } from '@/types/mandalart';
 import { Block6Data } from '@/types/block6';
 import { MonthlyData } from '@/types/monthly';
+import { DailyData } from '@/types/daily';
 import { DatePicker, formatPlanDate } from './DatePicker';
 import { MandalartGuide } from './MandalartGuide';
 import { Block6Guide } from './Block6';
 import { MonthlyGuide } from './Monthly';
+import { DailyGuide } from './Daily';
 
 // Union type for all plan types
-type PlanData = MandalartData | Block6Data | MonthlyData;
+type PlanData = MandalartData | Block6Data | MonthlyData | DailyData;
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
@@ -92,6 +95,8 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                         ? 'bg-violet-100 text-violet-600'
                         : plan.template === 'monthly'
                         ? 'bg-blue-100 text-blue-600'
+                        : plan.template === 'daily'
+                        ? 'bg-emerald-100 text-emerald-600'
                         : 'bg-amber-100 text-amber-600'}
                     `}>
                       {TEMPLATE_LABELS[plan.template]}
@@ -144,6 +149,7 @@ function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateMod
     { type: 'mandalart', description: '9x9 그리드로 목표를 세분화', hasGuide: true },
     { type: 'block6', description: '하루 6블록 시간 관리', hasGuide: true },
     { type: 'monthly', description: '월간 목표와 주간 계획', hasGuide: true },
+    { type: 'daily', description: '간단한 일간 할 일 관리', hasGuide: true },
   ];
 
   return (
@@ -246,11 +252,19 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const selectMonthlyPlan = useMonthlyStore((state) => state.selectMonthlyPlan);
   const deleteMonthlyPlan = useMonthlyStore((state) => state.deleteMonthlyPlan);
 
+  // Daily store
+  const dailyPlans = useDailyStore((state) => state.dailyPlans);
+  const currentDailyId = useDailyStore((state) => state.currentDailyId);
+  const createDailyPlan = useDailyStore((state) => state.createDailyPlan);
+  const selectDailyPlan = useDailyStore((state) => state.selectDailyPlan);
+  const deleteDailyPlan = useDailyStore((state) => state.deleteDailyPlan);
+
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ plan: PlanData; template: TemplateType } | null>(null);
   const [showMandalartGuide, setShowMandalartGuide] = useState(false);
   const [showBlock6Guide, setShowBlock6Guide] = useState(false);
   const [showMonthlyGuide, setShowMonthlyGuide] = useState(false);
+  const [showDailyGuide, setShowDailyGuide] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<TemplateType | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingDate, setPendingDate] = useState<{
@@ -261,14 +275,15 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   }>({});
 
   // Determine current template based on which store has a selection
-  const currentTemplate: TemplateType | null = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : currentMonthlyId ? 'monthly' : null;
-  const currentId = currentMandalartId || currentBlock6Id || currentMonthlyId;
+  const currentTemplate: TemplateType | null = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : currentMonthlyId ? 'monthly' : currentDailyId ? 'daily' : null;
+  const currentId = currentMandalartId || currentBlock6Id || currentMonthlyId || currentDailyId;
 
   const getPlansByCategory = (category: PlanCategory): PlanData[] => {
     const mandalartPlans = mandalarts.filter((m) => m.category === category);
     const block6CategoryPlans = block6Plans.filter((p) => p.category === category);
     const monthlyCategoryPlans = monthlyPlans.filter((p) => p.category === category);
-    return [...mandalartPlans, ...block6CategoryPlans, ...monthlyCategoryPlans];
+    const dailyCategoryPlans = dailyPlans.filter((p) => p.category === category);
+    return [...mandalartPlans, ...block6CategoryPlans, ...monthlyCategoryPlans, ...dailyCategoryPlans];
   };
 
   const handleCreateClick = (category: PlanCategory) => {
@@ -291,6 +306,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       setShowBlock6Guide(true);
     } else if (pendingTemplate === 'monthly') {
       setShowMonthlyGuide(true);
+    } else if (pendingTemplate === 'daily') {
+      setShowDailyGuide(true);
     }
   };
 
@@ -304,15 +321,23 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     if (template === 'mandalart') {
       if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
       if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
+      if (currentDailyId) useDailyStore.setState({ currentDailyId: null });
       selectMandalart(id);
     } else if (template === 'block6') {
       if (currentMandalartId) useMandalartStore.setState({ currentId: null });
       if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
+      if (currentDailyId) useDailyStore.setState({ currentDailyId: null });
       selectBlock6Plan(id);
     } else if (template === 'monthly') {
       if (currentMandalartId) useMandalartStore.setState({ currentId: null });
       if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
+      if (currentDailyId) useDailyStore.setState({ currentDailyId: null });
       selectMonthlyPlan(id);
+    } else if (template === 'daily') {
+      if (currentMandalartId) useMandalartStore.setState({ currentId: null });
+      if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
+      if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
+      selectDailyPlan(id);
     }
   };
 
@@ -324,6 +349,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       plan = block6Plans.find(p => p.id === id);
     } else if (template === 'monthly') {
       plan = monthlyPlans.find(p => p.id === id);
+    } else if (template === 'daily') {
+      plan = dailyPlans.find(p => p.id === id);
     }
     if (plan) {
       setDeleteTarget({ plan, template });
@@ -338,6 +365,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         deleteBlock6Plan(deleteTarget.plan.id);
       } else if (deleteTarget.template === 'monthly') {
         deleteMonthlyPlan(deleteTarget.plan.id);
+      } else if (deleteTarget.template === 'daily') {
+        deleteDailyPlan(deleteTarget.plan.id);
       }
       setDeleteTarget(null);
     }
@@ -351,6 +380,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       setShowBlock6Guide(true);
     } else if (template === 'monthly') {
       setShowMonthlyGuide(true);
+    } else if (template === 'daily') {
+      setShowDailyGuide(true);
     }
   };
 
@@ -362,6 +393,9 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       }
       if (currentMonthlyId) {
         useMonthlyStore.setState({ currentMonthlyId: null });
+      }
+      if (currentDailyId) {
+        useDailyStore.setState({ currentDailyId: null });
       }
       createMandalart(createCategory);
       // 선택한 날짜 적용
@@ -382,12 +416,15 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
   const handleBlock6GuideStart = () => {
     if (createCategory) {
-      // Clear mandalart selection
+      // Clear other selections
       if (currentMandalartId) {
         useMandalartStore.setState({ currentId: null });
       }
       if (currentMonthlyId) {
         useMonthlyStore.setState({ currentMonthlyId: null });
+      }
+      if (currentDailyId) {
+        useDailyStore.setState({ currentDailyId: null });
       }
       createBlock6Plan(createCategory);
       // 선택한 날짜 적용
@@ -415,6 +452,9 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       if (currentBlock6Id) {
         useBlock6Store.setState({ currentBlock6Id: null });
       }
+      if (currentDailyId) {
+        useDailyStore.setState({ currentDailyId: null });
+      }
       // Monthly는 생성 시 year, month를 직접 전달
       createMonthlyPlan(createCategory, pendingDate.year, pendingDate.month);
     }
@@ -424,10 +464,32 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     setPendingDate({});
   };
 
+  const handleDailyGuideStart = () => {
+    if (createCategory) {
+      // Clear other selections
+      if (currentMandalartId) {
+        useMandalartStore.setState({ currentId: null });
+      }
+      if (currentBlock6Id) {
+        useBlock6Store.setState({ currentBlock6Id: null });
+      }
+      if (currentMonthlyId) {
+        useMonthlyStore.setState({ currentMonthlyId: null });
+      }
+      // Daily는 생성 시 year, month, day를 직접 전달
+      createDailyPlan(createCategory, pendingDate.year, pendingDate.month, pendingDate.day);
+    }
+    setShowDailyGuide(false);
+    setCreateCategory(null);
+    setPendingTemplate(null);
+    setPendingDate({});
+  };
+
   const handleGuideClose = () => {
     setShowMandalartGuide(false);
     setShowBlock6Guide(false);
     setShowMonthlyGuide(false);
+    setShowDailyGuide(false);
     setPendingTemplate(null);
     setPendingDate({});
   };
@@ -494,7 +556,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       </button>
 
       {/* Template Selection Modal */}
-      {createCategory && !showDatePicker && !showMandalartGuide && !showBlock6Guide && !showMonthlyGuide && (
+      {createCategory && !showDatePicker && !showMandalartGuide && !showBlock6Guide && !showMonthlyGuide && !showDailyGuide && (
         <TemplateModal
           category={createCategory}
           onSelect={handleTemplateSelect}
@@ -532,6 +594,14 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       {showMonthlyGuide && (
         <MonthlyGuide
           onStart={handleMonthlyGuideStart}
+          onClose={handleGuideClose}
+        />
+      )}
+
+      {/* Daily Guide Modal */}
+      {showDailyGuide && (
+        <DailyGuide
+          onStart={handleDailyGuideStart}
           onClose={handleGuideClose}
         />
       )}
