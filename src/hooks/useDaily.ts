@@ -39,6 +39,9 @@ interface DailyStore {
     sourceId: string
   ) => number;
 
+  // Reorder
+  reorderTodos: (fromIndex: number, toIndex: number) => void;
+
   // Memo
   updateMemo: (memo: string) => void;
 
@@ -185,6 +188,30 @@ export const useDailyStore = create<DailyStore>()(
 
           const plan = state.dailyPlans[planIndex];
           const newTodos = plan.todos.filter((todo) => todo.id !== todoId);
+
+          const newPlans = [...state.dailyPlans];
+          newPlans[planIndex] = {
+            ...plan,
+            todos: newTodos,
+            updatedAt: new Date().toISOString(),
+          };
+
+          return { dailyPlans: newPlans };
+        });
+      },
+
+      reorderTodos: (fromIndex: number, toIndex: number) => {
+        const currentId = get().currentDailyId;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.dailyPlans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.dailyPlans[planIndex];
+          const newTodos = [...plan.todos];
+          const [moved] = newTodos.splice(fromIndex, 1);
+          newTodos.splice(toIndex, 0, moved);
 
           const newPlans = [...state.dailyPlans];
           newPlans[planIndex] = {
