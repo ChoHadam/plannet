@@ -106,7 +106,7 @@ export function Block6Grid() {
         {/* Left Sidebar */}
         <div className="flex flex-col mr-4">
           {/* Weekly Focus from Monthly Planner */}
-          <WeeklyFocusRef />
+          <WeeklyFocusRef planYear={data.year} planMonth={data.month} />
 
           {/* Backlog */}
           <TodoBacklog

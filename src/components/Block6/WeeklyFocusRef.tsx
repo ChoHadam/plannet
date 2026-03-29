@@ -35,19 +35,29 @@ function SyncButton({ isRefreshing, onClick }: { isRefreshing: boolean; onClick:
   );
 }
 
-export function WeeklyFocusRef() {
+interface WeeklyFocusRefProps {
+  planYear?: number;
+  planMonth?: number;
+}
+
+export function WeeklyFocusRef({ planYear, planMonth }: WeeklyFocusRefProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
-  const { focus, monthlyPlan, weekNumber } = getCurrentWeeklyFocus(monthlyPlans);
+
+  // Block6 플랜의 날짜가 있으면 해당 날짜 기준, 없으면 현재 날짜 기준
+  const now = new Date();
+  const targetDate = (planYear && planMonth)
+    ? new Date(planYear, planMonth - 1, 1)
+    : now;
+  const { focus, monthlyPlan, weekNumber } = getCurrentWeeklyFocus(monthlyPlans, targetDate);
 
   const handleSync = () => {
     setIsRefreshing(true);
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const monthName = MONTH_NAMES[currentMonth - 1];
+  const displayMonth = planMonth ?? (now.getMonth() + 1);
+  const monthName = MONTH_NAMES[displayMonth - 1];
 
   // 해당 월의 월간 플래너가 없는 경우
   if (!monthlyPlan) {
