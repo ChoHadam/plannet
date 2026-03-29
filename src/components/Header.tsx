@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
-import { useBlock6Store } from '@/hooks/useBlock6';
-import { useMonthlyStore } from '@/hooks/useMonthly';
-import { useDailyStore } from '@/hooks/useDaily';
 import { exportToJSON, importFromJSON, exportToImage } from '@/lib/export';
 import { MandalartData, TemplateType, PlanCategory } from '@/types/mandalart';
+import { templateRegistry, TEMPLATE_TYPES, BasePlanData } from '@/lib/templateRegistry';
 import { DatePicker, formatPlanDate } from './DatePicker';
 import { MandalartGuide } from './MandalartGuide';
 
@@ -14,7 +12,6 @@ interface HeaderProps {
   onOpenAIChat?: () => void;
 }
 
-// Common plan info across all templates
 interface ActivePlanInfo {
   template: TemplateType;
   title: string;
@@ -28,83 +25,36 @@ interface ActivePlanInfo {
 }
 
 function useActivePlan(): ActivePlanInfo | null {
-  const mandalart = useMandalartStore((state) => {
-    if (!state.currentId) return null;
-    return state.mandalarts.find(m => m.id === state.currentId) || null;
-  });
-  const mandalartUpdateTitle = useMandalartStore((state) => state.updateTitle);
-  const mandalartUpdateDate = useMandalartStore((state) => state.updatePlanDate);
+  // Call all hooks unconditionally (React hooks rules)
+  const plans: Record<TemplateType, BasePlanData | null> = {} as any;
+  const updateTitles: Record<TemplateType, (t: string) => void> = {} as any;
+  const updateDates: Record<TemplateType, (y?: number, m?: number, w?: number, d?: number) => void> = {} as any;
 
-  const block6 = useBlock6Store((state) => {
-    if (!state.currentBlock6Id) return null;
-    return state.block6Plans.find(p => p.id === state.currentBlock6Id) || null;
-  });
-  const block6UpdateTitle = useBlock6Store((state) => state.updateTitle);
-  const block6UpdateDate = useBlock6Store((state) => state.updatePlanDate);
-
-  const monthly = useMonthlyStore((state) => {
-    if (!state.currentMonthlyId) return null;
-    return state.monthlyPlans.find(p => p.id === state.currentMonthlyId) || null;
-  });
-  const monthlyUpdateTitle = useMonthlyStore((state) => state.updateTitle);
-
-  const daily = useDailyStore((state) => {
-    if (!state.currentDailyId) return null;
-    return state.dailyPlans.find(p => p.id === state.currentDailyId) || null;
-  });
-  const dailyUpdateTitle = useDailyStore((state) => state.updateTitle);
-  const dailyUpdateDate = useDailyStore((state) => state.updatePlanDate);
-
-  if (mandalart) {
-    return {
-      template: 'mandalart',
-      title: mandalart.title,
-      category: mandalart.category,
-      year: mandalart.year, month: mandalart.month, week: mandalart.week, day: mandalart.day,
-      updateTitle: mandalartUpdateTitle,
-      updatePlanDate: mandalartUpdateDate,
-    };
+  for (const t of TEMPLATE_TYPES) {
+    const entry = templateRegistry[t];
+    plans[t] = entry.useCurrentPlan();
+    updateTitles[t] = entry.useUpdateTitle();
+    updateDates[t] = entry.useUpdatePlanDate();
   }
-  if (block6) {
-    return {
-      template: 'block6',
-      title: block6.title,
-      category: block6.category,
-      year: block6.year, month: block6.month, week: block6.week, day: block6.day,
-      updateTitle: block6UpdateTitle,
-      updatePlanDate: block6UpdateDate,
-    };
-  }
-  if (monthly) {
-    return {
-      template: 'monthly',
-      title: monthly.title,
-      category: monthly.category,
-      year: monthly.year, month: monthly.month,
-      updateTitle: monthlyUpdateTitle,
-      // Monthly doesn't have updatePlanDate — no-op
-      updatePlanDate: () => {},
-    };
-  }
-  if (daily) {
-    return {
-      template: 'daily',
-      title: daily.title,
-      category: daily.category,
-      year: daily.year, month: daily.month, day: daily.day,
-      updateTitle: dailyUpdateTitle,
-      updatePlanDate: (year, month, _week, day) => dailyUpdateDate(year, month, day),
-    };
+
+  for (const t of TEMPLATE_TYPES) {
+    const plan = plans[t];
+    if (plan) {
+      return {
+        template: t,
+        title: plan.title,
+        category: plan.category,
+        year: plan.year,
+        month: plan.month,
+        week: plan.week,
+        day: plan.day,
+        updateTitle: updateTitles[t],
+        updatePlanDate: updateDates[t],
+      };
+    }
   }
   return null;
 }
-
-const TEMPLATE_PLACEHOLDERS: Record<TemplateType, string> = {
-  mandalart: '나의 만다라트',
-  block6: '나의 Block 6',
-  monthly: '나의 월간 플래너',
-  daily: '나의 투두리스트',
-};
 
 export function Header({ onOpenAIChat }: HeaderProps) {
   const plan = useActivePlan();
@@ -126,6 +76,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
   if (!plan) return null;
 
   const isMandalart = plan.template === 'mandalart';
+  const placeholder = templateRegistry[plan.template].placeholder;
 
   // Mandalart-specific: check if plan is empty
   const isCurrentPlanEmpty = () => {
@@ -167,9 +118,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
   };
 
   const handleExportJSON = () => {
-    if (mandalartData) {
-      exportToJSON(mandalartData);
-    }
+    if (mandalartData) exportToJSON(mandalartData);
     setShowMenu(false);
   };
 
@@ -188,7 +137,6 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
   const applyImport = (importedData: MandalartData) => {
     if (!mandalartData) return;
-
     const store = useMandalartStore.getState();
     const idx = store.mandalarts.findIndex(m => m.id === mandalartData.id);
     if (idx !== -1) {
@@ -203,17 +151,13 @@ export function Header({ onOpenAIChat }: HeaderProps) {
   };
 
   const handleConfirmImport = () => {
-    if (pendingImport) {
-      applyImport(pendingImport);
-    }
+    if (pendingImport) applyImport(pendingImport);
     setPendingImport(null);
     setShowImportConfirm(false);
   };
 
   const handleExportImage = () => {
-    if (mandalartData) {
-      exportToImage('mandalart-grid', mandalartData.title || 'mandalart');
-    }
+    if (mandalartData) exportToImage('mandalart-grid', mandalartData.title || 'mandalart');
     setShowMenu(false);
   };
 
@@ -226,7 +170,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
               type="text"
               value={plan.title}
               onChange={(e) => plan.updateTitle(e.target.value)}
-              placeholder={TEMPLATE_PLACEHOLDERS[plan.template]}
+              placeholder={placeholder}
               className="
                 text-2xl sm:text-3xl font-bold text-slate-800
                 bg-transparent border-none outline-none
@@ -236,7 +180,6 @@ export function Header({ onOpenAIChat }: HeaderProps) {
               "
             />
 
-            {/* 날짜 뱃지 */}
             <button
               onClick={() => setShowDatePicker(true)}
               className="
@@ -252,7 +195,6 @@ export function Header({ onOpenAIChat }: HeaderProps) {
               {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day)}
             </button>
 
-            {/* AI 어시스턴트 버튼 */}
             {onOpenAIChat && (
               <button
                 onClick={onOpenAIChat}
@@ -264,17 +206,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
                 "
                 title="AI 어시스턴트"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h2a4 4 0 0 1 4 4 4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4 4 4 0 0 1 4-4h2V9.4A4 4 0 0 1 12 2z" />
                 </svg>
                 AI
@@ -282,7 +214,6 @@ export function Header({ onOpenAIChat }: HeaderProps) {
               </button>
             )}
 
-            {/* 완료율 프로그레스 (만다라트만) */}
             {isMandalart && progress.total > 0 && (
               <div className="flex items-center gap-2 shrink-0">
                 <div className="w-20 sm:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -298,17 +229,11 @@ export function Header({ onOpenAIChat }: HeaderProps) {
             )}
           </div>
 
-          {/* Menu Button (만다라트만) */}
           {isMandalart && (
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className="
-                  p-2 rounded-lg
-                  bg-slate-100 text-slate-600
-                  hover:bg-slate-200
-                  transition-colors duration-200
-                "
+                className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors duration-200"
                 title="메뉴"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -320,70 +245,31 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
               {showMenu && (
                 <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowMenu(false)}
-                  />
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
-                    <button
-                      onClick={() => { setShowMenu(false); setShowGuide(true); }}
-                      className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                      </svg>
+                    <button onClick={() => { setShowMenu(false); setShowGuide(true); }} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                       가이드
                     </button>
                     <div className="border-t border-slate-100 my-1"></div>
                     <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">저장</div>
-                    <button
-                      onClick={handleExportJSON}
-                      className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                      </svg>
+                    <button onClick={handleExportJSON} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                       JSON 저장
                     </button>
-                    <button
-                      onClick={handleExportImage}
-                      className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                        <polyline points="21 15 16 10 5 21"></polyline>
-                      </svg>
+                    <button onClick={handleExportImage} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                       이미지 저장
                     </button>
-
                     <div className="border-t border-slate-100 my-1"></div>
                     <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">불러오기</div>
-                    <button
-                      onClick={handleImportJSON}
-                      className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                      </svg>
+                    <button onClick={handleImportJSON} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                       JSON 불러오기
                     </button>
-
                     <div className="border-t border-slate-100 my-1"></div>
-                    <button
-                      onClick={() => { setShowMenu(false); setShowResetConfirm(true); }}
-                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="1 4 1 10 7 10"></polyline>
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                      </svg>
+                    <button onClick={() => { setShowMenu(false); setShowResetConfirm(true); }} className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                       초기화
                     </button>
                   </div>
@@ -394,87 +280,32 @@ export function Header({ onOpenAIChat }: HeaderProps) {
         </div>
       </header>
 
-      {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-200">
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">
-              정말 초기화하시겠습니까?
-            </h3>
-            <p className="text-sm text-slate-500 mb-6">
-              모든 데이터가 삭제되며 복구할 수 없습니다.
-            </p>
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">정말 초기화하시겠습니까?</h3>
+            <p className="text-sm text-slate-500 mb-6">모든 데이터가 삭제되며 복구할 수 없습니다.</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="
-                  flex-1 px-4 py-2 rounded-lg
-                  bg-slate-100 text-slate-600
-                  hover:bg-slate-200
-                  transition-colors duration-200
-                  font-medium
-                "
-              >
-                취소
-              </button>
-              <button
-                onClick={handleReset}
-                className="
-                  flex-1 px-4 py-2 rounded-lg
-                  bg-red-500 text-white
-                  hover:bg-red-600
-                  transition-colors duration-200
-                  font-medium
-                "
-              >
-                초기화
-              </button>
+              <button onClick={() => setShowResetConfirm(false)} className="flex-1 px-4 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors duration-200 font-medium">취소</button>
+              <button onClick={handleReset} className="flex-1 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 font-medium">초기화</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Import Confirmation Modal */}
       {showImportConfirm && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-200">
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">
-              현재 플랜을 덮어쓰시겠습니까?
-            </h3>
-            <p className="text-sm text-slate-500 mb-6">
-              기존 내용이 불러온 파일의 내용으로 대체됩니다.
-            </p>
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">현재 플랜을 덮어쓰시겠습니까?</h3>
+            <p className="text-sm text-slate-500 mb-6">기존 내용이 불러온 파일의 내용으로 대체됩니다.</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => { setShowImportConfirm(false); setPendingImport(null); }}
-                className="
-                  flex-1 px-4 py-2 rounded-lg
-                  bg-slate-100 text-slate-600
-                  hover:bg-slate-200
-                  transition-colors duration-200
-                  font-medium
-                "
-              >
-                취소
-              </button>
-              <button
-                onClick={handleConfirmImport}
-                className="
-                  flex-1 px-4 py-2 rounded-lg
-                  bg-blue-500 text-white
-                  hover:bg-blue-600
-                  transition-colors duration-200
-                  font-medium
-                "
-              >
-                덮어쓰기
-              </button>
+              <button onClick={() => { setShowImportConfirm(false); setPendingImport(null); }} className="flex-1 px-4 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors duration-200 font-medium">취소</button>
+              <button onClick={handleConfirmImport} className="flex-1 px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200 font-medium">덮어쓰기</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Date Picker Modal */}
       {showDatePicker && (
         <DatePicker
           category={plan.category}
@@ -482,14 +313,11 @@ export function Header({ onOpenAIChat }: HeaderProps) {
           month={plan.month}
           week={plan.week}
           day={plan.day}
-          onSelect={(year, month, week, day) => {
-            plan.updatePlanDate(year, month, week, day);
-          }}
+          onSelect={(year, month, week, day) => plan.updatePlanDate(year, month, week, day)}
           onClose={() => setShowDatePicker(false)}
         />
       )}
 
-      {/* Guide Modal (만다라트만) */}
       {showGuide && (
         <MandalartGuide
           onStart={() => setShowGuide(false)}

@@ -1,28 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { useMandalartStore } from '@/hooks/useMandalart';
-import { useBlock6Store } from '@/hooks/useBlock6';
-import { useMonthlyStore } from '@/hooks/useMonthly';
-import { useDailyStore } from '@/hooks/useDaily';
 import {
   PlanCategory,
   PLAN_CATEGORY_LABELS,
   TemplateType,
-  TEMPLATE_LABELS,
-  MandalartData,
 } from '@/types/mandalart';
-import { Block6Data } from '@/types/block6';
-import { MonthlyData } from '@/types/monthly';
-import { DailyData } from '@/types/daily';
+import {
+  templateRegistry,
+  selectExclusive,
+  getAllTitles,
+  BasePlanData,
+  TEMPLATE_TYPES,
+} from '@/lib/templateRegistry';
+import { useAllPlansReactive } from '@/hooks/useAllPlans';
 import { DatePicker, formatPlanDate } from './DatePicker';
-import { MandalartGuide } from './MandalartGuide';
-import { Block6Guide } from './Block6';
-import { MonthlyGuide } from './Monthly';
-import { DailyGuide } from './Daily';
-
-// Union type for all plan types
-type PlanData = MandalartData | Block6Data | MonthlyData | DailyData;
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
@@ -64,9 +56,11 @@ function generateDefaultTitle(
   return `${base} (${n})`;
 }
 
+// ---- Section Component ----
+
 interface SectionProps {
   category: PlanCategory;
-  plans: PlanData[];
+  plans: BasePlanData[];
   currentId: string | null;
   currentTemplate: TemplateType | null;
   onSelect: (id: string, template: TemplateType) => void;
@@ -109,6 +103,7 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
         ) : (
           recentPlans.map((plan) => {
             const isSelected = currentId === plan.id && currentTemplate === plan.template;
+            const entry = templateRegistry[plan.template];
             return (
               <div
                 key={plan.id}
@@ -129,22 +124,15 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                     </span>
                     <span className={`
                       flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full
-                      ${plan.template === 'block6'
-                        ? 'bg-violet-100 text-violet-600'
-                        : plan.template === 'monthly'
-                        ? 'bg-blue-100 text-blue-600'
-                        : plan.template === 'daily'
-                        ? 'bg-emerald-100 text-emerald-600'
-                        : 'bg-amber-100 text-amber-600'}
+                      ${entry.badgeColor}
                     `}>
-                      {TEMPLATE_LABELS[plan.template]}
+                      {entry.label}
                     </span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {/* 월간 템플릿은 항상 년+월 표시 */}
                     {plan.template === 'monthly'
                       ? formatPlanDate('monthly', plan.year, plan.month, undefined, undefined, true)
-                      : formatPlanDate(plan.category, plan.year, plan.month, 'week' in plan ? plan.week : undefined, 'day' in plan ? plan.day : undefined, true)
+                      : formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day, true)
                     }
                   </span>
                 </div>
@@ -175,6 +163,8 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
   );
 }
 
+// ---- TemplateModal Component ----
+
 interface TemplateModalProps {
   category: PlanCategory;
   onSelect: (template: TemplateType) => void;
@@ -183,12 +173,11 @@ interface TemplateModalProps {
 }
 
 function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateModalProps) {
-  const templates: { type: TemplateType; description: string; hasGuide?: boolean }[] = [
-    { type: 'mandalart', description: '9x9 그리드로 목표를 세분화', hasGuide: true },
-    { type: 'block6', description: '하루 6블록 시간 관리', hasGuide: true },
-    { type: 'monthly', description: '월간 목표와 주간 계획', hasGuide: true },
-    { type: 'daily', description: '간단한 일간 할 일 관리', hasGuide: true },
-  ];
+  const templates = TEMPLATE_TYPES.map(t => ({
+    type: templateRegistry[t].type,
+    label: templateRegistry[t].label,
+    description: templateRegistry[t].description,
+  }));
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50" onClick={onClose}>
@@ -215,34 +204,32 @@ function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateMod
                 "
               >
                 <div className="font-medium text-slate-700">
-                  {TEMPLATE_LABELS[template.type]}
+                  {template.label}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
                   {template.description}
                 </div>
               </button>
-              {template.hasGuide && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onShowGuide(template.type);
-                  }}
-                  className="
-                    w-10 rounded-lg border border-slate-200
-                    flex items-center justify-center
-                    text-slate-400 hover:text-slate-600
-                    hover:border-slate-400 hover:bg-slate-50
-                    transition-colors
-                  "
-                  title={`${TEMPLATE_LABELS[template.type]} 사용법`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                </button>
-              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowGuide(template.type);
+                }}
+                className="
+                  w-10 rounded-lg border border-slate-200
+                  flex items-center justify-center
+                  text-slate-400 hover:text-slate-600
+                  hover:border-slate-400 hover:bg-slate-50
+                  transition-colors
+                "
+                title={`${template.label} 사용법`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </button>
             </div>
           ))}
         </div>
@@ -263,48 +250,19 @@ function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateMod
   );
 }
 
+// ---- Main Sidebar ----
+
 interface SidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
 export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
-  // Mandalart store
-  const mandalarts = useMandalartStore((state) => state.mandalarts);
-  const currentMandalartId = useMandalartStore((state) => state.currentId);
-  const createMandalart = useMandalartStore((state) => state.createMandalart);
-  const selectMandalart = useMandalartStore((state) => state.selectMandalart);
-  const deleteMandalart = useMandalartStore((state) => state.deleteMandalart);
-
-  // Block6 store
-  const block6Plans = useBlock6Store((state) => state.block6Plans);
-  const currentBlock6Id = useBlock6Store((state) => state.currentBlock6Id);
-  const createBlock6Plan = useBlock6Store((state) => state.createBlock6Plan);
-  const selectBlock6Plan = useBlock6Store((state) => state.selectBlock6Plan);
-  const deleteBlock6Plan = useBlock6Store((state) => state.deleteBlock6Plan);
-
-  // Monthly store
-  const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
-  const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
-  const createMonthlyPlan = useMonthlyStore((state) => state.createMonthlyPlan);
-  const selectMonthlyPlan = useMonthlyStore((state) => state.selectMonthlyPlan);
-  const deleteMonthlyPlan = useMonthlyStore((state) => state.deleteMonthlyPlan);
-
-  // Daily store
-  const dailyPlans = useDailyStore((state) => state.dailyPlans);
-  const currentDailyId = useDailyStore((state) => state.currentDailyId);
-  const createDailyPlan = useDailyStore((state) => state.createDailyPlan);
-  const selectDailyPlan = useDailyStore((state) => state.selectDailyPlan);
-  const deleteDailyPlan = useDailyStore((state) => state.deleteDailyPlan);
-
-  const allTitles = [...mandalarts, ...block6Plans, ...monthlyPlans, ...dailyPlans].map((p) => p.title);
+  const { currentTemplate, currentId, getPlansByCategory } = useAllPlansReactive();
 
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ plan: PlanData; template: TemplateType } | null>(null);
-  const [showMandalartGuide, setShowMandalartGuide] = useState(false);
-  const [showBlock6Guide, setShowBlock6Guide] = useState(false);
-  const [showMonthlyGuide, setShowMonthlyGuide] = useState(false);
-  const [showDailyGuide, setShowDailyGuide] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ plan: BasePlanData; template: TemplateType } | null>(null);
+  const [showGuide, setShowGuide] = useState<TemplateType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<TemplateType | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingDate, setPendingDate] = useState<{
@@ -314,230 +272,61 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     day?: number;
   }>({});
 
-  // Determine current template based on which store has a selection
-  const currentTemplate: TemplateType | null = currentMandalartId ? 'mandalart' : currentBlock6Id ? 'block6' : currentMonthlyId ? 'monthly' : currentDailyId ? 'daily' : null;
-  const currentId = currentMandalartId || currentBlock6Id || currentMonthlyId || currentDailyId;
-
-  const getPlansByCategory = (category: PlanCategory): PlanData[] => {
-    const mandalartPlans = mandalarts.filter((m) => m.category === category);
-    const block6CategoryPlans = block6Plans.filter((p) => p.category === category);
-    const monthlyCategoryPlans = monthlyPlans.filter((p) => p.category === category);
-    const dailyCategoryPlans = dailyPlans.filter((p) => p.category === category);
-    return [...mandalartPlans, ...block6CategoryPlans, ...monthlyCategoryPlans, ...dailyCategoryPlans];
-  };
-
-  const handleCreateClick = (category: PlanCategory) => {
-    setCreateCategory(category);
-  };
+  // ---- Handlers ----
 
   const handleTemplateSelect = (template: TemplateType) => {
     setPendingTemplate(template);
-    // 먼저 날짜 선택 모달 표시
     setShowDatePicker(true);
   };
 
   const handleDateSelect = (year?: number, month?: number, week?: number, day?: number) => {
     setPendingDate({ year, month, week, day });
     setShowDatePicker(false);
-    // 날짜 선택 후 가이드 모달 표시
-    if (pendingTemplate === 'mandalart') {
-      setShowMandalartGuide(true);
-    } else if (pendingTemplate === 'block6') {
-      setShowBlock6Guide(true);
-    } else if (pendingTemplate === 'monthly') {
-      setShowMonthlyGuide(true);
-    } else if (pendingTemplate === 'daily') {
-      setShowDailyGuide(true);
-    }
-  };
-
-  const handleDatePickerClose = () => {
-    setShowDatePicker(false);
-    // 취소 시 템플릿 선택 모달로 돌아감
+    setShowGuide(pendingTemplate);
   };
 
   const handleSelect = (id: string, template: TemplateType) => {
-    // Clear all other selections
-    if (template === 'mandalart') {
-      if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
-      if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
-      if (currentDailyId) useDailyStore.setState({ currentDailyId: null });
-      selectMandalart(id);
-    } else if (template === 'block6') {
-      if (currentMandalartId) useMandalartStore.setState({ currentId: null });
-      if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
-      if (currentDailyId) useDailyStore.setState({ currentDailyId: null });
-      selectBlock6Plan(id);
-    } else if (template === 'monthly') {
-      if (currentMandalartId) useMandalartStore.setState({ currentId: null });
-      if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
-      if (currentDailyId) useDailyStore.setState({ currentDailyId: null });
-      selectMonthlyPlan(id);
-    } else if (template === 'daily') {
-      if (currentMandalartId) useMandalartStore.setState({ currentId: null });
-      if (currentBlock6Id) useBlock6Store.setState({ currentBlock6Id: null });
-      if (currentMonthlyId) useMonthlyStore.setState({ currentMonthlyId: null });
-      selectDailyPlan(id);
-    }
+    selectExclusive(template, id);
   };
 
   const handleDeleteClick = (id: string, template: TemplateType) => {
-    let plan: PlanData | undefined;
-    if (template === 'mandalart') {
-      plan = mandalarts.find(m => m.id === id);
-    } else if (template === 'block6') {
-      plan = block6Plans.find(p => p.id === id);
-    } else if (template === 'monthly') {
-      plan = monthlyPlans.find(p => p.id === id);
-    } else if (template === 'daily') {
-      plan = dailyPlans.find(p => p.id === id);
-    }
-    if (plan) {
-      setDeleteTarget({ plan, template });
-    }
+    const plan = templateRegistry[template].getPlans().find(p => p.id === id);
+    if (plan) setDeleteTarget({ plan, template });
   };
 
   const handleConfirmDelete = () => {
     if (deleteTarget) {
-      if (deleteTarget.template === 'mandalart') {
-        deleteMandalart(deleteTarget.plan.id);
-      } else if (deleteTarget.template === 'block6') {
-        deleteBlock6Plan(deleteTarget.plan.id);
-      } else if (deleteTarget.template === 'monthly') {
-        deleteMonthlyPlan(deleteTarget.plan.id);
-      } else if (deleteTarget.template === 'daily') {
-        deleteDailyPlan(deleteTarget.plan.id);
-      }
+      templateRegistry[deleteTarget.template].deletePlan(deleteTarget.plan.id);
       setDeleteTarget(null);
     }
   };
 
   const handleShowGuide = (template: TemplateType) => {
     setPendingTemplate(template);
-    if (template === 'mandalart') {
-      setShowMandalartGuide(true);
-    } else if (template === 'block6') {
-      setShowBlock6Guide(true);
-    } else if (template === 'monthly') {
-      setShowMonthlyGuide(true);
-    } else if (template === 'daily') {
-      setShowDailyGuide(true);
-    }
+    setShowGuide(template);
   };
 
-  const handleMandalartGuideStart = () => {
-    if (createCategory) {
-      // Clear other selections
-      if (currentBlock6Id) {
-        useBlock6Store.setState({ currentBlock6Id: null });
-      }
-      if (currentMonthlyId) {
-        useMonthlyStore.setState({ currentMonthlyId: null });
-      }
-      if (currentDailyId) {
-        useDailyStore.setState({ currentDailyId: null });
-      }
-      createMandalart(createCategory);
-      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
-      useMandalartStore.getState().updateTitle(defaultTitle);
-      // 선택한 날짜 적용
-      if (pendingDate.year !== undefined) {
-        useMandalartStore.getState().updatePlanDate(
-          pendingDate.year,
-          pendingDate.month,
-          pendingDate.week,
-          pendingDate.day
-        );
-      }
-    }
-    setShowMandalartGuide(false);
-    setCreateCategory(null);
-    setPendingTemplate(null);
-    setPendingDate({});
-  };
+  const handleGuideStart = () => {
+    if (createCategory && showGuide) {
+      const entry = templateRegistry[showGuide];
 
-  const handleBlock6GuideStart = () => {
-    if (createCategory) {
       // Clear other selections
-      if (currentMandalartId) {
-        useMandalartStore.setState({ currentId: null });
+      for (const t of TEMPLATE_TYPES) {
+        if (t !== showGuide) templateRegistry[t].clearSelection();
       }
-      if (currentMonthlyId) {
-        useMonthlyStore.setState({ currentMonthlyId: null });
-      }
-      if (currentDailyId) {
-        useDailyStore.setState({ currentDailyId: null });
-      }
-      createBlock6Plan(createCategory);
-      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
-      useBlock6Store.getState().updateTitle(defaultTitle);
-      // 선택한 날짜 적용
-      if (pendingDate.year !== undefined) {
-        useBlock6Store.getState().updatePlanDate(
-          pendingDate.year,
-          pendingDate.month,
-          pendingDate.week,
-          pendingDate.day
-        );
-      }
-    }
-    setShowBlock6Guide(false);
-    setCreateCategory(null);
-    setPendingTemplate(null);
-    setPendingDate({});
-  };
 
-  const handleMonthlyGuideStart = () => {
-    if (createCategory) {
-      // Clear other selections
-      if (currentMandalartId) {
-        useMandalartStore.setState({ currentId: null });
-      }
-      if (currentBlock6Id) {
-        useBlock6Store.setState({ currentBlock6Id: null });
-      }
-      if (currentDailyId) {
-        useDailyStore.setState({ currentDailyId: null });
-      }
-      // Monthly는 생성 시 year, month를 직접 전달
-      createMonthlyPlan(createCategory, pendingDate.year, pendingDate.month);
-      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
-      useMonthlyStore.getState().updateTitle(defaultTitle);
+      entry.create(createCategory, pendingDate);
+      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, getAllTitles());
+      entry.applyTitleAndDate(defaultTitle, pendingDate);
     }
-    setShowMonthlyGuide(false);
-    setCreateCategory(null);
-    setPendingTemplate(null);
-    setPendingDate({});
-  };
-
-  const handleDailyGuideStart = () => {
-    if (createCategory) {
-      // Clear other selections
-      if (currentMandalartId) {
-        useMandalartStore.setState({ currentId: null });
-      }
-      if (currentBlock6Id) {
-        useBlock6Store.setState({ currentBlock6Id: null });
-      }
-      if (currentMonthlyId) {
-        useMonthlyStore.setState({ currentMonthlyId: null });
-      }
-      // Daily는 생성 시 year, month, day를 직접 전달
-      createDailyPlan(createCategory, pendingDate.year, pendingDate.month, pendingDate.day);
-      const defaultTitle = generateDefaultTitle(createCategory, pendingDate, allTitles);
-      useDailyStore.getState().updateTitle(defaultTitle);
-    }
-    setShowDailyGuide(false);
+    setShowGuide(null);
     setCreateCategory(null);
     setPendingTemplate(null);
     setPendingDate({});
   };
 
   const handleGuideClose = () => {
-    setShowMandalartGuide(false);
-    setShowBlock6Guide(false);
-    setShowMonthlyGuide(false);
-    setShowDailyGuide(false);
+    setShowGuide(null);
     setPendingTemplate(null);
     setPendingDate({});
   };
@@ -567,12 +356,11 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               currentId={currentId}
               currentTemplate={currentTemplate}
               onSelect={handleSelect}
-              onCreateClick={() => handleCreateClick(category)}
+              onCreateClick={() => setCreateCategory(category)}
               onDelete={handleDeleteClick}
             />
           ))}
         </div>
-
       </aside>
 
       {/* Sidebar Toggle Button */}
@@ -604,7 +392,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       </button>
 
       {/* Template Selection Modal */}
-      {createCategory && !showDatePicker && !showMandalartGuide && !showBlock6Guide && !showMonthlyGuide && !showDailyGuide && (
+      {createCategory && !showDatePicker && !showGuide && (
         <TemplateModal
           category={createCategory}
           onSelect={handleTemplateSelect}
@@ -618,41 +406,15 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         <DatePicker
           category={createCategory}
           onSelect={handleDateSelect}
-          onClose={handleDatePickerClose}
+          onClose={() => setShowDatePicker(false)}
         />
       )}
 
-      {/* Mandalart Guide Modal */}
-      {showMandalartGuide && (
-        <MandalartGuide
-          onStart={handleMandalartGuideStart}
-          onClose={handleGuideClose}
-        />
-      )}
-
-      {/* Block6 Guide Modal */}
-      {showBlock6Guide && (
-        <Block6Guide
-          onStart={handleBlock6GuideStart}
-          onClose={handleGuideClose}
-        />
-      )}
-
-      {/* Monthly Guide Modal */}
-      {showMonthlyGuide && (
-        <MonthlyGuide
-          onStart={handleMonthlyGuideStart}
-          onClose={handleGuideClose}
-        />
-      )}
-
-      {/* Daily Guide Modal */}
-      {showDailyGuide && (
-        <DailyGuide
-          onStart={handleDailyGuideStart}
-          onClose={handleGuideClose}
-        />
-      )}
+      {/* Guide Modal (unified) */}
+      {showGuide && (() => {
+        const Guide = templateRegistry[showGuide].GuideComponent;
+        return <Guide onStart={handleGuideStart} onClose={handleGuideClose} />;
+      })()}
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
