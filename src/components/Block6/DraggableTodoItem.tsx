@@ -31,8 +31,10 @@ export function DraggableTodoItem({
   const [editText, setEditText] = useState(todo.text);
   const [showMenu, setShowMenu] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: todo.id,
@@ -207,7 +209,18 @@ export function DraggableTodoItem({
       {/* Menu button (kebab) - only on hover */}
       <div ref={menuRef} className="relative flex-shrink-0">
         <button
-          onClick={() => setShowMenu(!showMenu)}
+          ref={menuBtnRef}
+          onClick={() => {
+            if (!showMenu && menuBtnRef.current) {
+              const rect = menuBtnRef.current.getBoundingClientRect();
+              const spaceBelow = window.innerHeight - rect.bottom;
+              setMenuPos({
+                top: spaceBelow < 200 ? rect.top - 4 : rect.bottom + 4,
+                left: rect.right,
+              });
+            }
+            setShowMenu(!showMenu);
+          }}
           className="
             opacity-0 group-hover:opacity-100
             w-3.5 h-3.5 rounded flex items-center justify-center
@@ -229,9 +242,16 @@ export function DraggableTodoItem({
           </svg>
         </button>
 
-        {/* Dropdown menu */}
-        {showMenu && (
-          <div className="absolute right-0 top-4 z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[100px]">
+        {/* Dropdown menu (fixed position to avoid overflow clipping) */}
+        {showMenu && menuPos && (
+          <div
+            className="fixed z-[9999] bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[100px]"
+            style={{
+              top: menuPos.top,
+              left: menuPos.left,
+              transform: 'translateX(-100%)',
+            }}
+          >
             {/* Toggle complete option */}
             <button
               onClick={() => {
