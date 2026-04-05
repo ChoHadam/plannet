@@ -56,6 +56,8 @@ export function Block6Grid() {
 
   // Drag and drop
   const moveTodo = useBlock6Store((state) => state.moveTodo);
+  const reorderBlockTodo = useBlock6Store((state) => state.reorderBlockTodo);
+  const reorderBacklogTodo = useBlock6Store((state) => state.reorderBacklogTodo);
 
   if (!data) {
     return (
@@ -91,13 +93,49 @@ export function Block6Grid() {
     const todoId = active.id as string;
     const sourceType = activeData.sourceType as 'backlog' | 'block';
     const sourceId = activeData.sourceId as string | null;
-    const destType = overData.type as 'backlog' | 'block';
-    const destId = overData.id as string | null;
 
-    // Don't do anything if dropped in the same place
-    if (sourceType === destType && sourceId === destId) return;
+    // over가 todo 아이템인지 droppable 컨테이너인지 판별
+    const isOverTodo = overData.type === 'todo';
 
-    moveTodo(todoId, sourceType, sourceId, destType, destId);
+    if (isOverTodo) {
+      // over가 다른 todo 아이템 → 같은 컨테이너면 reorder, 다른 컨테이너면 move
+      const overSourceType = overData.sourceType as 'backlog' | 'block';
+      const overSourceId = overData.sourceId as string | null;
+
+      if (sourceType === overSourceType && sourceId === overSourceId) {
+        // 같은 컨테이너 내 순서 변경
+        const overId = over.id as string;
+        if (todoId === overId) return;
+
+        if (sourceType === 'block' && sourceId) {
+          const block = data.blocks.find((b) => b.id === sourceId);
+          if (!block) return;
+          const fromIndex = block.todos.findIndex((t) => t.id === todoId);
+          const toIndex = block.todos.findIndex((t) => t.id === overId);
+          if (fromIndex !== -1 && toIndex !== -1) {
+            reorderBlockTodo(sourceId, fromIndex, toIndex);
+          }
+        } else if (sourceType === 'backlog') {
+          const fromIndex = data.backlog.findIndex((t) => t.id === todoId);
+          const toIndex = data.backlog.findIndex((t) => t.id === overId);
+          if (fromIndex !== -1 && toIndex !== -1) {
+            reorderBacklogTodo(fromIndex, toIndex);
+          }
+        }
+        return;
+      }
+
+      // 다른 컨테이너의 todo 위에 드롭 → 해당 컨테이너로 이동
+      moveTodo(todoId, sourceType, sourceId, overSourceType, overSourceId);
+    } else {
+      // over가 droppable 컨테이너
+      const destType = overData.type as 'backlog' | 'block';
+      const destId = overData.id as string | null;
+
+      if (sourceType === destType && sourceId === destId) return;
+
+      moveTodo(todoId, sourceType, sourceId, destType, destId);
+    }
   };
 
   return (

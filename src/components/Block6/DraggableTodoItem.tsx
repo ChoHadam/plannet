@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { TODO_COLOR_BAR, TODO_COLOR_BG, TODO_COLORS, TODO_COLOR_LABELS } from '@/lib/constants';
@@ -36,7 +36,7 @@ export function DraggableTodoItem({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: todo.id,
     data: {
       type: 'todo',
@@ -47,7 +47,8 @@ export function DraggableTodoItem({
   });
 
   const style = {
-    transform: CSS.Translate.toString(transform),
+    transform: CSS.Transform.toString(transform),
+    transition,
     opacity: isDragging ? 0.5 : 1,
   };
 

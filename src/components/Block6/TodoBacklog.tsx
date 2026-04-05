@@ -2,6 +2,7 @@
 
 import { useState, useMemo, KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { DraggableTodoItem } from './DraggableTodoItem';
 import { useMandalartStore } from '@/hooks/useMandalart';
@@ -152,31 +153,33 @@ export function TodoBacklog({
           ${isOver ? 'bg-blue-50 ring-2 ring-blue-300' : ''}
         `}
       >
-        {todos.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4">
-            할 일을 추가하고<br />블록으로 드래그하세요
-          </p>
-        ) : (
-          todos.map((todo) => (
-            <DraggableTodoItem
-              key={todo.id}
-              todo={todo}
-              sourceType="backlog"
-              sourceId={null}
-              onToggle={() => onToggleTodo(todo.id)}
-              onUpdate={(text) => onUpdateTodo(todo.id, text)}
-              onDelete={() => onDeleteTodo(todo.id)}
-              onColorChange={onColorChange ? (color) => onColorChange(todo.id, color) : undefined}
-              onDuplicate={onDuplicate ? () => onDuplicate(todo.id) : undefined}
-            />
-          ))
-        )}
+        <SortableContext items={todos.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {todos.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-4">
+              할 일을 추가하고<br />블록으로 드래그하세요
+            </p>
+          ) : (
+            todos.map((todo) => (
+              <DraggableTodoItem
+                key={todo.id}
+                todo={todo}
+                sourceType="backlog"
+                sourceId={null}
+                onToggle={() => onToggleTodo(todo.id)}
+                onUpdate={(text) => onUpdateTodo(todo.id, text)}
+                onDelete={() => onDeleteTodo(todo.id)}
+                onColorChange={onColorChange ? (color) => onColorChange(todo.id, color) : undefined}
+                onDuplicate={onDuplicate ? () => onDuplicate(todo.id) : undefined}
+              />
+            ))
+          )}
 
-        {todos.length > 0 && isOver && (
-          <div className="text-xs text-blue-400 text-center py-2">
-            여기에 놓으세요
-          </div>
-        )}
+          {todos.length > 0 && isOver && (
+            <div className="text-xs text-blue-400 text-center py-2">
+              여기에 놓으세요
+            </div>
+          )}
+        </SortableContext>
       </div>
     </div>
   );

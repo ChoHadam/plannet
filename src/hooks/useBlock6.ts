@@ -51,6 +51,10 @@ interface Block6Store {
   updateBacklogTodoColor: (todoId: string, color: TodoColor) => void;
   duplicateBacklogTodo: (todoId: string) => void;
 
+  // Reorder within same container
+  reorderBlockTodo: (blockId: string, fromIndex: number, toIndex: number) => void;
+  reorderBacklogTodo: (fromIndex: number, toIndex: number) => void;
+
   // Drag and drop operations
   moveTodo: (
     todoId: string,
@@ -562,6 +566,53 @@ export const useBlock6Store = create<Block6Store>()(
             backlog: newBacklog,
             updatedAt: new Date().toISOString(),
           };
+
+          return { block6Plans: newPlans };
+        });
+      },
+
+      reorderBlockTodo: (blockId: string, fromIndex: number, toIndex: number) => {
+        const currentId = get().currentBlock6Id;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.block6Plans[planIndex];
+          const blockIndex = plan.blocks.findIndex((b) => b.id === blockId);
+          if (blockIndex === -1) return state;
+
+          const block = plan.blocks[blockIndex];
+          const newTodos = [...block.todos];
+          const [moved] = newTodos.splice(fromIndex, 1);
+          newTodos.splice(toIndex, 0, moved);
+
+          const newBlocks = [...plan.blocks];
+          newBlocks[blockIndex] = { ...block, todos: newTodos };
+
+          const newPlans = [...state.block6Plans];
+          newPlans[planIndex] = { ...plan, blocks: newBlocks, updatedAt: new Date().toISOString() };
+
+          return { block6Plans: newPlans };
+        });
+      },
+
+      reorderBacklogTodo: (fromIndex: number, toIndex: number) => {
+        const currentId = get().currentBlock6Id;
+        if (!currentId) return;
+
+        set((state) => {
+          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
+          if (planIndex === -1) return state;
+
+          const plan = state.block6Plans[planIndex];
+          const newBacklog = [...plan.backlog];
+          const [moved] = newBacklog.splice(fromIndex, 1);
+          newBacklog.splice(toIndex, 0, moved);
+
+          const newPlans = [...state.block6Plans];
+          newPlans[planIndex] = { ...plan, backlog: newBacklog, updatedAt: new Date().toISOString() };
 
           return { block6Plans: newPlans };
         });

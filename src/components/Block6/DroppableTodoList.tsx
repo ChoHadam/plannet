@@ -2,6 +2,7 @@
 
 import { useState, useRef, KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { DraggableTodoItem } from './DraggableTodoItem';
 
@@ -69,27 +70,29 @@ export function DroppableTodoList({
         ${isOver ? 'bg-blue-50 ring-2 ring-blue-300' : ''}
       `}
     >
-      <div className="space-y-0.5">
-        {todos.map((todo) => (
-          <DraggableTodoItem
-            key={todo.id}
-            todo={todo}
-            sourceType={sourceType}
-            sourceId={sourceId}
-            onToggle={() => onToggleTodo(todo.id)}
-            onUpdate={(text) => onUpdateTodo(todo.id, text)}
-            onDelete={() => onDeleteTodo(todo.id)}
-            onColorChange={onColorChange ? (color) => onColorChange(todo.id, color) : undefined}
-            onDuplicate={onDuplicate ? () => onDuplicate(todo.id) : undefined}
-          />
-        ))}
+      <SortableContext items={todos.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-0.5">
+          {todos.map((todo) => (
+            <DraggableTodoItem
+              key={todo.id}
+              todo={todo}
+              sourceType={sourceType}
+              sourceId={sourceId}
+              onToggle={() => onToggleTodo(todo.id)}
+              onUpdate={(text) => onUpdateTodo(todo.id, text)}
+              onDelete={() => onDeleteTodo(todo.id)}
+              onColorChange={onColorChange ? (color) => onColorChange(todo.id, color) : undefined}
+              onDuplicate={onDuplicate ? () => onDuplicate(todo.id) : undefined}
+            />
+          ))}
 
-        {todos.length === 0 && isOver && (
-          <div className="text-xs text-blue-400 text-center py-2">
-            여기에 놓으세요
-          </div>
-        )}
-      </div>
+          {todos.length === 0 && isOver && (
+            <div className="text-xs text-blue-400 text-center py-2">
+              여기에 놓으세요
+            </div>
+          )}
+        </div>
+      </SortableContext>
 
       {/* Add todo input */}
       <div className="mt-1 flex items-center gap-1">
