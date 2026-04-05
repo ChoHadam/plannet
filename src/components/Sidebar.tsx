@@ -173,11 +173,15 @@ interface TemplateModalProps {
 }
 
 function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateModalProps) {
-  const templates = TEMPLATE_TYPES.map(t => ({
-    type: templateRegistry[t].type,
-    label: templateRegistry[t].label,
-    description: templateRegistry[t].description,
-  }));
+  const templates = TEMPLATE_TYPES
+    .filter(t => templateRegistry[t].allowedCategories.includes(category))
+    .map(t => ({
+      type: templateRegistry[t].type,
+      label: templateRegistry[t].label,
+      description: templateRegistry[t].description,
+      isRecommended: templateRegistry[t].defaultForCategory === category,
+    }))
+    .sort((a, b) => (a.isRecommended === b.isRecommended ? 0 : a.isRecommended ? -1 : 1));
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50" onClick={onClose}>
@@ -197,14 +201,20 @@ function TemplateModal({ category, onSelect, onClose, onShowGuide }: TemplateMod
             <div key={template.type} className="flex items-stretch gap-2">
               <button
                 onClick={() => onSelect(template.type)}
-                className="
-                  flex-1 p-3 rounded-lg border border-slate-200
-                  text-left hover:border-slate-400 hover:bg-slate-50
-                  transition-colors
-                "
+                className={`
+                  flex-1 p-3 rounded-lg border text-left transition-colors
+                  ${template.isRecommended
+                    ? 'border-indigo-300 bg-indigo-50/50 hover:border-indigo-400 hover:bg-indigo-50'
+                    : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50'}
+                `}
               >
-                <div className="font-medium text-slate-700">
-                  {template.label}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-700">{template.label}</span>
+                  {template.isRecommended && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500 text-white leading-none">
+                      추천
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
                   {template.description}

@@ -34,6 +34,8 @@ export interface TemplateEntry {
   description: string;
   badgeColor: string;
   footerHint: string;
+  allowedCategories: PlanCategory[]; // 이 템플릿을 선택할 수 있는 카테고리
+  defaultForCategory?: PlanCategory; // 이 카테고리의 추천 템플릿
 
   // Store 접근 (non-hook, getState 기반 — 이벤트 핸들러에서 사용)
   getPlans: () => BasePlanData[];
@@ -71,6 +73,8 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     description: '9x9 그리드로 목표를 세분화',
     badgeColor: 'bg-amber-100 text-amber-600',
     footerHint: '구역을 클릭하여 색상을 변경할 수 있습니다',
+    allowedCategories: ['annual', 'monthly', 'weekly', 'daily'],
+    defaultForCategory: 'annual',
 
     getPlans: () => useMandalartStore.getState().mandalarts as BasePlanData[],
     getCurrentId: () => useMandalartStore.getState().currentId,
@@ -102,6 +106,8 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     description: '하루 6블록 시간 관리',
     badgeColor: 'bg-violet-100 text-violet-600',
     footerHint: '각 블록에 키워드와 할 일을 입력하세요',
+    allowedCategories: ['weekly'],
+    defaultForCategory: 'weekly',
 
     getPlans: () => useBlock6Store.getState().block6Plans as BasePlanData[],
     getCurrentId: () => useBlock6Store.getState().currentBlock6Id,
@@ -133,6 +139,8 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     description: '월간 목표와 주간 계획',
     badgeColor: 'bg-blue-100 text-blue-600',
     footerHint: '이달의 목표를 설정하고 주간 포커스를 작성하세요',
+    allowedCategories: ['monthly'],
+    defaultForCategory: 'monthly',
 
     getPlans: () => useMonthlyStore.getState().monthlyPlans as BasePlanData[],
     getCurrentId: () => useMonthlyStore.getState().currentMonthlyId,
@@ -160,6 +168,8 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     description: '간단한 일간 할 일 관리',
     badgeColor: 'bg-emerald-100 text-emerald-600',
     footerHint: '할 일을 추가하고 완료하면 체크하세요',
+    allowedCategories: ['annual', 'monthly', 'weekly', 'daily'],
+    defaultForCategory: 'daily',
 
     getPlans: () => useDailyStore.getState().dailyPlans as BasePlanData[],
     getCurrentId: () => useDailyStore.getState().currentDailyId,
