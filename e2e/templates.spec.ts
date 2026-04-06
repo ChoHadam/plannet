@@ -46,7 +46,11 @@ test.describe('템플릿 공통 플로우', () => {
 
     const planItem = page.locator('[class*="cursor-pointer"]').filter({ hasText: '투두리스트' }).first();
     await planItem.hover();
-    await planItem.locator('button[title="삭제"]').click();
+
+    // 점3개 메뉴 클릭
+    await planItem.locator('button[title="메뉴"]').click();
+    // 드롭다운에서 삭제 클릭
+    await page.locator('text=삭제').first().click();
 
     await expect(page.locator('text=플랜을 삭제하시겠습니까?')).toBeVisible();
     await page.locator('button:has-text("삭제")').last().click();

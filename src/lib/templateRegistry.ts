@@ -2,6 +2,7 @@
 
 import { ComponentType } from 'react';
 import { TemplateType, PlanCategory } from '@/types/mandalart';
+import { generateId } from '@/lib/sanitize';
 import { useMandalartStore, useHydration } from '@/hooks/useMandalart';
 import { useBlock6Store, useBlock6Hydration } from '@/hooks/useBlock6';
 import { useMonthlyStore, useMonthlyHydration } from '@/hooks/useMonthly';
@@ -43,6 +44,7 @@ export interface TemplateEntry {
   clearSelection: () => void;
   select: (id: string) => void;
   deletePlan: (id: string) => void;
+  addPlanAndSelect: (plan: BasePlanData) => void; // store에 플랜 추가 + 선택
   create: (category: PlanCategory, date: DateParams) => void;
   applyTitleAndDate: (title: string, date: DateParams) => void;
 
@@ -81,6 +83,10 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     clearSelection: () => useMandalartStore.setState({ currentId: null }),
     select: (id) => useMandalartStore.getState().selectMandalart(id),
     deletePlan: (id) => useMandalartStore.getState().deleteMandalart(id),
+    addPlanAndSelect: (plan) => {
+      const state = useMandalartStore.getState();
+      useMandalartStore.setState({ mandalarts: [plan as any, ...state.mandalarts], currentId: plan.id });
+    },
     create: (category) => useMandalartStore.getState().createMandalart(category),
     applyTitleAndDate: (title, date) => {
       const s = useMandalartStore.getState();
@@ -114,6 +120,10 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     clearSelection: () => useBlock6Store.setState({ currentBlock6Id: null }),
     select: (id) => useBlock6Store.getState().selectBlock6Plan(id),
     deletePlan: (id) => useBlock6Store.getState().deleteBlock6Plan(id),
+    addPlanAndSelect: (plan) => {
+      const state = useBlock6Store.getState();
+      useBlock6Store.setState({ block6Plans: [plan as any, ...state.block6Plans], currentBlock6Id: plan.id });
+    },
     create: (category) => useBlock6Store.getState().createBlock6Plan(category),
     applyTitleAndDate: (title, date) => {
       const s = useBlock6Store.getState();
@@ -147,6 +157,10 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     clearSelection: () => useMonthlyStore.setState({ currentMonthlyId: null }),
     select: (id) => useMonthlyStore.getState().selectMonthlyPlan(id),
     deletePlan: (id) => useMonthlyStore.getState().deleteMonthlyPlan(id),
+    addPlanAndSelect: (plan) => {
+      const state = useMonthlyStore.getState();
+      useMonthlyStore.setState({ monthlyPlans: [plan as any, ...state.monthlyPlans], currentMonthlyId: plan.id });
+    },
     create: (category, date) => useMonthlyStore.getState().createMonthlyPlan(category, date.year, date.month),
     applyTitleAndDate: (title) => useMonthlyStore.getState().updateTitle(title),
 
@@ -176,6 +190,10 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     clearSelection: () => useDailyStore.setState({ currentDailyId: null }),
     select: (id) => useDailyStore.getState().selectDailyPlan(id),
     deletePlan: (id) => useDailyStore.getState().deleteDailyPlan(id),
+    addPlanAndSelect: (plan) => {
+      const state = useDailyStore.getState();
+      useDailyStore.setState({ dailyPlans: [plan as any, ...state.dailyPlans], currentDailyId: plan.id });
+    },
     create: (category, date) => useDailyStore.getState().createDailyPlan(category, date.year, date.month, date.day),
     applyTitleAndDate: (title) => useDailyStore.getState().updateTitle(title),
 
@@ -213,4 +231,32 @@ export function clearAllSelections(): void {
 
 export function getAllTitles(): string[] {
   return TEMPLATE_TYPES.flatMap(t => templateRegistry[t].getPlans().map(p => p.title));
+}
+
+/** 플랜 복제 — 템플릿 종류 무관하게 동작. date로 날짜 오버라이드 가능 */
+export function duplicatePlan(
+  id: string,
+  template: TemplateType,
+  date?: DateParams
+): string | null {
+  const entry = templateRegistry[template];
+  const plan = entry.getPlans().find(p => p.id === id);
+  if (!plan) return null;
+
+  const newId = generateId();
+  const now = new Date().toISOString();
+  const newPlan: BasePlanData = JSON.parse(JSON.stringify({
+    ...plan,
+    id: newId,
+    title: `${plan.title || '제목 없음'} (복사)`,
+    createdAt: now,
+    updatedAt: now,
+    ...(date?.year !== undefined && { year: date.year }),
+    ...(date?.month !== undefined && { month: date.month }),
+    ...(date?.week !== undefined && { week: date.week }),
+    ...(date?.day !== undefined && { day: date.day }),
+  }));
+
+  entry.addPlanAndSelect(newPlan);
+  return newId;
 }

@@ -10,6 +10,7 @@ import {
   templateRegistry,
   selectExclusive,
   getAllTitles,
+  duplicatePlan,
   BasePlanData,
   TEMPLATE_TYPES,
 } from '@/lib/templateRegistry';
@@ -66,9 +67,11 @@ interface SectionProps {
   onSelect: (id: string, template: TemplateType) => void;
   onCreateClick: () => void;
   onDelete: (id: string, template: TemplateType) => void;
+  onDuplicate: (id: string, template: TemplateType) => void;
 }
 
-function Section({ category, plans, currentId, currentTemplate, onSelect, onCreateClick, onDelete }: SectionProps) {
+function Section({ category, plans, currentId, currentTemplate, onSelect, onCreateClick, onDelete, onDuplicate }: SectionProps) {
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const recentPlans = plans
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
@@ -136,24 +139,62 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                     }
                   </span>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(plan.id, plan.template);
-                  }}
-                  className="
-                    opacity-0 group-hover:opacity-100
-                    w-5 h-5 rounded flex items-center justify-center
-                    text-slate-400 hover:text-red-500 hover:bg-red-50
-                    transition-all ml-1
-                  "
-                  title="삭제"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
+                <div className="relative ml-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpenId(menuOpenId === plan.id ? null : plan.id);
+                    }}
+                    className="
+                      opacity-0 group-hover:opacity-100
+                      w-5 h-5 rounded flex items-center justify-center
+                      text-slate-400 hover:text-slate-600 hover:bg-slate-100
+                      transition-all
+                    "
+                    title="메뉴"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="5" r="2" />
+                      <circle cx="12" cy="12" r="2" />
+                      <circle cx="12" cy="19" r="2" />
+                    </svg>
+                  </button>
+                  {menuOpenId === plan.id && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpenId(null)} />
+                      <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[90px]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenId(null);
+                            onDuplicate(plan.id, plan.template);
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                          복제
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenId(null);
+                            onDelete(plan.id, plan.template);
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                          삭제
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             );
           })
@@ -272,9 +313,10 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ plan: BasePlanData; template: TemplateType } | null>(null);
+  const [duplicateTarget, setDuplicateTarget] = useState<{ id: string; template: TemplateType; category: PlanCategory } | null>(null);
   const [showGuide, setShowGuide] = useState<TemplateType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<TemplateType | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState<'create' | 'duplicate' | null>(null);
   const [pendingDate, setPendingDate] = useState<{
     year?: number;
     month?: number;
@@ -286,13 +328,26 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
   const handleTemplateSelect = (template: TemplateType) => {
     setPendingTemplate(template);
-    setShowDatePicker(true);
+    setShowDatePicker('create');
   };
 
   const handleDateSelect = (year?: number, month?: number, week?: number, day?: number) => {
-    setPendingDate({ year, month, week, day });
-    setShowDatePicker(false);
-    setShowGuide(pendingTemplate);
+    const date = { year, month, week, day };
+    setPendingDate(date);
+    setShowDatePicker(null);
+
+    if (duplicateTarget) {
+      // 복제 플로우: 날짜 선택 후 바로 복제
+      for (const t of TEMPLATE_TYPES) {
+        if (t !== duplicateTarget.template) templateRegistry[t].clearSelection();
+      }
+      duplicatePlan(duplicateTarget.id, duplicateTarget.template, date);
+      setDuplicateTarget(null);
+      setPendingDate({});
+    } else {
+      // 생성 플로우: 날짜 선택 후 가이드 표시
+      setShowGuide(pendingTemplate);
+    }
   };
 
   const handleSelect = (id: string, template: TemplateType) => {
@@ -302,6 +357,13 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const handleDeleteClick = (id: string, template: TemplateType) => {
     const plan = templateRegistry[template].getPlans().find(p => p.id === id);
     if (plan) setDeleteTarget({ plan, template });
+  };
+
+  const handleDuplicate = (id: string, template: TemplateType) => {
+    const plan = templateRegistry[template].getPlans().find(p => p.id === id);
+    if (!plan) return;
+    setDuplicateTarget({ id, template, category: plan.category });
+    setShowDatePicker('duplicate');
   };
 
   const handleConfirmDelete = () => {
@@ -368,6 +430,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               onSelect={handleSelect}
               onCreateClick={() => setCreateCategory(category)}
               onDelete={handleDeleteClick}
+              onDuplicate={handleDuplicate}
             />
           ))}
         </div>
@@ -402,7 +465,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       </button>
 
       {/* Template Selection Modal */}
-      {createCategory && !showDatePicker && !showGuide && (
+      {createCategory && showDatePicker === null && !showGuide && (
         <TemplateModal
           category={createCategory}
           onSelect={handleTemplateSelect}
@@ -412,11 +475,14 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       )}
 
       {/* Date Picker Modal */}
-      {showDatePicker && createCategory && (
+      {showDatePicker && (
         <DatePicker
-          category={createCategory}
+          category={(showDatePicker === 'duplicate' ? duplicateTarget?.category : createCategory) ?? 'weekly'}
           onSelect={handleDateSelect}
-          onClose={() => setShowDatePicker(false)}
+          onClose={() => {
+            setShowDatePicker(null);
+            setDuplicateTarget(null);
+          }}
         />
       )}
 
