@@ -7,6 +7,7 @@ import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
 import { DraggableTodoItem } from './DraggableTodoItem';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { extractDailyHabits } from '@/lib/mandalartIntegration';
+import { RecurringTodosModal } from '../RecurringTodos';
 
 interface TodoBacklogProps {
   todos: TodoItemType[];
@@ -29,6 +30,7 @@ export function TodoBacklog({
 }: TodoBacklogProps) {
   const [newTodoText, setNewTodoText] = useState('');
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const [showRecurring, setShowRecurring] = useState(false);
   const mandalarts = useMandalartStore((state) => state.mandalarts);
   const completedCount = todos.filter((t) => t.completed).length;
   const totalCount = todos.length;
@@ -144,6 +146,32 @@ export function TodoBacklog({
           )}
         </div>
       )}
+
+      {/* Recurring todos */}
+      <div className="mb-2 pb-2 border-b border-slate-200">
+        <button
+          onClick={() => setShowRecurring(true)}
+          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded
+                   bg-slate-100 text-slate-600 text-xs font-medium
+                   hover:bg-slate-200 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+          </svg>
+          고정 할일
+        </button>
+      </div>
+
+      <RecurringTodosModal
+        isOpen={showRecurring}
+        onClose={() => setShowRecurring(false)}
+        onImport={(texts) => {
+          const existingTexts = new Set(todos.map(t => t.text));
+          const newTexts = texts.filter(t => !existingTexts.has(t));
+          newTexts.forEach(t => onAddTodo(t));
+        }}
+      />
 
       {/* Todo List */}
       <div
