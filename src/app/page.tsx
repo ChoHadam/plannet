@@ -44,10 +44,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        <footer className="mt-8 text-center text-sm text-slate-400">
-          {currentTemplate && <p>{templateRegistry[currentTemplate].footerHint}</p>}
-        </footer>
       </main>
 
       <AIChatSidebar
