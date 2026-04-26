@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PlanCategory } from '@/types/mandalart';
+import { getWeekOfMonth } from '@/lib/weekUtils';
 
 interface DatePickerProps {
   category: PlanCategory;
@@ -118,7 +119,7 @@ export function DatePicker({
   const now = new Date();
   const [year, setYear] = useState(initialYear || now.getFullYear());
   const [month, setMonth] = useState(initialMonth || now.getMonth() + 1);
-  const [week, setWeek] = useState(initialWeek || 1);
+  const [week, setWeek] = useState(initialWeek || getWeekOfMonth(now));
   const [day, setDay] = useState(initialDay || now.getDate());
 
   const handleConfirm = () => {
