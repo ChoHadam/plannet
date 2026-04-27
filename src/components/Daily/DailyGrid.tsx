@@ -21,7 +21,7 @@ import { useDailyStore } from '@/hooks/useDaily';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { extractDailyHabits } from '@/lib/mandalartIntegration';
 import { DailyTodo, DAY_LABELS } from '@/types/daily';
-import { RecurringTodosModal } from '../RecurringTodos';
+import { RecurringTodosInline } from '../RecurringTodos';
 
 // ---- Sortable Todo Item ----
 
@@ -241,7 +241,6 @@ export function DailyGrid() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
-  const [showRecurring, setShowRecurring] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -440,33 +439,12 @@ export function DailyGrid() {
                 )}
               </button>
             )}
-            <button
-              onClick={() => setShowRecurring(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                       bg-slate-100 text-slate-600 text-xs font-medium
-                       hover:bg-slate-200 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-              </svg>
-              고정 할일
-            </button>
             {importFeedback && (
               <span className="text-xs text-indigo-500 animate-pulse">
                 {importFeedback}
               </span>
             )}
           </div>
-
-          <RecurringTodosModal
-            isOpen={showRecurring}
-            onClose={() => setShowRecurring(false)}
-            onImport={(texts) => {
-              const existingTexts = new Set(data.todos.map(t => t.text));
-              texts.filter(t => !existingTexts.has(t)).forEach(t => addTodo(t));
-            }}
-          />
         </div>
 
         {/* Active todo items (draggable) */}
@@ -524,6 +502,11 @@ export function DailyGrid() {
             )}
           </>
         )}
+      </div>
+
+      {/* Recurring todos (inline) */}
+      <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <RecurringTodosInline onAdd={addTodo} />
       </div>
 
       {/* Memo section */}
