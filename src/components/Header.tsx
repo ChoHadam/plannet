@@ -195,7 +195,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
               {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day)}
             </button>
 
-            {onOpenAIChat && (
+            {isMandalart && onOpenAIChat && (
               <button
                 onClick={onOpenAIChat}
                 className="

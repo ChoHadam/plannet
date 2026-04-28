@@ -74,7 +74,8 @@ interface SectionProps {
 function Section({ category, plans, currentId, currentTemplate, onSelect, onCreateClick, onDelete, onDuplicate }: SectionProps) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const recentPlans = plans
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
   return (
