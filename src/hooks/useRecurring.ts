@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useEffect, useState } from 'react';
 import { RecurringTodo } from '@/types/recurring';
+import { TodoColor } from '@/types/block6';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 
 const STORAGE_KEY = 'plannet-recurring';
@@ -12,6 +13,7 @@ interface RecurringStore {
   todos: RecurringTodo[];
   addTodo: (text: string) => void;
   updateTodo: (id: string, text: string) => void;
+  updateColor: (id: string, color: TodoColor) => void;
   deleteTodo: (id: string) => void;
 }
 
@@ -37,6 +39,12 @@ export const useRecurringStore = create<RecurringStore>()(
         const sanitized = sanitizeInput(text);
         set((state) => ({
           todos: state.todos.map(t => t.id === id ? { ...t, text: sanitized } : t),
+        }));
+      },
+
+      updateColor: (id: string, color: TodoColor) => {
+        set((state) => ({
+          todos: state.todos.map(t => t.id === id ? { ...t, color } : t),
         }));
       },
 

@@ -44,7 +44,7 @@ interface Block6Store {
   duplicateTodo: (blockId: string, todoId: string) => void;
 
   // Backlog operations
-  addBacklogTodo: (text: string) => void;
+  addBacklogTodo: (text: string, color?: TodoColor) => void;
   updateBacklogTodo: (todoId: string, text: string) => void;
   toggleBacklogTodo: (todoId: string) => void;
   deleteBacklogTodo: (todoId: string) => void;
@@ -416,7 +416,7 @@ export const useBlock6Store = create<Block6Store>()(
       },
 
       // Backlog operations
-      addBacklogTodo: (text: string) => {
+      addBacklogTodo: (text: string, color?: TodoColor) => {
         const currentId = get().currentBlock6Id;
         if (!currentId || !text.trim()) return;
 
@@ -429,7 +429,7 @@ export const useBlock6Store = create<Block6Store>()(
             id: generateId(),
             text: sanitizeInput(text),
             completed: false,
-            color: 'gray',
+            color: color ?? 'gray',
           };
 
           const newPlans = [...state.block6Plans];
