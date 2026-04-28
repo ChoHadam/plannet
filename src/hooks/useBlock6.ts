@@ -66,7 +66,6 @@ interface Block6Store {
 
   // Plan metadata
   updateTitle: (title: string) => void;
-  updateCustomFocus: (focus: string) => void;
   updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
 }
@@ -687,25 +686,6 @@ export const useBlock6Store = create<Block6Store>()(
           newPlans[planIndex] = {
             ...newPlans[planIndex],
             title: sanitizeInput(title),
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { block6Plans: newPlans };
-        });
-      },
-
-      updateCustomFocus: (focus: string) => {
-        const currentId = get().currentBlock6Id;
-        if (!currentId) return;
-
-        set((state) => {
-          const planIndex = state.block6Plans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const newPlans = [...state.block6Plans];
-          newPlans[planIndex] = {
-            ...newPlans[planIndex],
-            customFocus: sanitizeInput(focus),
             updatedAt: new Date().toISOString(),
           };
 

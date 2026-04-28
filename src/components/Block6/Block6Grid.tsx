@@ -148,7 +148,7 @@ export function Block6Grid() {
       <div className="flex w-full max-w-screen-2xl mx-auto gap-4">
         {/* Left Sidebar */}
         <div className="w-48 flex flex-col gap-3 flex-shrink-0">
-          <WeeklyFocusRef planYear={data.year} planMonth={data.month} />
+          <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
           <TodoBacklog
             todos={data.backlog}
             onAddTodo={addBacklogTodo}

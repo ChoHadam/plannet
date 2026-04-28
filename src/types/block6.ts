@@ -69,7 +69,6 @@ export interface Block6Data {
   template: 'block6';
   blocks: BlockData[]; // 42 blocks (7 days x 6 blocks)
   backlog: TodoItem[]; // Unassigned todos (drag source)
-  customFocus?: string; // 월간 플래너 미연동 시 수기 입력 주간 포커스
   year?: number;
   month?: number;
   week?: number;

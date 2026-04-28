@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, KeyboardEvent } from 'react';
 import { useMonthlyStore } from '@/hooks/useMonthly';
-import { useBlock6Store } from '@/hooks/useBlock6';
+import { templateRegistry, selectExclusive, TEMPLATE_TYPES } from '@/lib/templateRegistry';
 import { getCurrentWeeklyFocus } from '@/lib/weekUtils';
+import { MonthlyData, WeeklyFocus } from '@/types/monthly';
 
 const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
@@ -29,50 +29,59 @@ function StarIcon({ className }: { className?: string }) {
 interface WeeklyFocusRefProps {
   planYear?: number;
   planMonth?: number;
+  planWeek?: number;
 }
 
-export function WeeklyFocusRef({ planYear, planMonth }: WeeklyFocusRefProps) {
+export function WeeklyFocusRef({ planYear, planMonth, planWeek }: WeeklyFocusRefProps) {
   const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
-  const currentBlock6Id = useBlock6Store((state) => state.currentBlock6Id);
-  const block6Plans = useBlock6Store((state) => state.block6Plans);
-  const updateCustomFocus = useBlock6Store((state) => state.updateCustomFocus);
-
-  const currentBlock6 = block6Plans.find((p) => p.id === currentBlock6Id);
-  const customFocus = currentBlock6?.customFocus || '';
-
-  const [editing, setEditing] = useState(false);
-  const [draftText, setDraftText] = useState(customFocus);
-
-  useEffect(() => {
-    setDraftText(customFocus);
-  }, [customFocus]);
 
   const now = new Date();
-  const targetDate = (planYear && planMonth)
-    ? new Date(planYear, planMonth - 1, 1)
-    : now;
-  const { focus, monthlyPlan, weekNumber } = getCurrentWeeklyFocus(monthlyPlans, targetDate);
+
+  // Block6 플랜의 year/month/week가 있으면 해당 주를 우선 사용,
+  // 없으면 현재 날짜 기준으로 자동 계산
+  let monthlyPlan: MonthlyData | null = null;
+  let focus: WeeklyFocus | null = null;
+  let weekNumber: number;
+
+  if (planYear && planMonth) {
+    const matchingPlan = monthlyPlans.find(
+      (p) => p.year === planYear && p.month === planMonth
+    );
+    monthlyPlan = matchingPlan ?? null;
+    weekNumber = planWeek ?? 1;
+    focus = matchingPlan?.weeklyFocus.find((wf) => wf.weekNumber === weekNumber) ?? null;
+  } else {
+    const result = getCurrentWeeklyFocus(monthlyPlans, now);
+    monthlyPlan = result.monthlyPlan;
+    focus = result.focus;
+    weekNumber = result.weekNumber;
+  }
 
   const displayMonth = planMonth ?? (now.getMonth() + 1);
+  const displayYear = planYear ?? now.getFullYear();
   const monthName = MONTH_NAMES[displayMonth - 1];
 
-  const saveCustomFocus = () => {
-    updateCustomFocus(draftText.trim());
-    setEditing(false);
+  // 해당 월의 월간 플래너 만들기 + 선택
+  const handleCreateMonthly = () => {
+    // 다른 store 선택 해제
+    for (const t of TEMPLATE_TYPES) {
+      if (t !== 'monthly') templateRegistry[t].clearSelection();
+    }
+    templateRegistry.monthly.create('monthly', { year: displayYear, month: displayMonth });
+    templateRegistry.monthly.applyTitleAndDate(`${displayYear}.${String(displayMonth).padStart(2, '0')}`, {
+      year: displayYear,
+      month: displayMonth,
+    });
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      saveCustomFocus();
-    } else if (e.key === 'Escape') {
-      setDraftText(customFocus);
-      setEditing(false);
+  // 기존 월간 플래너로 이동
+  const handleOpenMonthly = () => {
+    if (monthlyPlan) {
+      selectExclusive('monthly', monthlyPlan.id);
     }
   };
 
-  // 월간 플래너가 있고 해당 주에 포커스가 설정되어 있으면 → 우선 표시
+  // 1) 월간 플래너 + 해당 주 포커스가 모두 있는 경우 → 표시
   if (monthlyPlan && focus?.text) {
     const planMonthName = MONTH_NAMES[monthlyPlan.month - 1];
     return (
@@ -89,64 +98,59 @@ export function WeeklyFocusRef({ planYear, planMonth }: WeeklyFocusRefProps) {
     );
   }
 
-  // 월간 플래너 미연동 또는 포커스 미설정 → 수기 입력 모드
-  return (
-    <div className="w-48 flex-shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <StarIcon className={customFocus ? 'text-indigo-500' : 'text-slate-400'} />
+  // 2) 월간 플래너는 있지만 포커스 미설정 → 월간 플래너로 이동 유도
+  if (monthlyPlan) {
+    return (
+      <div className="w-48 flex-shrink-0 bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3">
+        <div className="flex items-center gap-1.5 mb-2">
+          <StarIcon className="text-slate-400" />
           <span className="text-xs font-semibold text-slate-600">이번 주 포커스</span>
         </div>
-        {customFocus && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            편집
-          </button>
-        )}
-      </div>
-
-      {editing ? (
-        <>
-          <textarea
-            value={draftText}
-            onChange={(e) => setDraftText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={saveCustomFocus}
-            placeholder="이번 주에 집중할 내용..."
-            autoFocus
-            rows={3}
-            className="
-              w-full text-sm text-slate-700 leading-snug
-              bg-white border border-slate-300 rounded-md p-2
-              focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300
-              resize-none
-            "
-          />
-          <p className="text-[10px] text-slate-400 mt-1">Enter 저장 · Esc 취소</p>
-        </>
-      ) : customFocus ? (
-        <p
-          className="text-sm text-slate-700 leading-snug whitespace-pre-wrap cursor-text"
-          onClick={() => setEditing(true)}
-        >
-          {customFocus}
+        <p className="text-xs text-slate-400 mb-3">
+          {monthName} W{weekNumber} 포커스가 비어있어요
         </p>
-      ) : (
         <button
-          onClick={() => setEditing(true)}
-          className="w-full text-left text-xs text-slate-400 hover:text-slate-600 transition-colors py-1"
+          onClick={handleOpenMonthly}
+          className="
+            w-full flex items-center justify-center gap-1
+            px-2 py-1.5 rounded-lg text-xs font-medium
+            bg-indigo-500 text-white hover:bg-indigo-600 transition-colors
+          "
         >
-          + 클릭해서 포커스 입력
+          월간 플래너에서 작성
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
         </button>
-      )}
+      </div>
+    );
+  }
 
-      {!editing && (
-        <p className="text-[10px] text-slate-400 mt-2">
-          {monthlyPlan ? `${monthName} W${weekNumber} (포커스 미설정)` : `${monthName} 월간 플래너 미연동`}
-        </p>
-      )}
+  // 3) 월간 플래너 자체가 없음 → 만들기 유도
+  return (
+    <div className="w-48 flex-shrink-0 bg-slate-50 rounded-xl border border-slate-200 border-dashed p-3 mb-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        <StarIcon className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-600">이번 주 포커스</span>
+      </div>
+      <p className="text-xs text-slate-400 mb-3 leading-snug">
+        {monthName} 월간 플래너를 만들어 주간 포커스를 작성해보세요
+      </p>
+      <button
+        onClick={handleCreateMonthly}
+        className="
+          w-full flex items-center justify-center gap-1
+          px-2 py-1.5 rounded-lg text-xs font-medium
+          bg-indigo-500 text-white hover:bg-indigo-600 transition-colors
+        "
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        {monthName} 플래너 만들기
+      </button>
     </div>
   );
 }
