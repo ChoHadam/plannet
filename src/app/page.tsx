@@ -6,10 +6,12 @@ import { Header } from '@/components/Header';
 import { AIChatSidebar } from '@/components/AIChatSidebar';
 import { templateRegistry } from '@/lib/templateRegistry';
 import { useAllPlansReactive, useAllHydrated } from '@/hooks/useAllPlans';
+import { useAutoBackup } from '@/lib/autoBackup';
 
 export default function Home() {
   const allHydrated = useAllHydrated();
   const { currentTemplate } = useAllPlansReactive();
+  useAutoBackup();
   const [showAIChat, setShowAIChat] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 

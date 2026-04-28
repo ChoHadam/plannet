@@ -50,3 +50,6 @@ next-env.d.ts
 # local docs
 ROADMAP.md
 CLAUDE.md
+
+# local data backups (dev only)
+.local-backup/
