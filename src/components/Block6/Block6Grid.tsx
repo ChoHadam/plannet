@@ -145,9 +145,9 @@ export function Block6Grid() {
 
   return (
     <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex w-full max-w-screen-2xl mx-auto gap-4">
-        {/* Left Sidebar */}
-        <div className="w-48 flex flex-col gap-3 flex-shrink-0">
+      <div className="flex w-full max-w-screen-2xl mx-auto gap-4 items-start">
+        {/* Left Sidebar (sticky to viewport so click targets stay in place) */}
+        <div className="w-48 flex flex-col gap-3 flex-shrink-0 sticky top-4 h-[calc(100vh-2rem)]">
           <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
           <TodoBacklog
             todos={data.backlog}

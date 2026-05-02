@@ -392,10 +392,10 @@ export function DailyGrid() {
         </div>
       )}
 
-      {/* Todo list */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Todo list (max-height keeps recurring panel below from drifting) */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[60vh]">
         {/* Add todo input */}
-        <div className="p-4 border-b border-slate-100">
+        <div className="p-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -447,61 +447,63 @@ export function DailyGrid() {
           </div>
         </div>
 
-        {/* Active todo items (draggable) */}
-        {data.todos.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-sm">
-            아직 할 일이 없습니다
-          </div>
-        ) : (
-          <>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={activeTodos.map((t) => t.id)}
-                strategy={verticalListSortingStrategy}
+        {/* Scrollable list area (active + completed) */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {data.todos.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">
+              아직 할 일이 없습니다
+            </div>
+          ) : (
+            <>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
-                <div className="divide-y divide-slate-100">
-                  {activeTodos.map((todo) => (
-                    <SortableTodoItem
-                      key={todo.id}
-                      todo={todo}
-                      onToggle={() => toggleTodo(todo.id)}
-                      onDelete={() => deleteTodo(todo.id)}
-                      onStartEdit={() => handleStartEdit(todo.id, todo.text)}
-                      isEditing={editingId === todo.id}
-                      editText={editText}
-                      onEditChange={setEditText}
-                      onEditSave={handleSaveEdit}
-                      onEditCancel={() => { setEditingId(null); setEditText(''); }}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+                <SortableContext
+                  items={activeTodos.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="divide-y divide-slate-100">
+                    {activeTodos.map((todo) => (
+                      <SortableTodoItem
+                        key={todo.id}
+                        todo={todo}
+                        onToggle={() => toggleTodo(todo.id)}
+                        onDelete={() => deleteTodo(todo.id)}
+                        onStartEdit={() => handleStartEdit(todo.id, todo.text)}
+                        isEditing={editingId === todo.id}
+                        editText={editText}
+                        onEditChange={setEditText}
+                        onEditSave={handleSaveEdit}
+                        onEditCancel={() => { setEditingId(null); setEditText(''); }}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
 
-            {/* Completed items (non-draggable, separated) */}
-            {completedTodos.length > 0 && (
-              <>
-                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200">
-                  <span className="text-xs text-slate-400">완료됨 ({completedTodos.length})</span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {completedTodos.map((todo) => (
-                    <CompletedTodoItem
-                      key={todo.id}
-                      todo={todo}
-                      onToggle={() => toggleTodo(todo.id)}
-                      onDelete={() => deleteTodo(todo.id)}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </>
-        )}
+              {/* Completed items (non-draggable, separated) */}
+              {completedTodos.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 sticky top-0">
+                    <span className="text-xs text-slate-400">완료됨 ({completedTodos.length})</span>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {completedTodos.map((todo) => (
+                      <CompletedTodoItem
+                        key={todo.id}
+                        todo={todo}
+                        onToggle={() => toggleTodo(todo.id)}
+                        onDelete={() => deleteTodo(todo.id)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Recurring todos (inline) */}
