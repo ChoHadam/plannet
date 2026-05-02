@@ -33,7 +33,7 @@ interface MonthlyStore {
   addGoal: (text: string) => void;
   updateGoal: (goalId: string, text: string) => void;
   updateGoalProgress: (goalId: string, progress: number) => void;
-  toggleGoalCompleted: (goalId: string) => void;
+  toggleGoalCompleted: (goalId: string, syncDecision?: boolean) => void;
   deleteGoal: (goalId: string) => void;
   importActionPlans: (plans: Array<{ text: string; cellId: string }>, sourceMandalartId?: string) => void;
 
@@ -206,7 +206,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
         });
       },
 
-      toggleGoalCompleted: (goalId: string) => {
+      toggleGoalCompleted: (goalId: string, syncDecision?: boolean) => {
         const currentId = get().currentMonthlyId;
         if (!currentId) return;
 
@@ -215,6 +215,9 @@ export const useMonthlyStore = create<MonthlyStore>()(
         const plan = state.monthlyPlans.find((p) => p.id === currentId);
         const goal = plan?.goals.find((g) => g.id === goalId);
         const newCompleted = goal ? !goal.completed : false;
+
+        // syncDecision이 명시적으로 전달되면 그 값을 저장, 아니면 기존 결정 유지
+        const effectiveSync = syncDecision ?? goal?.syncWithMandalart;
 
         set((state) => {
           const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
@@ -231,6 +234,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
             ...goal,
             completed: newCompleted,
             progress: newCompleted ? 100 : 0,
+            ...(syncDecision !== undefined && { syncWithMandalart: syncDecision }),
           };
 
           const newPlans = [...state.monthlyPlans];
@@ -243,8 +247,8 @@ export const useMonthlyStore = create<MonthlyStore>()(
           return { monthlyPlans: newPlans };
         });
 
-        // Mandalart 동기화 (source 정보가 있을 때만)
-        if (goal?.sourceMandalartId && goal?.sourceCellId) {
+        // Mandalart 동기화: source 정보 + 사용자 동의(true)가 있을 때만
+        if (goal?.sourceMandalartId && goal?.sourceCellId && effectiveSync === true) {
           useMandalartStore.getState().setCellCompleted(
             goal.sourceMandalartId,
             goal.sourceCellId,

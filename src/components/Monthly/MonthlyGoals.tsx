@@ -15,12 +15,29 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [syncPromptGoal, setSyncPromptGoal] = useState<MonthlyGoal | null>(null);
 
   const addGoal = useMonthlyStore((state) => state.addGoal);
   const updateGoal = useMonthlyStore((state) => state.updateGoal);
   const updateGoalProgress = useMonthlyStore((state) => state.updateGoalProgress);
   const toggleGoalCompleted = useMonthlyStore((state) => state.toggleGoalCompleted);
   const deleteGoal = useMonthlyStore((state) => state.deleteGoal);
+
+  // 토글 시: 만다라트에서 가져온 항목이고 sync 결정이 미정이면 모달, 아니면 바로 토글
+  const handleToggleCompleted = (goal: MonthlyGoal) => {
+    if (goal.sourceMandalartId && goal.sourceCellId && goal.syncWithMandalart === undefined) {
+      setSyncPromptGoal(goal);
+      return;
+    }
+    toggleGoalCompleted(goal.id);
+  };
+
+  const handleSyncDecision = (sync: boolean) => {
+    if (syncPromptGoal) {
+      toggleGoalCompleted(syncPromptGoal.id, sync);
+      setSyncPromptGoal(null);
+    }
+  };
 
   const handleAddGoal = () => {
     if (newGoalText.trim()) {
@@ -70,7 +87,7 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
             onEditKeyDown={(e) => handleEditKeyDown(e, goal.id)}
             onStartEditing={() => startEditing(goal)}
             onCancelEditing={() => setEditingId(null)}
-            onToggleCompleted={() => toggleGoalCompleted(goal.id)}
+            onToggleCompleted={() => handleToggleCompleted(goal)}
             onUpdateProgress={(progress) => updateGoalProgress(goal.id, progress)}
             onDelete={() => deleteGoal(goal.id)}
           />
@@ -122,6 +139,43 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
         onClose={() => setShowImportModal(false)}
         currentGoalsCount={goals.length}
       />
+
+      {/* Mandalart sync confirmation modal */}
+      {syncPromptGoal && (
+        <div
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
+          onClick={() => setSyncPromptGoal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">
+              만다라트도 함께 완료할까요?
+            </h3>
+            <p className="text-sm text-slate-500 mb-1">
+              <span className="font-medium text-slate-700">{syncPromptGoal.text}</span>
+            </p>
+            <p className="text-sm text-slate-500 mb-6">
+              이 목표는 만다라트에서 불러온 항목입니다. 선택한 결정은 이 목표에 기억됩니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleSyncDecision(false)}
+                className="flex-1 px-4 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors font-medium"
+              >
+                월간만 완료
+              </button>
+              <button
+                onClick={() => handleSyncDecision(true)}
+                className="flex-1 px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors font-medium"
+              >
+                둘 다 완료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

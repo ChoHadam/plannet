@@ -7,6 +7,7 @@ export interface MonthlyGoal {
   completed: boolean;
   sourceMandalartId?: string; // 출처 만다라트 ID (불러오기 추적용)
   sourceCellId?: string; // 출처 셀 ID (예: "top-left-3", 동기화용)
+  syncWithMandalart?: boolean; // 만다라트 동기화 여부 (undefined = 미결정, 첫 토글 시 사용자에게 묻기)
 }
 
 export interface WeeklyFocus {
