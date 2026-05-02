@@ -393,6 +393,7 @@ export function DailyGrid() {
       )}
 
       {/* Todo list (max-height keeps recurring panel below from drifting) */}
+      {/* TODO: 60vh is an arbitrary visual cap for the todo card. If Daily layout adds more sections, share a layout token instead of duplicating. */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[60vh]">
         {/* Add todo input */}
         <div className="p-4 border-b border-slate-100 flex-shrink-0">

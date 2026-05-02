@@ -60,13 +60,14 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
   };
 
   return (
-    <div className="border-t border-slate-200 pt-2">
-      <div className="flex items-center justify-between mb-1.5">
+    <div className="border-t border-slate-200 pt-2 flex flex-col">
+      <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">고정 할일</span>
       </div>
 
-      {/* Items */}
-      <div className="space-y-0.5">
+      {/* Items - capped height with internal scroll */}
+      {/* TODO: max-h-40 (≈5 items) is an arbitrary visual cap. Move to a constant if the recurring panel ever appears at a different size. */}
+      <div className="space-y-0.5 max-h-40 overflow-y-auto">
         {todos.map((todo) => {
           const todoColor = todo.color || 'none';
           const barColor = TODO_COLOR_BAR[todoColor];
@@ -156,7 +157,7 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
       </div>
 
       {/* Add input */}
-      <div className="flex items-center gap-1 mt-1">
+      <div className="flex items-center gap-1 mt-1 flex-shrink-0">
         <input
           ref={inputRef}
           type="text"

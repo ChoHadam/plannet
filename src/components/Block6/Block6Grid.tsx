@@ -147,6 +147,7 @@ export function Block6Grid() {
     <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex w-full max-w-screen-2xl mx-auto gap-4 items-start">
         {/* Left Sidebar (sticky to viewport so click targets stay in place) */}
+        {/* TODO: top-4/2rem are tied to <main>'s py-8. If another template needs the same sticky-sidebar pattern, extract to a tailwind theme spacing token. */}
         <div className="w-48 flex flex-col gap-3 flex-shrink-0 sticky top-4 h-[calc(100vh-2rem)]">
           <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
           <TodoBacklog

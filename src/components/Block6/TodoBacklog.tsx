@@ -146,11 +146,11 @@ export function TodoBacklog({
         </div>
       )}
 
-      {/* Todo List */}
+      {/* Todo List - takes all remaining space */}
       <div
         ref={setNodeRef}
         className={`
-          flex-1 overflow-y-auto space-y-0.5 rounded-md p-1 -m-1 transition-colors
+          flex-1 min-h-0 overflow-y-auto space-y-0.5 rounded-md p-1 -m-1 transition-colors
           ${isOver ? 'bg-blue-50 ring-2 ring-blue-300' : ''}
         `}
       >
@@ -183,8 +183,10 @@ export function TodoBacklog({
         </SortableContext>
       </div>
 
-      {/* Recurring todos (inline) */}
-      <RecurringTodosInline onAdd={onAddTodo} />
+      {/* Recurring todos (inline) - shrinks to content; items list caps height internally */}
+      <div className="flex-shrink-0">
+        <RecurringTodosInline onAdd={onAddTodo} />
+      </div>
     </div>
   );
 }
