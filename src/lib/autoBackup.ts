@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useBlock6Store } from '@/hooks/useBlock6';
 import { useMonthlyStore } from '@/hooks/useMonthly';
@@ -150,6 +150,118 @@ export async function loadBackup(filename: string): Promise<SnapshotData | null>
  * 백업 데이터를 localStorage에 적용. 적용 후 페이지 리로드.
  * persist key 형식: { state: <data>, version: <n> }
  */
+/** 백업 데이터에서 plan/todo 개수 합산 (빈 백업 판별용) */
+function totalItems(snap: SnapshotData): number {
+  return (
+    ((snap.mandalart as { mandalarts?: unknown[] })?.mandalarts?.length ?? 0) +
+    ((snap.block6 as { block6Plans?: unknown[] })?.block6Plans?.length ?? 0) +
+    ((snap.monthly as { monthlyPlans?: unknown[] })?.monthlyPlans?.length ?? 0) +
+    ((snap.daily as { dailyPlans?: unknown[] })?.dailyPlans?.length ?? 0) +
+    ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0)
+  );
+}
+
+/** 현재 비어있는 스토어 식별 */
+function getEmptyStores() {
+  return {
+    mandalart: useMandalartStore.getState().mandalarts.length === 0,
+    block6: useBlock6Store.getState().block6Plans.length === 0,
+    monthly: useMonthlyStore.getState().monthlyPlans.length === 0,
+    daily: useDailyStore.getState().dailyPlans.length === 0,
+    recurring: useRecurringStore.getState().todos.length === 0,
+  };
+}
+
+/** 백업의 각 스토어가 데이터를 가지고 있는지 */
+function getBackupHasData(snap: SnapshotData) {
+  return {
+    mandalart: ((snap.mandalart as { mandalarts?: unknown[] })?.mandalarts?.length ?? 0) > 0,
+    block6: ((snap.block6 as { block6Plans?: unknown[] })?.block6Plans?.length ?? 0) > 0,
+    monthly: ((snap.monthly as { monthlyPlans?: unknown[] })?.monthlyPlans?.length ?? 0) > 0,
+    daily: ((snap.daily as { dailyPlans?: unknown[] })?.dailyPlans?.length ?? 0) > 0,
+    recurring: ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0) > 0,
+  };
+}
+
+/** 비어있는 스토어만 골라 setState로 복원 (다른 스토어는 그대로 유지) */
+function restoreEmptyStores(snap: SnapshotData, targets: ReturnType<typeof getEmptyStores>): string[] {
+  const restored: string[] = [];
+  if (targets.mandalart) {
+    useMandalartStore.setState(snap.mandalart as Parameters<typeof useMandalartStore.setState>[0]);
+    restored.push('만다라트');
+  }
+  if (targets.block6) {
+    useBlock6Store.setState(snap.block6 as Parameters<typeof useBlock6Store.setState>[0]);
+    restored.push('Block6');
+  }
+  if (targets.monthly) {
+    useMonthlyStore.setState(snap.monthly as Parameters<typeof useMonthlyStore.setState>[0]);
+    restored.push('월간');
+  }
+  if (targets.daily) {
+    useDailyStore.setState(snap.daily as Parameters<typeof useDailyStore.setState>[0]);
+    restored.push('투두리스트');
+  }
+  if (targets.recurring) {
+    useRecurringStore.setState(snap.recurring as Parameters<typeof useRecurringStore.setState>[0]);
+    restored.push('고정 할일');
+  }
+  // 즉시 백업이 다시 생성되지 않도록 lastBackupAt 갱신
+  lastBackupAt = Date.now();
+  return restored;
+}
+
+export interface AutoRestoreResult {
+  createdAt: string;
+  restoredStores: string[];
+}
+
+/**
+ * 페이지 로드 시 비어있는 스토어가 있는데 백업에 데이터가 있으면 자동 복원.
+ * 부분 손실(예: 월간만 사라짐)도 감지하여 해당 스토어만 복원.
+ * dev 모드 편의를 위해 매 새로고침마다 검사 (sessionStorage 플래그 사용 안 함).
+ */
+export function useAutoRestore(allHydrated: boolean) {
+  const [result, setResult] = useState<AutoRestoreResult | null>(null);
+
+  useEffect(() => {
+    if (!allHydrated) return;
+    if (typeof window === 'undefined') return;
+
+    const empty = getEmptyStores();
+    const anyEmpty = Object.values(empty).some(Boolean);
+
+    if (!anyEmpty) return;
+
+    // 비어있는 스토어가 있음 → 해당 스토어에 데이터를 가진 가장 최근 백업 찾기
+    let cancelled = false;
+    (async () => {
+      const backups = await listBackups();
+      for (const b of backups) {
+        if (cancelled) return;
+        const snap = await loadBackup(b.filename);
+        if (!snap) continue;
+        const has = getBackupHasData(snap);
+        const targets = {
+          mandalart: empty.mandalart && has.mandalart,
+          block6: empty.block6 && has.block6,
+          monthly: empty.monthly && has.monthly,
+          daily: empty.daily && has.daily,
+          recurring: empty.recurring && has.recurring,
+        };
+        if (Object.values(targets).some(Boolean)) {
+          const restoredStores = restoreEmptyStores(snap, targets);
+          if (!cancelled) setResult({ createdAt: b.createdAt, restoredStores });
+          break;
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [allHydrated]);
+
+  return result;
+}
+
 export function applyBackup(snap: SnapshotData) {
   type State<T> = T & { version?: number };
   const wrap = <T>(data: T, key: string) => {
