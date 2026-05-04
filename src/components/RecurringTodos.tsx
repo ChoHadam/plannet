@@ -18,19 +18,23 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
   const [newText, setNewText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [colorPickerId, setColorPickerId] = useState<string | null>(null);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  // 외부 클릭 시 색상 선택기 닫기
+  // 외부 클릭 시 색상 선택기 닫기.
+  // 토글 버튼 클릭은 onClick에서 직접 처리하므로 click-outside는 click 단계에서 검사 (mousedown 사용 시 토글 버튼과 race).
   useEffect(() => {
     if (!colorPickerId) return;
     const onClickOutside = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setColorPickerId(null);
-      }
+      const target = e.target as Node;
+      if (pickerRef.current && pickerRef.current.contains(target)) return;
+      // 토글 버튼은 title="색상 변경"으로 식별 (자체 onClick에서 닫기 처리됨)
+      if ((target as HTMLElement).closest?.('button[title="색상 변경"]')) return;
+      setColorPickerId(null);
     };
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
+    document.addEventListener('click', onClickOutside);
+    return () => document.removeEventListener('click', onClickOutside);
   }, [colorPickerId]);
 
   if (todos.length === 0 && !isEditing) {
@@ -65,9 +69,8 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">고정 할일</span>
       </div>
 
-      {/* Items - capped height with internal scroll */}
-      {/* TODO: max-h-40 (≈5 items) is an arbitrary visual cap. Move to a constant if the recurring panel ever appears at a different size. */}
-      <div className="space-y-0.5 max-h-40 overflow-y-auto">
+      {/* Items - share remaining height in flex parent with internal scroll */}
+      <div className="space-y-0.5 flex-1 min-h-0 overflow-y-auto">
         {todos.map((todo) => {
           const todoColor = todo.color || 'none';
           const barColor = TODO_COLOR_BAR[todoColor];
@@ -97,7 +100,22 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
 
               {/* Color picker toggle */}
               <button
-                onClick={() => setColorPickerId(colorPickerId === todo.id ? null : todo.id)}
+                onClick={(e) => {
+                  if (colorPickerId === todo.id) {
+                    setColorPickerId(null);
+                    return;
+                  }
+                  // 버튼 위치 기준으로 fixed 좌표 계산 (overflow 컨테이너 영향 회피)
+                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  const pickerWidth = 108; // 3 cols × 24px + gaps + p-2 padding
+                  const pickerHeight = 108;
+                  const spaceBelow = window.innerHeight - rect.bottom;
+                  setPickerPos({
+                    top: spaceBelow < pickerHeight + 12 ? rect.top - pickerHeight - 4 : rect.bottom + 4,
+                    left: Math.min(rect.right - pickerWidth, window.innerWidth - pickerWidth - 8),
+                  });
+                  setColorPickerId(todo.id);
+                }}
                 className="opacity-0 group-hover:opacity-100 w-3.5 h-3.5 rounded-full flex-shrink-0
                          transition-all border border-slate-200"
                 style={{
@@ -118,11 +136,12 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
                 </svg>
               </button>
 
-              {/* Color picker dropdown */}
-              {colorPickerId === todo.id && (
+              {/* Color picker dropdown - fixed position to escape overflow container */}
+              {colorPickerId === todo.id && pickerPos && (
                 <div
                   ref={pickerRef}
-                  className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg border border-slate-200 p-2"
+                  className="fixed z-[9999] bg-white rounded-lg shadow-lg border border-slate-200 p-2"
+                  style={{ top: pickerPos.top, left: pickerPos.left }}
                 >
                   <div className="grid grid-cols-3 gap-1">
                     {TODO_COLORS.map((color) => (
