@@ -183,8 +183,8 @@ export function TodoBacklog({
         </SortableContext>
       </div>
 
-      {/* Recurring todos (inline) - shrinks to content; items list caps height internally */}
-      <div className="flex-shrink-0">
+      {/* Recurring todos (inline) - shares half of the body so items don't get cut off */}
+      <div className="flex-1 min-h-0 flex flex-col">
         <RecurringTodosInline onAdd={onAddTodo} />
       </div>
     </div>

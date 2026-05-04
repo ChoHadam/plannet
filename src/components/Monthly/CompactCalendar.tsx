@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { WeeklyFocus, getDaysInMonth, getFirstDayOfMonth } from '@/types/monthly';
+import { useHolidayStore } from '@/hooks/useHolidays';
+import { getHolidaysInMonth, toIsoDate } from '@/lib/holidays';
 
 interface CompactCalendarProps {
   year: number;
@@ -14,6 +16,9 @@ const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarProps) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDayOfMonth = getFirstDayOfMonth(year, month);
+  const manualHolidays = useHolidayStore((s) => s.manualHolidays);
+  const toggleManualHoliday = useHolidayStore((s) => s.toggleManualHoliday);
+  const holidayMap = getHolidaysInMonth(year, month, manualHolidays);
 
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
@@ -83,21 +88,42 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
               const dayOfWeek = (firstDayOfMonth + day - 1) % 7;
               const isSunday = dayOfWeek === 0;
               const isSaturday = dayOfWeek === 6;
+              const date = new Date(year, month - 1, day);
+              const iso = toIsoDate(date);
+              const holiday = holidayMap[iso];
+              const isAuto = holiday?.source === 'auto';
+              const isManual = holiday?.source === 'manual';
+
+              const handleClick = () => {
+                if (isAuto) return; // auto는 read-only
+                toggleManualHoliday(date);
+              };
+
+              const title = holiday?.name || (isAuto ? '공휴일' : '');
 
               return (
-                <div
+                <button
                   key={`day-${weekIndex}-${day}`}
+                  type="button"
+                  onClick={handleClick}
+                  disabled={isAuto}
+                  title={title}
                   className={`
                     h-7 rounded-md flex items-center justify-center
                     text-xs font-medium
-                    ${isToday ? 'ring-2 ring-red-400 ring-offset-1 bg-red-50' : ''}
-                    ${isSunday ? 'text-red-500' : ''}
-                    ${isSaturday ? 'text-blue-500' : ''}
-                    ${!isSunday && !isSaturday ? 'text-slate-700' : ''}
+                    transition-colors
+                    ${isToday ? 'ring-2 ring-red-400 ring-offset-1' : ''}
+                    ${isAuto ? 'bg-red-50 text-red-600 cursor-not-allowed' : ''}
+                    ${isManual ? 'bg-red-100 text-red-700' : ''}
+                    ${!holiday && isToday ? 'bg-red-50' : ''}
+                    ${!holiday && isSunday ? 'text-red-500' : ''}
+                    ${!holiday && isSaturday ? 'text-blue-500' : ''}
+                    ${!holiday && !isSunday && !isSaturday ? 'text-slate-700' : ''}
+                    ${!isAuto ? 'hover:bg-slate-100' : ''}
                   `}
                 >
                   {day}
-                </div>
+                </button>
               );
             })}
           </React.Fragment>
@@ -126,10 +152,21 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
       </div>
 
       {/* Legend */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500">
+      <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
         <div className="flex items-center gap-1">
           <span className="w-4 h-4 rounded border-2 border-red-400 bg-red-50" />
           <span>오늘</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-4 h-4 rounded bg-red-50" />
+          <span>공휴일</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-4 h-4 rounded bg-red-100" />
+          <span>수동 휴일</span>
+        </div>
+        <div className="text-[10px] text-slate-400 w-full">
+          날짜 클릭으로 수동 휴일 토글 (공휴일은 잠금)
         </div>
       </div>
     </div>

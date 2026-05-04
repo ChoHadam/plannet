@@ -6,6 +6,7 @@ import { useBlock6Store } from '@/hooks/useBlock6';
 import { useMonthlyStore } from '@/hooks/useMonthly';
 import { useDailyStore } from '@/hooks/useDaily';
 import { useRecurringStore } from '@/hooks/useRecurring';
+import { useHolidayStore } from '@/hooks/useHolidays';
 
 const DEBOUNCE_MS = 2000; // 변경 후 2초 idle 시 백업
 const MIN_INTERVAL_MS = 30_000; // 직전 백업 후 30초 미만이면 스킵 (스팸 방지)
@@ -16,6 +17,7 @@ interface SnapshotData {
   monthly: unknown;
   daily: unknown;
   recurring: unknown;
+  holidays: unknown;
   timestamp: string;
 }
 
@@ -26,6 +28,7 @@ function buildSnapshot(): SnapshotData {
     monthly: useMonthlyStore.getState(),
     daily: useDailyStore.getState(),
     recurring: useRecurringStore.getState(),
+    holidays: useHolidayStore.getState(),
     timestamp: new Date().toISOString(),
   };
 }
@@ -56,6 +59,9 @@ async function performBackup() {
     recurring: {
       todos: (snap.recurring as { todos: unknown[] }).todos,
     },
+    holidays: {
+      manualHolidays: (snap.holidays as { manualHolidays: Record<string, unknown> }).manualHolidays,
+    },
     timestamp: snap.timestamp,
   };
 
@@ -65,7 +71,8 @@ async function performBackup() {
     serializable.block6.block6Plans.length +
     serializable.monthly.monthlyPlans.length +
     serializable.daily.dailyPlans.length +
-    serializable.recurring.todos.length;
+    serializable.recurring.todos.length +
+    Object.keys(serializable.holidays.manualHolidays || {}).length;
   if (totalCount === 0) return;
 
   try {
@@ -108,6 +115,7 @@ export function useAutoBackup() {
     const unsubMonthly = useMonthlyStore.subscribe(scheduleBackup);
     const unsubDaily = useDailyStore.subscribe(scheduleBackup);
     const unsubRecurring = useRecurringStore.subscribe(scheduleBackup);
+    const unsubHolidays = useHolidayStore.subscribe(scheduleBackup);
 
     return () => {
       unsubMandalart();
@@ -115,6 +123,7 @@ export function useAutoBackup() {
       unsubMonthly();
       unsubDaily();
       unsubRecurring();
+      unsubHolidays();
       if (pendingTimer) clearTimeout(pendingTimer);
     };
   }, []);
@@ -157,7 +166,8 @@ function totalItems(snap: SnapshotData): number {
     ((snap.block6 as { block6Plans?: unknown[] })?.block6Plans?.length ?? 0) +
     ((snap.monthly as { monthlyPlans?: unknown[] })?.monthlyPlans?.length ?? 0) +
     ((snap.daily as { dailyPlans?: unknown[] })?.dailyPlans?.length ?? 0) +
-    ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0)
+    ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0) +
+    Object.keys(((snap.holidays as { manualHolidays?: Record<string, unknown> })?.manualHolidays) ?? {}).length
   );
 }
 
@@ -169,6 +179,7 @@ function getEmptyStores() {
     monthly: useMonthlyStore.getState().monthlyPlans.length === 0,
     daily: useDailyStore.getState().dailyPlans.length === 0,
     recurring: useRecurringStore.getState().todos.length === 0,
+    holidays: Object.keys(useHolidayStore.getState().manualHolidays).length === 0,
   };
 }
 
@@ -180,6 +191,7 @@ function getBackupHasData(snap: SnapshotData) {
     monthly: ((snap.monthly as { monthlyPlans?: unknown[] })?.monthlyPlans?.length ?? 0) > 0,
     daily: ((snap.daily as { dailyPlans?: unknown[] })?.dailyPlans?.length ?? 0) > 0,
     recurring: ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0) > 0,
+    holidays: Object.keys(((snap.holidays as { manualHolidays?: Record<string, unknown> })?.manualHolidays) ?? {}).length > 0,
   };
 }
 
@@ -205,6 +217,10 @@ function restoreEmptyStores(snap: SnapshotData, targets: ReturnType<typeof getEm
   if (targets.recurring) {
     useRecurringStore.setState(snap.recurring as Parameters<typeof useRecurringStore.setState>[0]);
     restored.push('고정 할일');
+  }
+  if (targets.holidays) {
+    useHolidayStore.setState(snap.holidays as Parameters<typeof useHolidayStore.setState>[0]);
+    restored.push('공휴일');
   }
   // 즉시 백업이 다시 생성되지 않도록 lastBackupAt 갱신
   lastBackupAt = Date.now();
@@ -248,6 +264,7 @@ export function useAutoRestore(allHydrated: boolean) {
           monthly: empty.monthly && has.monthly,
           daily: empty.daily && has.daily,
           recurring: empty.recurring && has.recurring,
+          holidays: empty.holidays && has.holidays,
         };
         if (Object.values(targets).some(Boolean)) {
           const restoredStores = restoreEmptyStores(snap, targets);
@@ -280,6 +297,7 @@ export function applyBackup(snap: SnapshotData) {
   localStorage.setItem('plannet-monthly', wrap(snap.monthly as State<unknown>, 'plannet-monthly'));
   localStorage.setItem('plannet-daily', wrap(snap.daily as State<unknown>, 'plannet-daily'));
   localStorage.setItem('plannet-recurring', wrap(snap.recurring as State<unknown>, 'plannet-recurring'));
+  localStorage.setItem('plannet-holidays', wrap(snap.holidays as State<unknown>, 'plannet-holidays'));
 
   window.location.reload();
 }

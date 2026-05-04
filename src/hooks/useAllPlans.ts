@@ -4,6 +4,7 @@ import { useMandalartStore, useHydration } from '@/hooks/useMandalart';
 import { useBlock6Store, useBlock6Hydration } from '@/hooks/useBlock6';
 import { useMonthlyStore, useMonthlyHydration } from '@/hooks/useMonthly';
 import { useDailyStore, useDailyHydration } from '@/hooks/useDaily';
+import { useHolidayHydration } from '@/hooks/useHolidays';
 import { TemplateType, PlanCategory } from '@/types/mandalart';
 import { BasePlanData } from '@/lib/templateRegistry';
 
@@ -53,5 +54,6 @@ export function useAllHydrated(): boolean {
   const h2 = useBlock6Hydration();
   const h3 = useMonthlyHydration();
   const h4 = useDailyHydration();
-  return h1 && h2 && h3 && h4;
+  const h5 = useHolidayHydration();
+  return h1 && h2 && h3 && h4 && h5;
 }

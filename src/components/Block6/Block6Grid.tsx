@@ -16,8 +16,28 @@ import {
 import { BlockCard } from './BlockCard';
 import { TodoBacklog } from './TodoBacklog';
 import { WeeklyFocusRef } from './WeeklyFocusRef';
+import { useHolidayStore } from '@/hooks/useHolidays';
+import { getHolidaysInWeek, toIsoDate } from '@/lib/holidays';
+import { getWeekDates } from '@/lib/weekUtils';
 
 const BLOCK_NUMBERS: BlockNumber[] = [1, 2, 3, 4, 5, 6];
+
+// 레이아웃 토큰 — 한 곳에서만 정의해서 사이드바/그리드 디자인이 같이 바뀌도록.
+// 한 값을 바꿔도 다른 영역에 영향이 가지 않도록 의미 단위로 분리해 둠.
+const LAYOUT = {
+  // 사이드바와 메인 그리드 카드의 공통 표면(surface) 스타일
+  surface: 'bg-slate-50 rounded-2xl',
+  surfacePadding: 'p-4',
+  // 사이드바 ↔ 메인 사이 간격
+  outerGap: 'gap-6',
+  // 그리드 셀 사이 간격
+  gridGap: 'gap-2',
+  // 그리드 최소 너비 (월~일 컬럼이 잘리지 않게)
+  gridMinWidth: 'min-w-[860px]',
+  // 주말(토/일) 강조 배경 — 헤더와 셀 모두 동일한 톤 사용
+  weekendBg: 'bg-slate-100',
+  weekdayHeaderBg: 'bg-white',
+} as const;
 
 // 시간대별 스타일
 const TIME_STYLES: Record<TimeOfDay, { bg: string; bar: string; text: string; icon: React.ReactNode }> = {
@@ -79,6 +99,9 @@ export function Block6Grid() {
   const reorderBlockTodo = useBlock6Store((state) => state.reorderBlockTodo);
   const reorderBacklogTodo = useBlock6Store((state) => state.reorderBacklogTodo);
 
+  const manualHolidays = useHolidayStore((s) => s.manualHolidays);
+  const toggleManualHoliday = useHolidayStore((s) => s.toggleManualHoliday);
+
   if (!data) {
     return (
       <div className="flex items-center justify-center h-96 text-slate-400">
@@ -90,6 +113,24 @@ export function Block6Grid() {
   const getBlock = (day: DayOfWeek, blockNumber: BlockNumber) => {
     return data.blocks.find((b) => b.day === day && b.blockNumber === blockNumber);
   };
+
+  // 요일 헤더에 표시할 날짜 + 공휴일 정보 (week 메타데이터가 있을 때만)
+  const weekDates: Date[] | null =
+    data.year && data.month && data.week
+      ? getWeekDates(data.year, data.month, data.week)
+      : null;
+  const holidayMap = weekDates ? getHolidaysInWeek(weekDates, manualHolidays) : {};
+  const dateByDay: Record<DayOfWeek, Date | null> = weekDates
+    ? {
+        mon: weekDates[0],
+        tue: weekDates[1],
+        wed: weekDates[2],
+        thu: weekDates[3],
+        fri: weekDates[4],
+        sat: weekDates[5],
+        sun: weekDates[6],
+      }
+    : { mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null };
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -145,7 +186,7 @@ export function Block6Grid() {
 
   return (
     <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex w-full max-w-screen-2xl mx-auto gap-4 items-start">
+      <div className={`flex w-full max-w-screen-2xl mx-auto items-start ${LAYOUT.outerGap}`}>
         {/* Left Sidebar (sticky to viewport so click targets stay in place) */}
         {/* TODO: top-4/2rem are tied to <main>'s py-8. If another template needs the same sticky-sidebar pattern, extract to a tailwind theme spacing token. */}
         <div className="w-48 flex flex-col gap-3 flex-shrink-0 sticky top-4 h-[calc(100vh-2rem)]">
@@ -162,23 +203,54 @@ export function Block6Grid() {
         </div>
 
         {/* Main Grid */}
+        {/* inline-block min-w-full wrapper so the surface card spans the full grid width
+            (overflow-x-auto would otherwise clip the rounded background after Friday). */}
         <div className="flex-1 overflow-x-auto">
-          <div className="bg-slate-50 p-3 rounded-2xl">
-            <div className="grid grid-cols-[56px_repeat(7,1fr)] gap-1.5 min-w-[860px]">
+          <div className="inline-block min-w-full">
+            <div className={`${LAYOUT.surface} ${LAYOUT.surfacePadding} ${LAYOUT.gridMinWidth}`}>
+              <div className={`grid grid-cols-[56px_repeat(7,1fr)] ${LAYOUT.gridGap}`}>
               {/* Header Row */}
               <div />
               {DAYS_OF_WEEK.map((day) => {
                 const isWeekend = day === 'sat' || day === 'sun';
+                const date = dateByDay[day];
+                const iso = date ? toIsoDate(date) : '';
+                const holiday = iso ? holidayMap[iso] : undefined;
+                const isAuto = holiday?.source === 'auto';
+                const isManualHoliday = holiday?.source === 'manual';
+                const handleContextMenu = (e: React.MouseEvent) => {
+                  if (!date) return;
+                  e.preventDefault();
+                  if (isAuto) return; // 자동 휴일은 read-only
+                  toggleManualHoliday(date);
+                };
                 return (
                   <div
                     key={day}
+                    onContextMenu={handleContextMenu}
+                    title={
+                      holiday?.name
+                        ? holiday.name + (isAuto ? ' · 공휴일' : ' · 수동')
+                        : date
+                          ? '우클릭으로 수동 휴일 토글'
+                          : ''
+                    }
                     className={`
-                      h-9 flex items-center justify-center
+                      h-12 flex flex-col items-center justify-center
                       text-xs font-bold uppercase tracking-wider rounded-lg
-                      ${isWeekend ? 'text-slate-400 bg-slate-100' : 'text-slate-500 bg-white'}
+                      transition-colors
+                      ${isAuto ? 'bg-red-50 text-red-600 cursor-not-allowed' : ''}
+                      ${isManualHoliday ? 'bg-red-100 text-red-700 cursor-pointer' : ''}
+                      ${!holiday && isWeekend ? `text-slate-400 ${LAYOUT.weekendBg}` : ''}
+                      ${!holiday && !isWeekend ? `text-slate-500 ${LAYOUT.weekdayHeaderBg}` : ''}
                     `}
                   >
-                    {DAY_LABELS[day]}
+                    <span>{DAY_LABELS[day]}</span>
+                    {date && (
+                      <span className="text-[10px] font-normal opacity-70 leading-none mt-0.5">
+                        {date.getMonth() + 1}/{date.getDate()}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -214,11 +286,18 @@ export function Block6Grid() {
                       if (!block) return <div key={`${day}-${blockNumber}`} />;
 
                       const isWeekend = day === 'sat' || day === 'sun';
+                      const date = dateByDay[day];
+                      const iso = date ? toIsoDate(date) : '';
+                      const isHolidayCol = !!(iso && holidayMap[iso]);
 
                       return (
                         <div
                           key={`${day}-${blockNumber}`}
-                          className={`rounded-lg ${isWeekend ? 'bg-slate-100/60' : ''}`}
+                          className={`
+                            rounded-lg
+                            ${isWeekend && !isHolidayCol ? LAYOUT.weekendBg : ''}
+                            ${isHolidayCol ? 'ring-1 ring-red-200 bg-red-50/30' : ''}
+                          `}
                         >
                           <BlockCard
                             block={block}
@@ -235,6 +314,7 @@ export function Block6Grid() {
                   </React.Fragment>
                 );
               })}
+              </div>
             </div>
           </div>
         </div>
