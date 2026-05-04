@@ -23,9 +23,10 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
   const toggleGoalCompleted = useMonthlyStore((state) => state.toggleGoalCompleted);
   const deleteGoal = useMonthlyStore((state) => state.deleteGoal);
 
-  // 토글 시: 만다라트에서 가져온 항목이고 sync 결정이 미정이면 모달, 아니면 바로 토글
+  // 만다라트에서 가져온 항목은 토글할 때마다 동기화 여부를 묻는다.
+  // 결정을 영구 저장하면 "한 번 정하면 끝"이라 사용자가 다시 묻고 싶을 때 방법이 없음 → 매번 묻기.
   const handleToggleCompleted = (goal: MonthlyGoal) => {
-    if (goal.sourceMandalartId && goal.sourceCellId && goal.syncWithMandalart === undefined) {
+    if (goal.sourceMandalartId && goal.sourceCellId) {
       setSyncPromptGoal(goal);
       return;
     }
@@ -157,7 +158,7 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
               <span className="font-medium text-slate-700">{syncPromptGoal.text}</span>
             </p>
             <p className="text-sm text-slate-500 mb-6">
-              이 목표는 만다라트에서 불러온 항목입니다. 선택한 결정은 이 목표에 기억됩니다.
+              이 목표는 만다라트에서 불러온 항목입니다.
             </p>
             <div className="flex gap-3">
               <button
