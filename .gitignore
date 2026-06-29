@@ -53,3 +53,6 @@ CLAUDE.md
 
 # local data backups (dev only)
 .local-backup/
+
+# local kubernetes manifests
+/k8s/local/
