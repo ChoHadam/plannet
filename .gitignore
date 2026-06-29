@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/apps/*/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,15 +13,21 @@
 
 # testing
 /coverage
-/test-results/
-/playwright-report/
+/apps/*/coverage
+/test-results
+/apps/*/test-results
+/playwright-report
+/apps/*/playwright-report
 
 # next.js
-/.next/
-/out/
+/.next
+/apps/*/.next
+/out
+/apps/*/out
 
 # production
 /build
+/apps/*/build
 
 # misc
 .DS_Store
@@ -35,9 +42,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!apps/*/.env.example
 
 # vercel
 .vercel
+apps/*/.vercel
 
 # IDE
 .idea/
