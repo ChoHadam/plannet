@@ -16,6 +16,7 @@ import {
 import { BlockCard } from './BlockCard';
 import { TodoBacklog } from './TodoBacklog';
 import { WeeklyFocusRef } from './WeeklyFocusRef';
+import { Block6GridMobile } from './Block6GridMobile';
 import { useHolidayStore } from '@/hooks/useHolidays';
 import { getHolidaysInWeek, toIsoDate } from '@/lib/holidays';
 import { getWeekDates } from '@/lib/weekUtils';
@@ -185,6 +186,14 @@ export function Block6Grid() {
   };
 
   return (
+    <>
+      {/* 모바일 전용 레이아웃 (요일 탭 + 아코디언). 데스크탑에서는 hidden. */}
+      <div className="md:hidden">
+        <Block6GridMobile />
+      </div>
+
+      {/* 데스크탑 그리드. 모바일에서는 hidden. */}
+      <div className="hidden md:block">
     <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className={`flex w-full max-w-screen-2xl mx-auto items-start ${LAYOUT.outerGap}`}>
         {/* Left Sidebar (sticky to viewport so click targets stay in place) */}
@@ -329,5 +338,7 @@ export function Block6Grid() {
         ) : null}
       </DragOverlay>
     </DndContext>
+      </div>
+    </>
   );
 }

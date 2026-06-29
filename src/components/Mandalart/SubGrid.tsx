@@ -16,6 +16,8 @@ interface SubGridProps {
   onColorClick?: () => void;
   isCenter?: boolean;
   disabled?: boolean;
+  /** 셀 탭 시 호출. 모바일에서 중앙 셀 → 외곽 그리드 펼치기 같은 용도. */
+  onCellTap?: (cellIndex: number) => void;
 }
 
 export function SubGrid({
@@ -31,6 +33,7 @@ export function SubGrid({
   onColorClick,
   isCenter = false,
   disabled = false,
+  onCellTap,
 }: SubGridProps) {
   return (
     <div
@@ -71,6 +74,7 @@ export function SubGrid({
                 ? () => onScheduleClick(index)
                 : undefined
             }
+            onTap={onCellTap ? () => onCellTap(index) : undefined}
           />
         );
       })}

@@ -355,6 +355,10 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
   const handleSelect = (id: string, template: TemplateType) => {
     selectExclusive(template, id);
+    // 모바일: 항목 선택하면 사이드바 자동으로 닫기 (md 미만에서만)
+    if (typeof window !== 'undefined' && window.innerWidth < 768 && onToggleCollapse) {
+      onToggleCollapse();
+    }
   };
 
   const handleDeleteClick = (id: string, template: TemplateType) => {
@@ -408,11 +412,23 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
   return (
     <>
+      {/* Mobile backdrop — 사이드바가 열렸을 때만 표시. 데스크탑에서는 hidden */}
+      {!collapsed && (
+        <div
+          className="fixed inset-0 bg-black/30 z-30 md:hidden"
+          onClick={onToggleCollapse}
+        />
+      )}
+
       <aside
         className={`
           h-screen bg-slate-50 border-r border-slate-200 flex flex-col
-          transition-all duration-300 ease-in-out flex-shrink-0
-          ${collapsed ? 'w-0 overflow-hidden' : 'w-60'}
+          transition-all duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-40 w-72 shadow-xl
+          md:static md:shadow-none md:flex-shrink-0
+          ${collapsed
+            ? '-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden'
+            : 'translate-x-0 md:w-60'}
         `}
       >
         {/* Logo / Brand */}
@@ -456,18 +472,22 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Sidebar Toggle Button */}
+      {/* Sidebar Toggle Button
+          - 모바일: 사이드바 닫혀있을 때만 햄버거 표시 (열려있으면 backdrop 클릭 또는 자동 닫힘)
+          - 데스크탑: 기존대로 토글 버튼 (collapsed 상태 따라 위치 이동) */}
       <button
         onClick={onToggleCollapse}
         className={`
-          fixed top-4 z-40 p-2 rounded-lg
+          fixed top-4 z-50 p-2 rounded-lg
           bg-white border border-slate-200 shadow-sm
           text-slate-500 hover:text-slate-700 hover:bg-slate-50
           transition-all duration-300
-          ${collapsed ? 'left-4' : 'left-[252px]'}
+          ${collapsed ? 'left-4' : 'left-4 md:left-[252px]'}
+          ${!collapsed ? 'hidden md:block' : ''}
         `}
         title={collapsed ? '사이드바 열기' : '사이드바 접기'}
       >
+        {/* 데스크탑: chevron (collapsed 시 회전) */}
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="18"
@@ -478,9 +498,26 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className={`transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
+          className={`hidden md:block transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
         >
-          <polyline points="15 18 9 12 15 6"></polyline>
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        {/* 모바일: 햄버거 */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="md:hidden"
+        >
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
 

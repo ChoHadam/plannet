@@ -18,6 +18,12 @@ interface CellProps {
   onClearCell?: () => void;
   schedule?: CellSchedule;
   onScheduleClick?: () => void;
+  /**
+   * 셀 탭 시 추가로 호출되는 콜백 (textarea focus와 별개).
+   * 모바일 만다라트에서 중앙 셀 → 해당 외곽 그리드 표시 같은 동작에 사용.
+   * 데스크탑에서는 사용 안 함.
+   */
+  onTap?: () => void;
 }
 
 function hasSchedule(schedule?: CellSchedule): boolean {
@@ -40,6 +46,7 @@ export function Cell({
   onClearCell,
   schedule,
   onScheduleClick,
+  onTap,
 }: CellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localValue, setLocalValue] = useState(value);
@@ -50,11 +57,25 @@ export function Cell({
   }, [value]);
 
   // Auto-resize textarea
+  // localValue 변화 + 부모 크기 변화(예: 모바일/데스크탑 레이아웃 전환으로 처음 visible해질 때)에 재계산.
+  // ResizeObserver로 부모 요소를 관찰하면 hidden→visible 전환 시 size change가 발생해 callback이 호출됨.
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const resize = () => {
+      if (!textarea.isConnected) return;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    };
+
+    resize();
+
+    const parent = textarea.parentElement;
+    if (!parent) return;
+    const observer = new ResizeObserver(resize);
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, [localValue]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -64,7 +85,9 @@ export function Cell({
   };
 
   const handleCellClick = () => {
-    if (!disabled && textareaRef.current) {
+    if (disabled) return;
+    onTap?.();
+    if (textareaRef.current) {
       textareaRef.current.focus();
     }
   };

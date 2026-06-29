@@ -163,39 +163,43 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
   return (
     <>
-      <header className="w-full max-w-4xl mx-auto px-4 py-6">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex-1 flex flex-col sm:flex-row items-center gap-3">
+      <header className="w-full max-w-4xl mx-auto px-4 py-3 md:py-6 pl-14 md:pl-4">
+        {/* 모바일: 2단 구조. 1단=제목, 2단=날짜+액션. 데스크탑: 1줄 유지 */}
+        <div className="flex flex-col gap-2 md:gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex-1 flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
             <input
               type="text"
               value={plan.title}
               onChange={(e) => plan.updateTitle(e.target.value)}
               placeholder={placeholder}
               className="
-                text-2xl sm:text-3xl font-bold text-slate-800
+                text-xl md:text-3xl font-bold text-slate-800
                 bg-transparent border-none outline-none
                 placeholder:text-slate-300
-                text-center sm:text-left
-                w-full sm:w-auto sm:flex-1
+                text-left
+                w-full md:w-auto md:flex-1
               "
             />
 
-            <button
-              onClick={() => setShowDatePicker(true)}
-              className="
-                px-3 py-1 rounded-full
-                bg-slate-100 text-slate-600
-                hover:bg-slate-200
-                transition-colors duration-200
-                text-sm font-medium
-                shrink-0
-              "
-              title="날짜 변경"
-            >
-              {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day)}
-            </button>
+            <div className="flex items-center justify-between gap-2 md:contents">
+              <button
+                onClick={() => setShowDatePicker(true)}
+                className="
+                  px-3 py-1 rounded-full
+                  bg-slate-100 text-slate-600
+                  hover:bg-slate-200
+                  transition-colors duration-200
+                  text-sm font-medium
+                  shrink-0
+                "
+                title="날짜 변경"
+              >
+                {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day)}
+              </button>
 
-            {isMandalart && onOpenAIChat && (
+              {/* 모바일에서 우측에 그룹화될 액션들 */}
+              <div className="flex items-center gap-2 md:contents">
+                {isMandalart && onOpenAIChat && (
               <button
                 onClick={onOpenAIChat}
                 className="
@@ -214,19 +218,21 @@ export function Header({ onOpenAIChat }: HeaderProps) {
               </button>
             )}
 
-            {isMandalart && progress.total > 0 && (
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="w-20 sm:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-500 ease-out"
-                    style={{ width: `${progress.percentage}%` }}
-                  />
-                </div>
-                <span className="text-sm font-medium text-slate-500 min-w-[3ch]">
-                  {progress.percentage}%
-                </span>
+                {isMandalart && progress.total > 0 && (
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
+                    <div className="w-20 sm:w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-500 ease-out"
+                        style={{ width: `${progress.percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium text-slate-500 min-w-[3ch]">
+                      {progress.percentage}%
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {isMandalart && (

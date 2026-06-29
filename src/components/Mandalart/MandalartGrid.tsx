@@ -5,6 +5,7 @@ import { SubGrid } from './SubGrid';
 import { CellSchedulePopover } from './CellSchedulePopover';
 import { ColorPicker } from '../ColorPicker';
 import { EmojiPickerWrapper } from '../EmojiPicker';
+import { MandalartGridMobile } from './MandalartGridMobile';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP, CellSchedule } from '@/types/mandalart';
 
@@ -103,6 +104,14 @@ export function MandalartGrid() {
   };
 
   return (
+    <>
+      {/* 모바일: Focus + Detail 레이아웃 */}
+      <div className="md:hidden">
+        <MandalartGridMobile />
+      </div>
+
+      {/* 데스크탑: 9x9 그리드 */}
+      <div className="hidden md:block">
     <div className="relative">
       <div id="mandalart-grid" className="grid grid-cols-3 gap-2 p-4 bg-slate-100/50 rounded-2xl shadow-inner max-w-4xl mx-auto">
         {GRID_POSITIONS.map((position) => {
@@ -173,5 +182,7 @@ export function MandalartGrid() {
         />
       )}
     </div>
+      </div>
+    </>
   );
 }

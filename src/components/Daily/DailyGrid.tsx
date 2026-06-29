@@ -350,7 +350,7 @@ export function DailyGrid() {
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-4">
+    <div className="w-full max-w-2xl mx-auto px-2 py-2 md:p-4">
       {/* Header with date navigation */}
       <div className="flex items-center justify-center gap-4 mb-6">
         <button
@@ -392,9 +392,9 @@ export function DailyGrid() {
         </div>
       )}
 
-      {/* Todo list (max-height keeps recurring panel below from drifting) */}
+      {/* Todo list — 모바일에서는 전체 페이지 스크롤 사용, 데스크탑에서만 카드 내부 스크롤 */}
       {/* TODO: 60vh is an arbitrary visual cap for the todo card. If Daily layout adds more sections, share a layout token instead of duplicating. */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[60vh]">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col md:max-h-[60vh]">
         {/* Add todo input */}
         <div className="p-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex gap-2">
@@ -449,7 +449,7 @@ export function DailyGrid() {
         </div>
 
         {/* Scrollable list area (active + completed) */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 md:overflow-y-auto">
           {data.todos.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-sm">
               아직 할 일이 없습니다

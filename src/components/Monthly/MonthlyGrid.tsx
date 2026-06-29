@@ -28,7 +28,7 @@ export function MonthlyGrid() {
   const monthName = MONTH_NAMES[data.month - 1];
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-4">
+    <div className="w-full max-w-6xl mx-auto px-2 py-2 md:p-4">
       {/* Header with month navigation */}
       <div className="flex items-center justify-center gap-4 mb-6">
         <button
@@ -55,7 +55,7 @@ export function MonthlyGrid() {
       </div>
 
       {/* Main layout: Calendar + Dashboard (responsive) */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-3 md:gap-6">
         {/* Left: Compact Calendar */}
         <div className="w-full lg:w-[30%] lg:min-w-[280px]">
           <CompactCalendar

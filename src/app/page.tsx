@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { AIChatSidebar } from '@/components/AIChatSidebar';
@@ -17,6 +17,13 @@ export default function Home() {
   const [showAIChat, setShowAIChat] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // 모바일에서는 기본적으로 사이드바 닫힌 상태로 시작 (첫 마운트 1회만)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }, []);
+
   if (!allHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -26,13 +33,13 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen min-w-[1024px]">
+    <div className="flex min-h-screen md:min-w-[1024px]">
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      <main className="flex-1 py-8 px-4 overflow-x-auto">
+      <main className="flex-1 py-4 px-3 md:py-8 md:px-4 overflow-x-auto min-w-0">
         <Header onOpenAIChat={() => setShowAIChat(true)} />
 
         {currentTemplate ? (
