@@ -16,6 +16,7 @@ import {
 } from '@/types/mandalart';
 import { DEFAULT_COLORS, STORAGE_KEY } from '@/lib/constants';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
+import { getWeekOfMonth } from '@/lib/weekUtils';
 
 interface MandalartStore {
   // Multiple plans support
@@ -48,35 +49,6 @@ interface MandalartStore {
   setCellCompleted: (mandalartId: string, cellId: string, completed: boolean) => boolean;
 }
 
-// Get Monday-based week number within the month
-// Returns 1+ for weeks where Monday is in the current month
-// Returns 1 if the Monday is in the previous month (first partial week)
-const getWeekNumberInMonth = (date: Date): number => {
-  const year = date.getFullYear();
-  const month = date.getMonth(); // 0-indexed
-  const day = date.getDate();
-  const dayOfWeek = date.getDay(); // 0=일, 1=월, ..., 6=토
-
-  // Find the Monday of the week containing this date
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const mondayDate = day - daysFromMonday;
-
-  // If Monday is in the previous month, return 1 (first week)
-  if (mondayDate < 1) {
-    return 1;
-  }
-
-  // Find the first Monday of the month
-  const firstOfMonth = new Date(year, month, 1);
-  const firstDayOfWeek = firstOfMonth.getDay();
-  const daysToFirstMonday = firstDayOfWeek === 0 ? 1 : (firstDayOfWeek === 1 ? 0 : 8 - firstDayOfWeek);
-  const firstMondayDate = 1 + daysToFirstMonday;
-
-  // Calculate week number (1-based)
-  const weekNum = Math.floor((mondayDate - firstMondayDate) / 7) + 1;
-  return Math.max(1, weekNum);
-};
-
 // Create initial empty mandalart data
 const createInitialMandalart = (category: PlanCategory, title: string = ''): MandalartData => {
   const grids: SubGridData[] = GRID_POSITIONS.map((position) => ({
@@ -92,7 +64,7 @@ const createInitialMandalart = (category: PlanCategory, title: string = ''): Man
   const now = new Date();
   const year = now.getFullYear();
   const month = ['monthly', 'weekly', 'daily'].includes(category) ? now.getMonth() + 1 : undefined;
-  const week = category === 'weekly' ? getWeekNumberInMonth(now) : undefined;
+  const week = category === 'weekly' ? getWeekOfMonth(now) : undefined;
   const day = category === 'daily' ? now.getDate() : undefined;
 
   return {

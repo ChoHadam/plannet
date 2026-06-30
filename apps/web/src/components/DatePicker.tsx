@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { PlanCategory } from '@/types/mandalart';
-import { getWeekOfMonth } from '@/lib/weekUtils';
+import { getWeekOfMonth, getWeeksOfMonth } from '@/lib/weekUtils';
+import type { WeekOfMonthMeta } from '@/lib/weekUtils';
 
 interface DatePickerProps {
   category: PlanCategory;
@@ -17,77 +18,9 @@ interface DatePickerProps {
 const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
-// ISO 8601 helpers -----------------------------------------------------------
-// Week belongs to the month that contains the Thursday of that week
-const getMonthOfISOWeek = (date: Date) => {
-  const dayOfWeek = date.getDay() === 0 ? 6 : date.getDay() - 1; // Mon=0 ... Sun=6
-  const thursday = new Date(date);
-  thursday.setDate(date.getDate() + (3 - dayOfWeek));
-  return thursday.getMonth() + 1; // 1-12
-};
-
-const getISOWeekInfo = (date: Date) => {
-  const target = new Date(date);
-  // Move to Thursday of current week
-  const dayNr = (target.getDay() + 6) % 7; // Mon=0 ... Sun=6
-  target.setDate(target.getDate() - dayNr + 3);
-
-  const isoYear = target.getFullYear();
-  const firstThursday = new Date(isoYear, 0, 4);
-  const diff = target.getTime() - firstThursday.getTime();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const isoWeek = 1 + Math.floor(diff / (7 * oneDayMs));
-
-  return { isoYear, isoWeek };
-};
-
-// Get ISO weeks belonging to a month (by Thursday-in-month rule)
-const getISOWeeksMetaForMonth = (year: number, month: number) => {
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
-
-  // Find the Monday of the week containing the 1st
-  const dayOfWeek = firstDay.getDay(); // 0=Sun
-  const offsetToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  let cursor = new Date(firstDay);
-  cursor.setDate(firstDay.getDate() + offsetToMonday);
-
-  const weeks: {
-    isoYear: number;
-    isoWeek: number;
-    weekOfMonth: number;
-    start: Date;
-    end: Date;
-  }[] = [];
-
-  while (cursor <= lastDay || getMonthOfISOWeek(cursor) === month) {
-    const weekStart = new Date(cursor);
-    const weekEnd = new Date(cursor);
-    weekEnd.setDate(cursor.getDate() + 6);
-
-    const monthOfWeek = getMonthOfISOWeek(weekStart);
-    const { isoYear, isoWeek } = getISOWeekInfo(weekStart);
-
-    if (monthOfWeek === month) {
-      weeks.push({
-        isoYear,
-        isoWeek,
-        weekOfMonth: weeks.length + 1,
-        start: weekStart,
-        end: weekEnd,
-      });
-    }
-
-    cursor = new Date(cursor);
-    cursor.setDate(cursor.getDate() + 7);
-  }
-
-  const weekOrderMap = new Map<string, number>();
-  weeks.forEach((w) => {
-    weekOrderMap.set(`${w.isoYear}-${w.isoWeek}`, w.weekOfMonth);
-  });
-
-  return { weeks, weekOrderMap };
+const getWeekOfDate = (date: Date, weeks: WeekOfMonthMeta[]) => {
+  const time = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return weeks.find((w) => w.start.getTime() <= time && time <= w.end.getTime())?.weekOfMonth;
 };
 
 // Get days in month for calendar (Sunday start for display)
@@ -240,19 +173,17 @@ export function DatePicker({
 
         {/* Week selector - calendar style for weekly (Monday-based weeks) */}
         {category === 'weekly' && (() => {
-          const { weeks: isoWeeks, weekOrderMap } = getISOWeeksMetaForMonth(year, month);
+          const monthWeeks = getWeeksOfMonth(year, month);
 
           // Calculate previous month days to show
           const firstDayDate = new Date(year, month - 1, 1);
           const firstDayOfWeek = firstDayDate.getDay(); // 0=일요일
           const prevMonthLastDay = new Date(year, month - 1, 0).getDate();
-          const prevMonthLabel = month === 1 ? 12 : month - 1;
 
           // Calculate next month days to show
           const lastDayDate = new Date(year, month, 0);
           const lastDayOfWeek = lastDayDate.getDay(); // 0=일
           const nextMonthDays = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
-          const nextMonthLabel = month === 12 ? 1 : month + 1;
 
           // Build calendar array with prev/current/next month days
           const calendarDays: { day: number; isPrevMonth?: boolean; isNextMonth?: boolean }[] = [];
@@ -275,9 +206,7 @@ export function DatePicker({
             }
           }
 
-          // Selected week meta (by ISO rule: week belongs to month if Thursday is in month)
-          const selectedWeek = isoWeeks.find((w) => w.weekOfMonth === week);
-          const maxWeek = isoWeeks.length || 0;
+          const selectedWeek = monthWeeks.find((w) => w.weekOfMonth === week);
 
           return (
             <div className="mb-4">
@@ -311,14 +240,8 @@ export function DatePicker({
 
                   const dateObj = new Date(baseYear, baseMonth - 1, d);
 
-                  const weekKey = (() => {
-                    const { isoYear, isoWeek } = getISOWeekInfo(dateObj);
-                    return `${isoYear}-${isoWeek}`;
-                  })();
-
-                  const weekOfMonth = weekOrderMap.get(weekKey);
-                  const weekMonth = getMonthOfISOWeek(dateObj);
-                  const belongsToMonth = weekMonth === month;
+                  const weekOfMonth = getWeekOfDate(dateObj, monthWeeks);
+                  const belongsToMonth = weekOfMonth !== undefined;
 
                   // Highlight if this day belongs to the selected week (even if prev/next month)
                   const isInSelectedWeek = belongsToMonth && weekOfMonth === selectedWeek?.weekOfMonth;
@@ -355,7 +278,7 @@ export function DatePicker({
                           ? isOtherMonthDay
                             ? `${baseMonth}월 ${d}일 · ${month}월 ${weekOfMonth ?? ''}주차`
                             : `${month}월 ${weekOfMonth ?? ''}주차`
-                          : `${weekMonth}월 주차`
+                          : `${baseMonth}월 ${d}일`
                       }
                     >
                       {d}
@@ -380,9 +303,6 @@ export function DatePicker({
                   })()}
                   <span className="text-xs text-slate-400 ml-1">(월~일)</span>
                 </div>
-              ) : maxWeek > 0 && week > maxWeek ? (
-                // Auto-adjust if current week exceeds max
-                (() => { setWeek(1); return null; })()
               ) : null}
             </div>
           );

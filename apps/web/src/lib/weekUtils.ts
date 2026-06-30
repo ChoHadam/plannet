@@ -39,27 +39,52 @@ export function getWeekDates(year: number, month: number, weekNumber: number): D
   return dates;
 }
 
+export interface WeekOfMonthMeta {
+  weekOfMonth: number;
+  start: Date;
+  end: Date;
+  dates: Date[];
+}
+
+export function getWeeksOfMonth(year: number, month: number): WeekOfMonthMeta[] {
+  const lastOfMonth = new Date(year, month, 0);
+  const weeks: WeekOfMonthMeta[] = [];
+
+  for (let weekOfMonth = 1; weekOfMonth <= 6; weekOfMonth += 1) {
+    const dates = getWeekDates(year, month, weekOfMonth);
+    const hasCurrentMonthDate = dates.some(
+      (d) => d.getFullYear() === year && d.getMonth() + 1 === month
+    );
+
+    if (hasCurrentMonthDate) {
+      weeks.push({
+        weekOfMonth,
+        start: dates[0],
+        end: dates[6],
+        dates,
+      });
+    }
+
+    if (dates[6].getTime() >= lastOfMonth.getTime()) break;
+  }
+
+  return weeks;
+}
+
 /**
- * 날짜가 해당 월의 몇 번째 주인지 계산 (1-5)
+ * 날짜가 해당 월의 몇 번째 주인지 계산
  * 해당 월 1일이 속한 주를 W1으로 계산
  */
 export function getWeekOfMonth(date: Date): number {
   const year = date.getFullYear();
-  const month = date.getMonth();
+  const month = date.getMonth() + 1;
   const day = date.getDate();
+  const target = new Date(year, month - 1, day).getTime();
+  const week = getWeeksOfMonth(year, month).find(
+    (w) => w.start.getTime() <= target && target <= w.end.getTime()
+  );
 
-  // 해당 월 1일의 요일 (0=일, 6=토)
-  const firstDayOfMonth = new Date(year, month, 1).getDay();
-
-  // 첫 주의 남은 일수 (일요일 시작 기준)
-  const daysInFirstWeek = 7 - firstDayOfMonth;
-
-  if (day <= daysInFirstWeek) return 1;
-
-  const weekNumber = Math.ceil((day - daysInFirstWeek) / 7) + 1;
-
-  // 최대 W5로 제한 (일부 달은 6주까지 있을 수 있음)
-  return Math.min(weekNumber, 5);
+  return week?.weekOfMonth ?? 1;
 }
 
 export interface CurrentWeeklyFocusResult {

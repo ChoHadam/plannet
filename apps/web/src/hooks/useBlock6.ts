@@ -14,6 +14,7 @@ import {
   TodoColor,
 } from '@/types/block6';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
+import { getWeekOfMonth } from '@/lib/weekUtils';
 
 const BLOCK6_STORAGE_KEY = 'plannet-block6';
 
@@ -70,28 +71,6 @@ interface Block6Store {
   resetCurrent: () => void;
 }
 
-// Get Monday-based week number within the month
-const getWeekNumberInMonth = (date: Date): number => {
-  const day = date.getDate();
-  const dayOfWeek = date.getDay();
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const mondayDate = day - daysFromMonday;
-
-  if (mondayDate < 1) {
-    return 1;
-  }
-
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const firstOfMonth = new Date(year, month, 1);
-  const firstDayOfWeek = firstOfMonth.getDay();
-  const daysToFirstMonday = firstDayOfWeek === 0 ? 1 : firstDayOfWeek === 1 ? 0 : 8 - firstDayOfWeek;
-  const firstMondayDate = 1 + daysToFirstMonday;
-
-  const weekNum = Math.floor((mondayDate - firstMondayDate) / 7) + 1;
-  return Math.max(1, weekNum);
-};
-
 // Create 42 empty blocks (7 days x 6 blocks)
 const createInitialBlocks = (): BlockData[] => {
   const blocks: BlockData[] = [];
@@ -117,7 +96,7 @@ const createInitialBlock6Plan = (category: PlanCategory, title: string = ''): Bl
   const now = new Date();
   const year = now.getFullYear();
   const month = ['monthly', 'weekly', 'daily'].includes(category) ? now.getMonth() + 1 : undefined;
-  const week = category === 'weekly' ? getWeekNumberInMonth(now) : undefined;
+  const week = category === 'weekly' ? getWeekOfMonth(now) : undefined;
   const day = category === 'daily' ? now.getDate() : undefined;
 
   return {
