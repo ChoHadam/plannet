@@ -185,7 +185,7 @@ export function TodoBacklog({
 
       {/* Recurring todos (inline) - shares half of the body so items don't get cut off */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <RecurringTodosInline onAdd={onAddTodo} />
+        <RecurringTodosInline onAdd={onAddTodo} layout="fill" />
       </div>
     </div>
   );

@@ -7,9 +7,10 @@ import { TODO_COLORS, TODO_COLOR_BAR, TODO_COLOR_LABELS } from '@/lib/constants'
 
 interface RecurringTodosInlineProps {
   onAdd: (text: string, color?: TodoColor) => void;
+  layout?: 'natural' | 'fill';
 }
 
-export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
+export function RecurringTodosInline({ onAdd, layout = 'natural' }: RecurringTodosInlineProps) {
   const todos = useRecurringStore((s) => s.todos);
   const addTodo = useRecurringStore((s) => s.addTodo);
   const updateColor = useRecurringStore((s) => s.updateColor);
@@ -63,14 +64,15 @@ export function RecurringTodosInline({ onAdd }: RecurringTodosInlineProps) {
     }
   };
 
+  const isFillLayout = layout === 'fill';
+
   return (
-    <div className="border-t border-slate-200 pt-2 flex flex-col">
+    <div className={`border-t border-slate-200 pt-2 flex flex-col ${isFillLayout ? 'flex-1 min-h-0' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">고정 할일</span>
       </div>
 
-      {/* Items - share remaining height in flex parent with internal scroll */}
-      <div className="space-y-0.5 flex-1 min-h-0 overflow-y-auto">
+      <div className={`space-y-0.5 overflow-y-auto pr-1 ${isFillLayout ? 'flex-1 min-h-0' : 'max-h-72'}`}>
         {todos.map((todo) => {
           const todoColor = todo.color || 'none';
           const barColor = TODO_COLOR_BAR[todoColor];
