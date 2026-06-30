@@ -33,10 +33,8 @@ const LAYOUT = {
   outerGap: 'gap-6',
   // 그리드 셀 사이 간격
   gridGap: 'gap-2',
-  // 그리드 최소 너비 (월~일 컬럼이 잘리지 않게)
-  gridMinWidth: 'min-w-[860px]',
-  // 주말(토/일) 강조 배경 — 헤더와 셀 모두 동일한 톤 사용
-  weekendBg: 'bg-slate-100',
+  // 56px time label + 7 * 150px day columns + 7 * 8px gaps + 32px padding.
+  gridMinWidth: 'min-w-[1194px]',
   weekdayHeaderBg: 'bg-white',
 } as const;
 
@@ -215,7 +213,7 @@ export function Block6Grid() {
         <div className="flex-1 min-w-0 overflow-x-auto pb-3 overscroll-x-contain">
           <div className="min-w-full pr-4">
             <div className={`${LAYOUT.surface} ${LAYOUT.surfacePadding} ${LAYOUT.gridMinWidth} w-full`}>
-              <div className={`grid grid-cols-[56px_repeat(7,minmax(0,1fr))] ${LAYOUT.gridGap}`}>
+              <div className={`grid grid-cols-[56px_repeat(7,minmax(150px,1fr))] ${LAYOUT.gridGap}`}>
               {/* Header Row */}
               <div />
               {DAYS_OF_WEEK.map((day) => {
@@ -225,6 +223,7 @@ export function Block6Grid() {
                 const holiday = iso ? holidayMap[iso] : undefined;
                 const isAuto = holiday?.source === 'auto';
                 const isManualHoliday = holiday?.source === 'manual';
+                const isWeekendManualHoliday = isWeekend && isManualHoliday;
                 const handleContextMenu = (e: React.MouseEvent) => {
                   if (!date) return;
                   e.preventDefault();
@@ -247,9 +246,8 @@ export function Block6Grid() {
                       text-xs font-bold uppercase tracking-wider rounded-lg
                       transition-colors
                       ${isAuto ? 'bg-red-50 text-red-600 cursor-not-allowed' : ''}
-                      ${isManualHoliday ? 'bg-red-100 text-red-700 cursor-pointer' : ''}
-                      ${!holiday && isWeekend ? `text-slate-400 ${LAYOUT.weekendBg}` : ''}
-                      ${!holiday && !isWeekend ? `text-slate-500 ${LAYOUT.weekdayHeaderBg}` : ''}
+                      ${isManualHoliday ? `${isWeekendManualHoliday ? 'bg-slate-100 text-slate-500' : 'bg-red-100 text-red-700'} cursor-pointer` : ''}
+                      ${!holiday ? `${isWeekend ? 'text-slate-400' : 'text-slate-500'} ${LAYOUT.weekdayHeaderBg}` : ''}
                     `}
                   >
                     <span>{DAY_LABELS[day]}</span>
@@ -292,18 +290,19 @@ export function Block6Grid() {
                       const block = getBlock(day, blockNumber);
                       if (!block) return <div key={`${day}-${blockNumber}`} />;
 
-                      const isWeekend = day === 'sat' || day === 'sun';
                       const date = dateByDay[day];
                       const iso = date ? toIsoDate(date) : '';
-                      const isHolidayCol = !!(iso && holidayMap[iso]);
+                      const holiday = iso ? holidayMap[iso] : undefined;
+                      const isWeekend = day === 'sat' || day === 'sun';
+                      const isWeekendManualHoliday = isWeekend && holiday?.source === 'manual';
+                      const isHolidayCol = !!holiday;
 
                       return (
                         <div
                           key={`${day}-${blockNumber}`}
                           className={`
                             rounded-lg
-                            ${isWeekend && !isHolidayCol ? LAYOUT.weekendBg : ''}
-                            ${isHolidayCol ? 'ring-1 ring-red-200 bg-red-50/30' : ''}
+                            ${isWeekendManualHoliday ? 'bg-slate-100/80' : isHolidayCol ? 'ring-1 ring-red-200 bg-red-50/30' : ''}
                           `}
                         >
                           <BlockCard
