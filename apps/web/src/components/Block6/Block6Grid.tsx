@@ -212,12 +212,10 @@ export function Block6Grid() {
         </div>
 
         {/* Main Grid */}
-        {/* inline-block min-w-full wrapper so the surface card spans the full grid width
-            (overflow-x-auto would otherwise clip the rounded background after Friday). */}
-        <div className="flex-1 overflow-x-auto">
-          <div className="inline-block min-w-full">
-            <div className={`${LAYOUT.surface} ${LAYOUT.surfacePadding} ${LAYOUT.gridMinWidth}`}>
-              <div className={`grid grid-cols-[56px_repeat(7,1fr)] ${LAYOUT.gridGap}`}>
+        <div className="flex-1 min-w-0 overflow-x-auto pb-3 overscroll-x-contain">
+          <div className="min-w-full pr-4">
+            <div className={`${LAYOUT.surface} ${LAYOUT.surfacePadding} ${LAYOUT.gridMinWidth} w-full`}>
+              <div className={`grid grid-cols-[56px_repeat(7,minmax(0,1fr))] ${LAYOUT.gridGap}`}>
               {/* Header Row */}
               <div />
               {DAYS_OF_WEEK.map((day) => {
