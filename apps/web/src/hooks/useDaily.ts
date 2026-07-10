@@ -26,12 +26,12 @@ interface DailyStore {
   toggleTodo: (todoId: string) => void;
   deleteTodo: (todoId: string) => void;
 
-  // Import from other plans
+  // Import from other plans (dedup by sourceType/sourceId/cellId, returns added count)
   importTodos: (
     items: Array<{ text: string; cellId?: string }>,
     sourceType: 'monthly' | 'block6' | 'mandalart',
     sourceId: string
-  ) => void;
+  ) => number;
 
   // Import daily habits with dedup
   importDailyHabits: (
@@ -278,11 +278,27 @@ export const useDailyStore = create<DailyStore>()(
         items: Array<{ text: string; cellId?: string }>,
         sourceType: 'monthly' | 'block6' | 'mandalart',
         sourceId: string
-      ) => {
+      ): number => {
         const currentId = get().currentDailyId;
-        if (!currentId) return;
+        if (!currentId) return 0;
 
-        const newTodos: DailyTodo[] = items.map((item) => ({
+        const plan = get().dailyPlans.find((p) => p.id === currentId);
+        if (!plan) return 0;
+
+        // Dedup: cellId 있는 항목은 같은 출처로 이미 들어온 것 제외
+        const newItems = items.filter((item) => {
+          if (!item.cellId) return true;
+          return !plan.todos.some(
+            (todo) =>
+              todo.sourceType === sourceType &&
+              todo.sourceId === sourceId &&
+              todo.sourceCellId === item.cellId
+          );
+        });
+
+        if (newItems.length === 0) return 0;
+
+        const newTodos: DailyTodo[] = newItems.map((item) => ({
           id: generateId(),
           text: sanitizeInput(item.text),
           completed: false,
@@ -305,6 +321,8 @@ export const useDailyStore = create<DailyStore>()(
 
           return { dailyPlans: newPlans };
         });
+
+        return newTodos.length;
       },
 
       updateMemo: (memo: string) => {

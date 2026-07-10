@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -19,9 +19,17 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useDailyStore } from '@/hooks/useDaily';
 import { useMandalartStore } from '@/hooks/useMandalart';
+import { useBlock6Store } from '@/hooks/useBlock6';
 import { extractDailyHabits } from '@/lib/mandalartIntegration';
+import { getWeekDates } from '@/lib/weekUtils';
+import { getBlocksByDay, DayOfWeek } from '@/types/block6';
 import { DailyTodo, DAY_LABELS } from '@/types/daily';
 import { RecurringTodosInline } from '../RecurringTodos';
+import { WeeklyImportModal } from './WeeklyImportModal';
+
+// JS Date.getDay() (0=일) → block6 DayOfWeek
+const JS_DAY_TO_DOW: DayOfWeek[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const IMPORT_COUNT_BADGE_CLASS = 'px-1.5 py-0.5 rounded-full text-white text-xs leading-none';
 
 // ---- Sortable Todo Item ----
 
@@ -145,7 +153,7 @@ function SortableTodoItem({
       {todo.sourceType && (
         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
           {todo.sourceType === 'monthly' ? '월간' :
-           todo.sourceType === 'block6' ? 'Block6' : '만다라트'}
+           todo.sourceType === 'block6' ? '주간' : '만다라트'}
         </span>
       )}
 
@@ -200,7 +208,7 @@ function CompletedTodoItem({
       {todo.sourceType && (
         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
           {todo.sourceType === 'monthly' ? '월간' :
-           todo.sourceType === 'block6' ? 'Block6' : '만다라트'}
+           todo.sourceType === 'block6' ? '주간' : '만다라트'}
         </span>
       )}
 
@@ -235,12 +243,15 @@ export function DailyGrid() {
   const reorderTodos = useDailyStore((state) => state.reorderTodos);
   const updateMemo = useDailyStore((state) => state.updateMemo);
   const importDailyHabits = useDailyStore((state) => state.importDailyHabits);
+  const importTodos = useDailyStore((state) => state.importTodos);
   const mandalarts = useMandalartStore((state) => state.mandalarts);
+  const block6Plans = useBlock6Store((state) => state.block6Plans);
 
   const [newTodoText, setNewTodoText] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const [weeklyModalOpen, setWeeklyModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -304,15 +315,11 @@ export function DailyGrid() {
   };
 
   // Extract all daily habits from all mandalarts
-  const allDailyHabits = useMemo(() => {
-    return mandalarts.flatMap((m) =>
-      extractDailyHabits(m).map((h) => ({ ...h, mandalartId: m.id }))
-    );
-  }, [mandalarts]);
+  const allDailyHabits = mandalarts.flatMap((m) =>
+    extractDailyHabits(m).map((h) => ({ ...h, mandalartId: m.id }))
+  );
 
-  const newHabitsCount = useMemo(() => {
-    if (!data) return 0;
-    return allDailyHabits.filter((habit) =>
+  const newHabitsCount = allDailyHabits.filter((habit) =>
       !data.todos.some(
         (todo) =>
           todo.sourceType === 'mandalart' &&
@@ -320,7 +327,52 @@ export function DailyGrid() {
           todo.sourceCellId === habit.cellId
       )
     ).length;
-  }, [allDailyHabits, data]);
+
+  // 이 날짜가 속한 주간(block6) 플랜과 해당 요일 블록의 투두 목록
+  const weeklyMatch = (() => {
+    const target = new Date(data.year, data.month - 1, data.day);
+    const targetKey = `${target.getFullYear()}-${target.getMonth()}-${target.getDate()}`;
+    const dow = JS_DAY_TO_DOW[target.getDay()];
+
+    const candidates = block6Plans
+      .filter((p) => p.category === 'weekly' && p.year && p.month && p.week)
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)); // 최신 우선
+
+    for (const plan of candidates) {
+      const inWeek = getWeekDates(plan.year!, plan.month!, plan.week!).some(
+        (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` === targetKey
+      );
+      if (!inWeek) continue;
+
+      const items = getBlocksByDay(plan.blocks, dow).flatMap((block) =>
+        block.todos.map((t) => ({ cellId: t.id, text: t.text, blockKeyword: block.keyword }))
+      );
+      if (items.length > 0) return { planId: plan.id, items };
+    }
+    return null;
+  })();
+
+  // 각 항목이 이미 이 일간 플랜에 들어와 있는지 표시
+  const weeklyItems = weeklyMatch
+    ? weeklyMatch.items.map((it) => ({
+      ...it,
+      alreadyImported: data.todos.some(
+        (todo) =>
+          todo.sourceType === 'block6' &&
+          todo.sourceId === weeklyMatch.planId &&
+          todo.sourceCellId === it.cellId
+      ),
+    }))
+    : [];
+
+  const newWeeklyCount = weeklyItems.filter((it) => !it.alreadyImported).length;
+
+  const handleImportWeekly = (picked: Array<{ text: string; cellId: string }>) => {
+    if (!weeklyMatch) return;
+    const imported = importTodos(picked, 'block6', weeklyMatch.planId);
+    setImportFeedback(imported > 0 ? `${imported}개 블럭 항목 추가됨` : '이미 모두 추가되어 있습니다');
+    setTimeout(() => setImportFeedback(null), 2000);
+  };
 
   const handleImportHabits = () => {
     if (allDailyHabits.length === 0) return;
@@ -434,8 +486,29 @@ export function DailyGrid() {
                 </svg>
                 습관 불러오기
                 {newHabitsCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] leading-none">
+                  <span className={`${IMPORT_COUNT_BADGE_CLASS} bg-indigo-500`}>
                     {newHabitsCount}
+                  </span>
+                )}
+              </button>
+            )}
+            {weeklyMatch && (
+              <button
+                onClick={() => setWeeklyModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                         bg-sky-50 text-sky-600 text-xs font-medium
+                         hover:bg-sky-100 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                주간 블럭 불러오기
+                {newWeeklyCount > 0 && (
+                  <span className={`${IMPORT_COUNT_BADGE_CLASS} bg-sky-500`}>
+                    {newWeeklyCount}
                   </span>
                 )}
               </button>
@@ -525,6 +598,14 @@ export function DailyGrid() {
                    resize-none"
         />
       </div>
+
+      {weeklyModalOpen && (
+        <WeeklyImportModal
+          onClose={() => setWeeklyModalOpen(false)}
+          items={weeklyItems}
+          onImport={handleImportWeekly}
+        />
+      )}
     </div>
   );
 }
