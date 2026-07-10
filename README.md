@@ -16,12 +16,15 @@ A planner web application with various templates for goal setting and productivi
 
 ## Tech Stack
 
-- Next.js 14 (App Router)
+- Next.js 16 (App Router)
 - TypeScript
 - Tailwind CSS
 - Zustand (State Management)
+- Spring Boot/Kotlin API
 
 ## Getting Started
+
+### Web
 
 ```bash
 npm install
@@ -29,6 +32,19 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser.
+
+### API
+
+```bash
+npm run api:dev
+```
+
+The API server runs on [http://localhost:8080](http://localhost:8080).
+Health check:
+
+```bash
+curl http://localhost:8080/api/v1/health
+```
 
 ## License
 

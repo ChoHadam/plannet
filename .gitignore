@@ -29,6 +29,10 @@
 /build
 /apps/*/build
 
+# gradle
+/.gradle
+/apps/*/.gradle
+
 # misc
 .DS_Store
 *.pem
