@@ -74,7 +74,7 @@ function GuideStep1() {
         목표 달성 도구입니다.
       </p>
       <p className="text-xs text-slate-500 mt-4 bg-slate-100 rounded-lg py-2 px-3 inline-block">
-        예시: "역량향상" → 전문성, 외국어, 건강 등 8가지 세부 목표
+        예시: &quot;역량향상&quot; → 전문성, 외국어, 건강 등 8가지 세부 목표
       </p>
     </div>
   );
@@ -155,23 +155,13 @@ function ExampleGrid() {
       if (cellIdx === 4) {
         return { text: EXAMPLE_DATA.centerGoal, isCenter: true };
       }
-      // Find which subGoal goes in this cell
-      for (const [subIdx, gIdx] of Object.entries(SUB_GOAL_TO_GRID)) {
-        // Convert grid position to cell position in center grid
-        const cellPosition = parseInt(Object.keys(SUB_GOAL_TO_GRID).find(
-          k => SUB_GOAL_TO_GRID[parseInt(k)] === parseInt(subIdx)
-        ) || '-1');
-        if (ACTION_TO_CELL[parseInt(subIdx)] === cellIdx || SUB_GOAL_TO_GRID[parseInt(subIdx)] === cellIdx) {
-          // Map subGoal index to cell index
-          const subGoalIdx = Object.entries(SUB_GOAL_TO_GRID).find(([, g]) => g === cellIdx)?.[0];
-          if (subGoalIdx !== undefined) {
-            return {
-              text: EXAMPLE_DATA.subGoals[parseInt(subGoalIdx)],
-              isSubGoal: true,
-              isHighlighted: EXAMPLE_DATA.subGoals[parseInt(subGoalIdx)] === EXAMPLE_DATA.expandedGoal
-            };
-          }
-        }
+      const subGoalIdx = Object.entries(SUB_GOAL_TO_GRID).find(([, gridPosition]) => gridPosition === cellIdx)?.[0];
+      if (subGoalIdx !== undefined) {
+        return {
+          text: EXAMPLE_DATA.subGoals[parseInt(subGoalIdx)],
+          isSubGoal: true,
+          isHighlighted: EXAMPLE_DATA.subGoals[parseInt(subGoalIdx)] === EXAMPLE_DATA.expandedGoal,
+        };
       }
       return null;
     }

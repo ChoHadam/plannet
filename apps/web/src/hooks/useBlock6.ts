@@ -8,7 +8,6 @@ import {
   Block6Data,
   BlockData,
   BlockNumber,
-  DayOfWeek,
   DAYS_OF_WEEK,
   TodoItem,
   TodoColor,
@@ -609,7 +608,7 @@ export const useBlock6Store = create<Block6Store>()(
           const plan = state.block6Plans[planIndex];
           let todo: TodoItem | undefined;
           let newBacklog = [...plan.backlog];
-          let newBlocks = [...plan.blocks];
+          const newBlocks = [...plan.blocks];
 
           // Remove from source
           if (sourceType === 'backlog') {

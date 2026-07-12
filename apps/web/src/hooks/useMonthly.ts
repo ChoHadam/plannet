@@ -7,7 +7,6 @@ import { PlanCategory } from '@/types/mandalart';
 import {
   MonthlyData,
   MonthlyGoal,
-  WeeklyFocus,
   createInitialWeeklyFocus,
 } from '@/types/monthly';
 import { generateId, sanitizeInput } from '@/lib/sanitize';

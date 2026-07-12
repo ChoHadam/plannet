@@ -21,7 +21,6 @@ interface SubGridProps {
 }
 
 export function SubGrid({
-  gridId,
   cells,
   color,
   cellColors,

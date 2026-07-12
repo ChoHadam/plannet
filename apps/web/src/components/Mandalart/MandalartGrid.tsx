@@ -7,7 +7,7 @@ import { ColorPicker } from '../ColorPicker';
 import { EmojiPickerWrapper } from '../EmojiPicker';
 import { MandalartGridMobile } from './MandalartGridMobile';
 import { useMandalartStore } from '@/hooks/useMandalart';
-import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP, CellSchedule } from '@/types/mandalart';
+import { GridPosition, GRID_POSITIONS, OUTER_TO_CENTER_MAP, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
 
 export function MandalartGrid() {
   const data = useMandalartStore((state) => {

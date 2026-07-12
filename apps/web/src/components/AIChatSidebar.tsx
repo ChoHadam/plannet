@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { GridPosition, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
 
@@ -50,10 +50,10 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
   const updateCell = useMandalartStore((state) => state.updateCell);
 
   // 셀 값 조회 헬퍼
-  const getCellValue = (gridId: GridPosition, cellIndex: number): string => {
+  const getCellValue = useCallback((gridId: GridPosition, cellIndex: number): string => {
     const grid = data?.grids.find((g) => g.id === gridId);
     return grid?.cells[cellIndex]?.value?.trim() || '';
-  };
+  }, [data]);
 
   // 빈 하위목표 슬롯 찾기
   const findEmptySubGoalSlot = (): number | null => {
@@ -84,14 +84,7 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
     setIsEnded(false);
   }, [currentId]);
 
-  // 사이드바 열릴 때 첫 메시지 가져오기
-  useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      initChat();
-    }
-  }, [isOpen, currentId]);
-
-  const initChat = () => {
+  const initChat = useCallback(() => {
     // 현재 그리드 상태 확인
     const coreGoal = getCellValue('center', 4);
     const emptySlotCount = [0, 1, 2, 3, 5, 6, 7, 8].filter(
@@ -112,7 +105,14 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
     }
 
     setMessages([{ role: 'assistant', content: startMessage }]);
-  };
+  }, [getCellValue]);
+
+  // 사이드바 열릴 때 첫 메시지 가져오기
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      initChat();
+    }
+  }, [isOpen, currentId, messages.length, initChat]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading || isEnded) return;

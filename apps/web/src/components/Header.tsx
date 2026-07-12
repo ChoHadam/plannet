@@ -26,9 +26,9 @@ interface ActivePlanInfo {
 
 function useActivePlan(): ActivePlanInfo | null {
   // Call all hooks unconditionally (React hooks rules)
-  const plans: Record<TemplateType, BasePlanData | null> = {} as any;
-  const updateTitles: Record<TemplateType, (t: string) => void> = {} as any;
-  const updateDates: Record<TemplateType, (y?: number, m?: number, w?: number, d?: number) => void> = {} as any;
+  const plans: Partial<Record<TemplateType, BasePlanData | null>> = {};
+  const updateTitles: Partial<Record<TemplateType, (t: string) => void>> = {};
+  const updateDates: Partial<Record<TemplateType, (y?: number, m?: number, w?: number, d?: number) => void>> = {};
 
   for (const t of TEMPLATE_TYPES) {
     const entry = templateRegistry[t];
@@ -39,7 +39,9 @@ function useActivePlan(): ActivePlanInfo | null {
 
   for (const t of TEMPLATE_TYPES) {
     const plan = plans[t];
-    if (plan) {
+    const updateTitle = updateTitles[t];
+    const updatePlanDate = updateDates[t];
+    if (plan && updateTitle && updatePlanDate) {
       return {
         template: t,
         title: plan.title,
@@ -48,8 +50,8 @@ function useActivePlan(): ActivePlanInfo | null {
         month: plan.month,
         week: plan.week,
         day: plan.day,
-        updateTitle: updateTitles[t],
-        updatePlanDate: updateDates[t],
+        updateTitle,
+        updatePlanDate,
       };
     }
   }

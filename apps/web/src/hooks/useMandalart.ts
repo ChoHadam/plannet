@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { useEffect, useState } from 'react';
 import {
   MandalartData,
@@ -11,6 +11,7 @@ import {
   CENTER_TO_OUTER_MAP,
   OUTER_TO_CENTER_MAP,
   PlanCategory,
+  CellData,
   CellSchedule,
   RepeatCycle,
 } from '@/types/mandalart';
@@ -583,7 +584,7 @@ export const useMandalartStore = create<MandalartStore>()(
             grids: m.grids.map(g => ({
               ...g,
               cells: g.cells.map(cell => {
-                const { isDaily, ...rest } = cell as any;
+                const { isDaily, ...rest } = cell as CellData & { isDaily?: boolean };
                 if (isDaily) {
                   return { ...rest, schedule: { repeat: 'daily' as RepeatCycle } };
                 }

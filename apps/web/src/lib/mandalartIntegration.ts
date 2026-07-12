@@ -1,4 +1,4 @@
-import { MandalartData, CENTER_TO_OUTER_MAP, GridPosition, CellSchedule } from '@/types/mandalart';
+import { MandalartData, CENTER_TO_OUTER_MAP, CellSchedule } from '@/types/mandalart';
 
 export interface ActionPlanItem {
   id: string;          // 고유 ID (선택 추적용)
@@ -37,7 +37,7 @@ export function extractGroupedActionPlans(
       // 외곽 그리드의 실천 계획 추출
       const actionPlans: ActionPlanItem[] = outerGrid
         ? actionPositions
-            .map((actionPos, idx) => {
+            .map((actionPos) => {
               const text = outerGrid.cells[actionPos]?.value || '';
               return {
                 id: `${outerGridId}-${actionPos}`,

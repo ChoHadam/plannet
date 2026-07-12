@@ -1,7 +1,10 @@
 'use client';
 
 import { ComponentType } from 'react';
-import { TemplateType, PlanCategory } from '@/types/mandalart';
+import { MandalartData, TemplateType, PlanCategory } from '@/types/mandalart';
+import { Block6Data } from '@/types/block6';
+import { MonthlyData } from '@/types/monthly';
+import { DailyData } from '@/types/daily';
 import { generateId } from '@/lib/sanitize';
 import { useMandalartStore, useHydration } from '@/hooks/useMandalart';
 import { useBlock6Store, useBlock6Hydration } from '@/hooks/useBlock6';
@@ -85,7 +88,7 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     deletePlan: (id) => useMandalartStore.getState().deleteMandalart(id),
     addPlanAndSelect: (plan) => {
       const state = useMandalartStore.getState();
-      useMandalartStore.setState({ mandalarts: [plan as any, ...state.mandalarts], currentId: plan.id });
+      useMandalartStore.setState({ mandalarts: [plan as MandalartData, ...state.mandalarts], currentId: plan.id });
     },
     create: (category) => useMandalartStore.getState().createMandalart(category),
     applyTitleAndDate: (title, date) => {
@@ -122,7 +125,7 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     deletePlan: (id) => useBlock6Store.getState().deleteBlock6Plan(id),
     addPlanAndSelect: (plan) => {
       const state = useBlock6Store.getState();
-      useBlock6Store.setState({ block6Plans: [plan as any, ...state.block6Plans], currentBlock6Id: plan.id });
+      useBlock6Store.setState({ block6Plans: [plan as Block6Data, ...state.block6Plans], currentBlock6Id: plan.id });
     },
     create: (category) => useBlock6Store.getState().createBlock6Plan(category),
     applyTitleAndDate: (title, date) => {
@@ -159,7 +162,7 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     deletePlan: (id) => useMonthlyStore.getState().deleteMonthlyPlan(id),
     addPlanAndSelect: (plan) => {
       const state = useMonthlyStore.getState();
-      useMonthlyStore.setState({ monthlyPlans: [plan as any, ...state.monthlyPlans], currentMonthlyId: plan.id });
+      useMonthlyStore.setState({ monthlyPlans: [plan as MonthlyData, ...state.monthlyPlans], currentMonthlyId: plan.id });
     },
     create: (category, date) => useMonthlyStore.getState().createMonthlyPlan(category, date.year, date.month),
     applyTitleAndDate: (title) => useMonthlyStore.getState().updateTitle(title),
@@ -192,7 +195,7 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
     deletePlan: (id) => useDailyStore.getState().deleteDailyPlan(id),
     addPlanAndSelect: (plan) => {
       const state = useDailyStore.getState();
-      useDailyStore.setState({ dailyPlans: [plan as any, ...state.dailyPlans], currentDailyId: plan.id });
+      useDailyStore.setState({ dailyPlans: [plan as DailyData, ...state.dailyPlans], currentDailyId: plan.id });
     },
     create: (category, date) => useDailyStore.getState().createDailyPlan(category, date.year, date.month, date.day),
     applyTitleAndDate: (title) => useDailyStore.getState().updateTitle(title),

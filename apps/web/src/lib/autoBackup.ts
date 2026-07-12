@@ -193,18 +193,6 @@ export async function loadBackup(filename: string): Promise<SnapshotData | null>
  * 백업 데이터를 localStorage에 적용. 적용 후 페이지 리로드.
  * persist key 형식: { state: <data>, version: <n> }
  */
-/** 백업 데이터에서 plan/todo 개수 합산 (빈 백업 판별용) */
-function totalItems(snap: SnapshotData): number {
-  return (
-    ((snap.mandalart as { mandalarts?: unknown[] })?.mandalarts?.length ?? 0) +
-    ((snap.block6 as { block6Plans?: unknown[] })?.block6Plans?.length ?? 0) +
-    ((snap.monthly as { monthlyPlans?: unknown[] })?.monthlyPlans?.length ?? 0) +
-    ((snap.daily as { dailyPlans?: unknown[] })?.dailyPlans?.length ?? 0) +
-    ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0) +
-    Object.keys(((snap.holidays as { manualHolidays?: Record<string, unknown> })?.manualHolidays) ?? {}).length
-  );
-}
-
 /** 현재 비어있는 스토어 식별 */
 function getEmptyStores() {
   return {
