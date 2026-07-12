@@ -23,6 +23,8 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
   const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
 
   const currentMonthly = monthlyPlans.find(p => p.id === currentMonthlyId);
+  const availableGoalSlots = Math.max(0, 5 - currentGoalsCount);
+  const reachedSelectionLimit = selectedPlans.size >= availableGoalSlots;
 
   // 이번 달 추천 항목 (모든 만다라트에서 현재 월 대상 셀 추출)
   const recommendedCells = useMemo<ScheduledCellItem[]>(() => {
@@ -55,11 +57,12 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
     }
   }, [isOpen, mandalarts, selectedMandalartId]);
 
-  const togglePlan = (planId: string, planText: string) => {
+  const togglePlan = (planId: string) => {
     const newSelected = new Set(selectedPlans);
     if (newSelected.has(planId)) {
       newSelected.delete(planId);
     } else {
+      if (newSelected.size >= availableGoalSlots) return;
       newSelected.add(planId);
     }
     setSelectedPlans(newSelected);
@@ -187,6 +190,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                   <div className="divide-y divide-blue-100">
                     {recommendedCells.map((cell) => {
                       const isSelected = selectedPlans.has(cell.cellId);
+                      const isDisabled = !isSelected && reachedSelectionLimit;
                       return (
                         <label
                           key={`rec-${cell.cellId}`}
@@ -195,7 +199,8 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => togglePlan(cell.cellId, cell.text)}
+                            disabled={isDisabled}
+                            onChange={() => togglePlan(cell.cellId)}
                             className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                           />
                           <div className="flex-1 min-w-0">
@@ -246,6 +251,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                     <div className="divide-y divide-slate-100">
                       {group.actionPlans.map((plan) => {
                         const isSelected = selectedPlans.has(plan.id);
+                        const isDisabled = !isSelected && reachedSelectionLimit;
                         return (
                           <label
                             key={plan.id}
@@ -254,7 +260,8 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => togglePlan(plan.id, plan.text)}
+                              disabled={isDisabled}
+                              onChange={() => togglePlan(plan.id)}
                               className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                             />
                             <span className="text-sm text-slate-600 flex-1">
@@ -275,7 +282,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
         <div className="p-4 border-t border-slate-100">
           {selectedPlans.size > 0 && (
             <div className="mb-3 text-xs text-blue-500">
-              {selectedPlans.size}개 선택됨
+              {selectedPlans.size}개 선택됨 / 최대 {availableGoalSlots}개
             </div>
           )}
 
@@ -288,7 +295,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
             </button>
             <button
               onClick={handleImport}
-              disabled={selectedPlans.size === 0}
+              disabled={selectedPlans.size === 0 || availableGoalSlots === 0}
               className="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {selectedPlans.size}개 불러오기
