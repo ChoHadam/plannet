@@ -10,6 +10,8 @@
     "build": "npm run web:build",
     "start": "npm run web:start",
     "lint": "npm run web:lint",
+    "check": "npm run web:lint && npm run api:test",
+    "build:all": "npm run web:build && npm run api:build",
     "test:e2e": "npm run web:test:e2e",
     "api:dev": "./gradlew :apps:api:bootRun",
     "api:build": "./gradlew :apps:api:build",

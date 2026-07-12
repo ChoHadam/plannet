@@ -28,10 +28,12 @@ A planner web application with various templates for goal setting and productivi
 
 ```bash
 npm install
+cp apps/web/.env.example apps/web/.env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser.
+The AI chat route requires `OPENGATEWAY_API_KEY` and `OPENGATEWAY_BASE_URL` in `apps/web/.env.local`.
 
 ### API
 
@@ -44,6 +46,13 @@ Health check:
 
 ```bash
 curl http://localhost:8080/api/v1/health
+```
+
+### Checks
+
+```bash
+npm run check
+npm run build:all
 ```
 
 ## License
