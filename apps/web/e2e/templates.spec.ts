@@ -4,6 +4,13 @@ import { test, expect, Page } from '@playwright/test';
 // 카테고리 순서: 연간(0), 월간(1), 주간(2), 일간(3)
 
 test.describe('템플릿 공통 플로우', () => {
+  test.beforeEach(async ({ page }) => {
+    // 템플릿 테스트 데이터가 실제 로컬 백업 목록에 섞이지 않도록 자동 백업 비활성화
+    await page.addInitScript(() => {
+      localStorage.setItem('plannet-auto-backup-enabled', 'false');
+    });
+  });
+
   const templates = [
     { name: '만다라트', placeholder: '나의 만다라트', categoryIndex: 0 },   // 연간
     { name: 'Block 6', placeholder: '나의 Block 6', categoryIndex: 2 },     // 주간

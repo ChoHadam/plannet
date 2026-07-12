@@ -10,6 +10,7 @@ import { useHolidayStore } from '@/hooks/useHolidays';
 
 const DEBOUNCE_MS = 2000; // 변경 후 2초 idle 시 백업
 const MIN_INTERVAL_MS = 30_000; // 직전 백업 후 30초 미만이면 스킵 (스팸 방지)
+const AUTO_BACKUP_ENABLED_KEY = 'plannet-auto-backup-enabled';
 
 interface SnapshotData {
   mandalart: unknown;
@@ -36,7 +37,35 @@ function buildSnapshot(): SnapshotData {
 let lastBackupAt = 0;
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** 현재 브라우저에서 자동 백업을 사용할지 여부 (기존 동작 유지를 위해 기본값 true) */
+export function getAutoBackupEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+
+  try {
+    return localStorage.getItem(AUTO_BACKUP_ENABLED_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+/** 현재 브라우저의 자동 백업 설정을 저장하고, 비활성화 시 예약된 백업을 취소 */
+export function setAutoBackupEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(AUTO_BACKUP_ENABLED_KEY, String(enabled));
+  } catch {
+    // localStorage를 사용할 수 없는 환경에서는 기존 자동 백업 동작 유지
+    return;
+  }
+
+  if (!enabled && pendingTimer) {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+  }
+}
+
 async function performBackup() {
+  if (!getAutoBackupEnabled()) return;
+
   // 모든 스토어 데이터를 plain object로 직렬화 (함수 제외)
   const snap = buildSnapshot();
   const serializable = {
@@ -89,6 +118,11 @@ async function performBackup() {
 
 function scheduleBackup() {
   if (pendingTimer) clearTimeout(pendingTimer);
+  if (!getAutoBackupEnabled()) {
+    pendingTimer = null;
+    return;
+  }
+
   pendingTimer = setTimeout(() => {
     pendingTimer = null;
     if (Date.now() - lastBackupAt < MIN_INTERVAL_MS) {
