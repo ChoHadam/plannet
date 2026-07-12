@@ -1,11 +1,6 @@
 import OpenAI from 'openai';
 import { NextRequest, NextResponse } from 'next/server';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENGATEWAY_API_KEY || '',
-  baseURL: process.env.OPENGATEWAY_BASE_URL || 'http://localhost:8080/v1',
-});
-
 // OpenAI Function Calling 정의
 const tools: OpenAI.ChatCompletionTool[] = [
   {
@@ -175,12 +170,20 @@ export async function POST(req: NextRequest) {
       gridState?: GridState;
     };
 
-    if (!process.env.OPENGATEWAY_API_KEY) {
+    const apiKey = process.env.OPENGATEWAY_API_KEY;
+    const baseURL = process.env.OPENGATEWAY_BASE_URL;
+
+    if (!apiKey || !baseURL) {
       return NextResponse.json(
-        { error: 'API key not configured' },
+        { error: 'OpenGateway configuration is missing' },
         { status: 500 }
       );
     }
+
+    const openai = new OpenAI({
+      apiKey,
+      baseURL,
+    });
 
     // 첫 대화인 경우 시작 메시지 반환
     if (!messages || messages.length === 0) {
@@ -261,7 +264,7 @@ export async function POST(req: NextRequest) {
     let input: FunctionArgs;
     try {
       input = JSON.parse(toolCall.function.arguments);
-    } catch (parseError) {
+    } catch {
       console.error('[AI Error] Failed to parse function arguments:', toolCall.function.arguments);
       return NextResponse.json({
         message: '응답을 처리하는 중 문제가 발생했어요. 다시 말씀해주세요.',

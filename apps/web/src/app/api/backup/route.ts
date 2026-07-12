@@ -5,6 +5,15 @@ import path from 'path';
 const BACKUP_DIR = path.join(process.cwd(), '.local-backup');
 const MAX_BACKUPS = 20;
 
+function getBackupPath(filename: string): string | null {
+  if (!/^snapshot-[A-Za-z0-9_.-]+\.json$/.test(filename)) return null;
+  if (path.basename(filename) !== filename) return null;
+
+  const backupRoot = path.resolve(BACKUP_DIR);
+  const resolved = path.resolve(backupRoot, filename);
+  return resolved.startsWith(`${backupRoot}${path.sep}`) ? resolved : null;
+}
+
 async function ensureDir() {
   await fs.mkdir(BACKUP_DIR, { recursive: true });
 }
@@ -58,10 +67,10 @@ export async function GET(request: NextRequest) {
 
     if (filename) {
       // 특정 파일 내용 반환
-      if (!filename.startsWith('snapshot-') || !filename.endsWith('.json')) {
+      const filepath = getBackupPath(filename);
+      if (!filepath) {
         return NextResponse.json({ ok: false, error: 'invalid filename' }, { status: 400 });
       }
-      const filepath = path.join(BACKUP_DIR, filename);
       const content = await fs.readFile(filepath, 'utf-8');
       return NextResponse.json({ ok: true, data: JSON.parse(content) });
     }
