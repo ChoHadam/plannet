@@ -37,23 +37,23 @@ function buildSnapshot(): SnapshotData {
 let lastBackupAt = 0;
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 현재 브라우저에서 자동 백업을 사용할지 여부 (기존 동작 유지를 위해 기본값 true) */
-export function getAutoBackupEnabled(): boolean {
-  if (typeof window === 'undefined') return true;
+/** 현재 브라우저에서 자동 백업과 자동 복원을 사용할지 여부 (새 브라우저 기본값 false) */
+export function getBackupAutomationEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
 
   try {
-    return localStorage.getItem(AUTO_BACKUP_ENABLED_KEY) !== 'false';
+    return localStorage.getItem(AUTO_BACKUP_ENABLED_KEY) === 'true';
   } catch {
-    return true;
+    return false;
   }
 }
 
-/** 현재 브라우저의 자동 백업 설정을 저장하고, 비활성화 시 예약된 백업을 취소 */
-export function setAutoBackupEnabled(enabled: boolean): void {
+/** 현재 브라우저의 백업 자동화 설정을 저장하고, 비활성화 시 예약된 백업을 취소 */
+export function setBackupAutomationEnabled(enabled: boolean): void {
   try {
     localStorage.setItem(AUTO_BACKUP_ENABLED_KEY, String(enabled));
   } catch {
-    // localStorage를 사용할 수 없는 환경에서는 기존 자동 백업 동작 유지
+    // localStorage를 사용할 수 없는 환경에서는 백업 자동화를 활성화하지 않음
     return;
   }
 
@@ -64,7 +64,7 @@ export function setAutoBackupEnabled(enabled: boolean): void {
 }
 
 async function performBackup() {
-  if (!getAutoBackupEnabled()) return;
+  if (!getBackupAutomationEnabled()) return;
 
   // 모든 스토어 데이터를 plain object로 직렬화 (함수 제외)
   const snap = buildSnapshot();
@@ -118,7 +118,7 @@ async function performBackup() {
 
 function scheduleBackup() {
   if (pendingTimer) clearTimeout(pendingTimer);
-  if (!getAutoBackupEnabled()) {
+  if (!getBackupAutomationEnabled()) {
     pendingTimer = null;
     return;
   }
@@ -265,6 +265,7 @@ export function useAutoRestore(allHydrated: boolean) {
   useEffect(() => {
     if (!allHydrated) return;
     if (typeof window === 'undefined') return;
+    if (!getBackupAutomationEnabled()) return;
 
     const empty = getEmptyStores();
     const anyEmpty = Object.values(empty).some(Boolean);

@@ -3,6 +3,33 @@ import { test, expect, Page } from '@playwright/test';
 // 각 테스트는 격리된 브라우저 컨텍스트 (빈 localStorage)에서 실행
 // 카테고리 순서: 연간(0), 월간(1), 주간(2), 일간(3)
 
+test('새 브라우저에서는 자동 백업과 자동 복원이 비활성화된다', async ({ page }) => {
+  let backupGetCount = 0;
+  let backupPostCount = 0;
+
+  await page.route('**/api/backup**', async (route) => {
+    if (route.request().method() === 'POST') {
+      backupPostCount += 1;
+      await route.fulfill({ json: { ok: true, filename: 'test-snapshot.json' } });
+      return;
+    }
+
+    backupGetCount += 1;
+    await route.fulfill({ json: { ok: true, backups: [] } });
+  });
+
+  await page.goto('/');
+  await createPlan(page, '투두리스트', 3);
+  await page.waitForTimeout(2500);
+
+  expect(backupPostCount).toBe(0);
+  expect(backupGetCount).toBe(0);
+
+  await page.locator('button[title="백업 복원"]').click();
+  await expect(page.getByRole('switch', { name: '이 브라우저에서 자동 백업·복원' })).not.toBeChecked();
+  expect(backupGetCount).toBe(1);
+});
+
 test.describe('템플릿 공통 플로우', () => {
   test.beforeEach(async ({ page }) => {
     // 템플릿 테스트 데이터가 실제 로컬 백업 목록에 섞이지 않도록 자동 백업 비활성화
