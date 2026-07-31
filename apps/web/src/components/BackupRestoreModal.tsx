@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import {
   applyBackup,
   BackupItem,
-  getBackupAutomationEnabled,
+  getAutoBackupEnabled,
   listBackups,
   loadBackup,
-  setBackupAutomationEnabled,
+  setAutoBackupEnabled,
 } from '@/lib/autoBackup';
 
 interface BackupRestoreModalProps {
@@ -73,7 +73,7 @@ export function BackupRestoreModal({ isOpen, onClose }: BackupRestoreModalProps)
         <div className="p-4 border-b border-slate-100">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="text-sm font-medium text-slate-700">이 브라우저에서 자동 백업·복원</div>
+              <div className="text-sm font-medium text-slate-700">이 브라우저에서 자동 백업</div>
               <div className="mt-1 text-xs text-slate-500">
                 새 브라우저에서는 기본으로 꺼져 있습니다. 꺼도 목록 조회와 수동 복원은 사용할 수 있습니다.
               </div>
@@ -81,14 +81,14 @@ export function BackupRestoreModal({ isOpen, onClose }: BackupRestoreModalProps)
             <input
               type="checkbox"
               role="switch"
-              aria-label="이 브라우저에서 자동 백업·복원"
-              defaultChecked={getBackupAutomationEnabled()}
-              onChange={(event) => setBackupAutomationEnabled(event.currentTarget.checked)}
+              aria-label="이 브라우저에서 자동 백업"
+              defaultChecked={getAutoBackupEnabled()}
+              onChange={(event) => setAutoBackupEnabled(event.currentTarget.checked)}
               className="relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-5 before:w-5 before:rounded-full before:bg-white before:shadow-sm before:transition-transform checked:bg-blue-500 checked:before:translate-x-5"
             />
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            켜면 데이터 변경 후 백업하고, 비어 있는 데이터는 최신 백업에서 자동 복원합니다. 백업은 최근 20개를 보관합니다.
+            켜면 데이터 변경 후 자동으로 백업합니다. 복원은 아래 목록에서 원하는 시점을 직접 선택하며, 백업은 최근 20개를 보관합니다.
           </p>
         </div>
 
@@ -142,7 +142,7 @@ export function BackupRestoreModal({ isOpen, onClose }: BackupRestoreModalProps)
               <span className="font-medium text-slate-700">{formatTimestamp(confirmTarget.createdAt)}</span> 시점으로 되돌립니다.
             </p>
             <p className="text-sm text-slate-500 mb-6">
-              현재 데이터는 덮어쓰여집니다. 자동 백업·복원이 켜져 있으면 이후 변경 사항부터 다시 백업됩니다.
+              현재 데이터는 덮어쓰여집니다. 자동 백업이 켜져 있으면 이후 변경 사항부터 다시 백업됩니다.
             </p>
             <div className="flex gap-3">
               <button

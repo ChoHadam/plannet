@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useBlock6Store } from '@/hooks/useBlock6';
 import { useMonthlyStore } from '@/hooks/useMonthly';
@@ -37,8 +37,8 @@ function buildSnapshot(): SnapshotData {
 let lastBackupAt = 0;
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 현재 브라우저에서 자동 백업과 자동 복원을 사용할지 여부 (새 브라우저 기본값 false) */
-export function getBackupAutomationEnabled(): boolean {
+/** 현재 브라우저에서 자동 백업을 사용할지 여부 (새 브라우저 기본값 false) */
+export function getAutoBackupEnabled(): boolean {
   if (typeof window === 'undefined') return false;
 
   try {
@@ -48,12 +48,12 @@ export function getBackupAutomationEnabled(): boolean {
   }
 }
 
-/** 현재 브라우저의 백업 자동화 설정을 저장하고, 비활성화 시 예약된 백업을 취소 */
-export function setBackupAutomationEnabled(enabled: boolean): void {
+/** 현재 브라우저의 자동 백업 설정을 저장하고, 비활성화 시 예약된 백업을 취소 */
+export function setAutoBackupEnabled(enabled: boolean): void {
   try {
     localStorage.setItem(AUTO_BACKUP_ENABLED_KEY, String(enabled));
   } catch {
-    // localStorage를 사용할 수 없는 환경에서는 백업 자동화를 활성화하지 않음
+    // localStorage를 사용할 수 없는 환경에서는 자동 백업을 활성화하지 않음
     return;
   }
 
@@ -64,7 +64,7 @@ export function setBackupAutomationEnabled(enabled: boolean): void {
 }
 
 async function performBackup() {
-  if (!getBackupAutomationEnabled()) return;
+  if (!getAutoBackupEnabled()) return;
 
   // 모든 스토어 데이터를 plain object로 직렬화 (함수 제외)
   const snap = buildSnapshot();
@@ -118,7 +118,7 @@ async function performBackup() {
 
 function scheduleBackup() {
   if (pendingTimer) clearTimeout(pendingTimer);
-  if (!getBackupAutomationEnabled()) {
+  if (!getAutoBackupEnabled()) {
     pendingTimer = null;
     return;
   }
@@ -189,138 +189,24 @@ export async function loadBackup(filename: string): Promise<SnapshotData | null>
   }
 }
 
-/**
- * 백업 데이터를 localStorage에 적용. 적용 후 페이지 리로드.
- * persist key 형식: { state: <data>, version: <n> }
- */
-/** 현재 비어있는 스토어 식별 */
-function getEmptyStores() {
-  return {
-    mandalart: useMandalartStore.getState().mandalarts.length === 0,
-    block6: useBlock6Store.getState().block6Plans.length === 0,
-    monthly: useMonthlyStore.getState().monthlyPlans.length === 0,
-    daily: useDailyStore.getState().dailyPlans.length === 0,
-    recurring: useRecurringStore.getState().todos.length === 0,
-    holidays: Object.keys(useHolidayStore.getState().manualHolidays).length === 0,
-  };
-}
-
-/** 백업의 각 스토어가 데이터를 가지고 있는지 */
-function getBackupHasData(snap: SnapshotData) {
-  return {
-    mandalart: ((snap.mandalart as { mandalarts?: unknown[] })?.mandalarts?.length ?? 0) > 0,
-    block6: ((snap.block6 as { block6Plans?: unknown[] })?.block6Plans?.length ?? 0) > 0,
-    monthly: ((snap.monthly as { monthlyPlans?: unknown[] })?.monthlyPlans?.length ?? 0) > 0,
-    daily: ((snap.daily as { dailyPlans?: unknown[] })?.dailyPlans?.length ?? 0) > 0,
-    recurring: ((snap.recurring as { todos?: unknown[] })?.todos?.length ?? 0) > 0,
-    holidays: Object.keys(((snap.holidays as { manualHolidays?: Record<string, unknown> })?.manualHolidays) ?? {}).length > 0,
-  };
-}
-
-/** 비어있는 스토어만 골라 setState로 복원 (다른 스토어는 그대로 유지) */
-function restoreEmptyStores(snap: SnapshotData, targets: ReturnType<typeof getEmptyStores>): string[] {
-  const restored: string[] = [];
-  if (targets.mandalart) {
-    useMandalartStore.setState(snap.mandalart as Parameters<typeof useMandalartStore.setState>[0]);
-    restored.push('만다라트');
-  }
-  if (targets.block6) {
-    useBlock6Store.setState(snap.block6 as Parameters<typeof useBlock6Store.setState>[0]);
-    restored.push('Block6');
-  }
-  if (targets.monthly) {
-    useMonthlyStore.setState(snap.monthly as Parameters<typeof useMonthlyStore.setState>[0]);
-    restored.push('월간');
-  }
-  if (targets.daily) {
-    useDailyStore.setState(snap.daily as Parameters<typeof useDailyStore.setState>[0]);
-    restored.push('투두리스트');
-  }
-  if (targets.recurring) {
-    useRecurringStore.setState(snap.recurring as Parameters<typeof useRecurringStore.setState>[0]);
-    restored.push('고정 할일');
-  }
-  if (targets.holidays) {
-    useHolidayStore.setState(snap.holidays as Parameters<typeof useHolidayStore.setState>[0]);
-    restored.push('공휴일');
-  }
-  // 즉시 백업이 다시 생성되지 않도록 lastBackupAt 갱신
-  lastBackupAt = Date.now();
-  return restored;
-}
-
-export interface AutoRestoreResult {
-  createdAt: string;
-  restoredStores: string[];
-}
-
-/**
- * 페이지 로드 시 비어있는 스토어가 있는데 백업에 데이터가 있으면 자동 복원.
- * 부분 손실(예: 월간만 사라짐)도 감지하여 해당 스토어만 복원.
- * dev 모드 편의를 위해 매 새로고침마다 검사 (sessionStorage 플래그 사용 안 함).
- */
-export function useAutoRestore(allHydrated: boolean) {
-  const [result, setResult] = useState<AutoRestoreResult | null>(null);
-
-  useEffect(() => {
-    if (!allHydrated) return;
-    if (typeof window === 'undefined') return;
-    if (!getBackupAutomationEnabled()) return;
-
-    const empty = getEmptyStores();
-    const anyEmpty = Object.values(empty).some(Boolean);
-
-    if (!anyEmpty) return;
-
-    // 비어있는 스토어가 있음 → 해당 스토어에 데이터를 가진 가장 최근 백업 찾기
-    let cancelled = false;
-    (async () => {
-      const backups = await listBackups();
-      for (const b of backups) {
-        if (cancelled) return;
-        const snap = await loadBackup(b.filename);
-        if (!snap) continue;
-        const has = getBackupHasData(snap);
-        const targets = {
-          mandalart: empty.mandalart && has.mandalart,
-          block6: empty.block6 && has.block6,
-          monthly: empty.monthly && has.monthly,
-          daily: empty.daily && has.daily,
-          recurring: empty.recurring && has.recurring,
-          holidays: empty.holidays && has.holidays,
-        };
-        if (Object.values(targets).some(Boolean)) {
-          const restoredStores = restoreEmptyStores(snap, targets);
-          if (!cancelled) setResult({ createdAt: b.createdAt, restoredStores });
-          break;
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [allHydrated]);
-
-  return result;
+/** 스냅샷 전체를 각 Zustand store에 적용해 현재 persist 버전으로 저장 */
+function applySnapshotToStores(snap: SnapshotData) {
+  useMandalartStore.setState(snap.mandalart as Parameters<typeof useMandalartStore.setState>[0]);
+  useBlock6Store.setState(snap.block6 as Parameters<typeof useBlock6Store.setState>[0]);
+  useMonthlyStore.setState(snap.monthly as Parameters<typeof useMonthlyStore.setState>[0]);
+  useDailyStore.setState(snap.daily as Parameters<typeof useDailyStore.setState>[0]);
+  useRecurringStore.setState(snap.recurring as Parameters<typeof useRecurringStore.setState>[0]);
+  useHolidayStore.setState(snap.holidays as Parameters<typeof useHolidayStore.setState>[0]);
 }
 
 export function applyBackup(snap: SnapshotData) {
-  type State<T> = T & { version?: number };
-  const wrap = <T>(data: T, key: string) => {
-    const existing = localStorage.getItem(key);
-    let version = 0;
-    try {
-      version = existing ? (JSON.parse(existing).version ?? 0) : 0;
-    } catch {
-      version = 0;
-    }
-    return JSON.stringify({ state: data, version });
-  };
+  applySnapshotToStores(snap);
+  lastBackupAt = Date.now();
 
-  localStorage.setItem('plannet-mandalart', wrap(snap.mandalart as State<unknown>, 'plannet-mandalart'));
-  localStorage.setItem('plannet-block6', wrap(snap.block6 as State<unknown>, 'plannet-block6'));
-  localStorage.setItem('plannet-monthly', wrap(snap.monthly as State<unknown>, 'plannet-monthly'));
-  localStorage.setItem('plannet-daily', wrap(snap.daily as State<unknown>, 'plannet-daily'));
-  localStorage.setItem('plannet-recurring', wrap(snap.recurring as State<unknown>, 'plannet-recurring'));
-  localStorage.setItem('plannet-holidays', wrap(snap.holidays as State<unknown>, 'plannet-holidays'));
+  if (pendingTimer) {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+  }
 
   window.location.reload();
 }

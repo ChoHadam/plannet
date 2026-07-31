@@ -6,15 +6,13 @@ import { Header } from '@/components/Header';
 import { AIChatSidebar } from '@/components/AIChatSidebar';
 import { templateRegistry } from '@/lib/templateRegistry';
 import { useAllPlansReactive, useAllHydrated } from '@/hooks/useAllPlans';
-import { useAutoBackup, useAutoRestore } from '@/lib/autoBackup';
-import { AutoRestoreToast } from '@/components/AutoRestoreToast';
+import { useAutoBackup } from '@/lib/autoBackup';
 import { AuthStatus } from '@/components/AuthStatus';
 
 export default function Home() {
   const allHydrated = useAllHydrated();
   const { currentTemplate } = useAllPlansReactive();
   useAutoBackup();
-  const restoreResult = useAutoRestore(allHydrated);
   const [showAIChat, setShowAIChat] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -66,8 +64,6 @@ export default function Home() {
         isOpen={showAIChat}
         onClose={() => setShowAIChat(false)}
       />
-
-      <AutoRestoreToast result={restoreResult} />
     </div>
   );
 }

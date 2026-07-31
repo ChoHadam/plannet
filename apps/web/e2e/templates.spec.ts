@@ -3,7 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 // 각 테스트는 격리된 브라우저 컨텍스트 (빈 localStorage)에서 실행
 // 카테고리 순서: 연간(0), 월간(1), 주간(2), 일간(3)
 
-test('새 브라우저에서는 자동 백업과 자동 복원이 비활성화된다', async ({ page }) => {
+test('새 브라우저에서는 자동 백업이 비활성화된다', async ({ page }) => {
   let backupGetCount = 0;
   let backupPostCount = 0;
 
@@ -26,8 +26,64 @@ test('새 브라우저에서는 자동 백업과 자동 복원이 비활성화�
   expect(backupGetCount).toBe(0);
 
   await page.locator('button[title="백업 복원"]').click();
-  await expect(page.getByRole('switch', { name: '이 브라우저에서 자동 백업·복원' })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: '이 브라우저에서 자동 백업' })).not.toBeChecked();
   expect(backupGetCount).toBe(1);
+});
+
+test('자동 백업을 켜도 페이지 로드 시 백업을 자동 복원하지 않는다', async ({ page }) => {
+  let backupGetCount = 0;
+
+  await page.addInitScript(() => {
+    localStorage.setItem('plannet-auto-backup-enabled', 'true');
+  });
+  await page.route('**/api/backup**', async (route) => {
+    if (route.request().method() === 'GET') backupGetCount += 1;
+    await route.fulfill({ json: { ok: true, backups: [] } });
+  });
+
+  await page.goto('/');
+  await expect(page.locator('h1:has-text("Plannet")')).toBeVisible();
+  await page.waitForTimeout(500);
+
+  expect(backupGetCount).toBe(0);
+});
+
+test('수동 복원은 빈 브라우저에도 현재 store 버전으로 월간 플랜을 저장한다', async ({ page }) => {
+  const filename = 'snapshot-manual-restore.json';
+  const snapshot = createTestSnapshot({
+    monthly: {
+      monthlyPlans: [createTestMonthlyPlan('manual-monthly', '수동 복원 월간')],
+      currentMonthlyId: 'manual-monthly',
+    },
+  });
+
+  await page.route('**/api/backup**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has('file')) {
+      await route.fulfill({ json: { ok: true, data: snapshot } });
+      return;
+    }
+
+    await route.fulfill({
+      json: {
+        ok: true,
+        backups: [{ filename, createdAt: snapshot.timestamp, size: 1024 }],
+      },
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('button[title="백업 복원"]').click();
+  await page.getByRole('button', { name: /KB/ }).click();
+  const reloaded = page.waitForEvent('framenavigated');
+  await page.getByRole('button', { name: '복원', exact: true }).click();
+  await reloaded;
+  await page.waitForLoadState('domcontentloaded');
+
+  await expect(page.getByText('수동 복원 월간').first()).toBeVisible({ timeout: 5000 });
+  const persistedMonthly = await page.evaluate(() => JSON.parse(localStorage.getItem('plannet-monthly') ?? '{}'));
+  expect(persistedMonthly.version).toBe(1);
+  expect(persistedMonthly.state.monthlyPlans).toHaveLength(1);
 });
 
 test.describe('템플릿 공통 플로우', () => {
@@ -116,7 +172,7 @@ async function createPlan(page: Page, templateName: string, categoryIndex: numbe
   await page.locator(`button:has-text("${templateName}")`).first().click();
 
   // DatePicker 모달 → 확인
-  const dateConfirm = page.locator('button:has-text("확인")');
+  const dateConfirm = page.getByRole('button', { name: '확인', exact: true });
   await expect(dateConfirm).toBeVisible({ timeout: 3000 });
   await dateConfirm.click();
 
@@ -140,4 +196,33 @@ async function dismissGuide(page: Page) {
 
     break;
   }
+}
+
+function createTestSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    mandalart: { mandalarts: [], currentId: null },
+    block6: { block6Plans: [], currentBlock6Id: null },
+    monthly: { monthlyPlans: [], currentMonthlyId: null },
+    daily: { dailyPlans: [], currentDailyId: null },
+    recurring: { todos: [] },
+    holidays: { manualHolidays: {} },
+    timestamp: '2026-07-12T09:06:00.000Z',
+    ...overrides,
+  };
+}
+
+function createTestMonthlyPlan(id: string, title: string) {
+  return {
+    id,
+    title,
+    category: 'monthly',
+    template: 'monthly',
+    year: 2026,
+    month: 7,
+    goals: [],
+    weeklyFocus: [1, 2, 3, 4, 5].map((weekNumber) => ({ weekNumber, text: '' })),
+    memo: '',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  };
 }
