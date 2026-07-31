@@ -8,6 +8,7 @@ import { templateRegistry } from '@/lib/templateRegistry';
 import { useAllPlansReactive, useAllHydrated } from '@/hooks/useAllPlans';
 import { useAutoBackup, useAutoRestore } from '@/lib/autoBackup';
 import { AutoRestoreToast } from '@/components/AutoRestoreToast';
+import { AuthStatus } from '@/components/AuthStatus';
 
 export default function Home() {
   const allHydrated = useAllHydrated();
@@ -40,6 +41,10 @@ export default function Home() {
       />
 
       <main className="flex-1 py-4 px-3 md:py-8 md:px-4 overflow-x-auto min-w-0">
+        <div className="w-full max-w-4xl mx-auto px-4 pl-14 md:pl-4 flex justify-end">
+          <AuthStatus />
+        </div>
+
         <Header onOpenAIChat={() => setShowAIChat(true)} />
 
         {currentTemplate ? (

@@ -63,6 +63,53 @@ apps/api/
 
 초기 기능이 단순하면 Gradle 멀티모듈까지 바로 가지 않아도 된다. 패키지 경계로 시작하고, 모듈 간 의존 규칙이 안정되면 Gradle 멀티모듈로 승격한다.
 
+## Authentication Phases
+
+인증은 유저 관리와 분리해서 두 단계로 진행한다.
+
+### Phase 1. Auth Only
+
+목표는 로그인 여부와 Google profile만 확인하는 것이다. DB, 회원 테이블, planner 소유권 연결은 만들지 않는다.
+
+구성:
+
+```text
+apps/web
+  Auth.js Google provider
+  JWT session cookie
+  /api/auth/*
+  /api/auth/me
+```
+
+완료 기준:
+
+- Google 로그인/로그아웃이 가능하다.
+- 새로고침 후에도 로그인 상태가 유지된다.
+- `/api/auth/me`가 현재 Google profile을 반환한다.
+- 로그인하지 않아도 기존 LocalStorage 기반 플래너 기능은 그대로 동작한다.
+- 내부 `userId`, 회원 row, refresh token 저장소는 아직 만들지 않는다.
+
+### Phase 2. Identity/Auth With DB
+
+목표는 Google profile을 서비스 내부 사용자와 매핑하는 것이다.
+
+구성:
+
+```text
+apps/api
+  identity_users
+  identity_provider_accounts
+  auth_sessions or auth_refresh_tokens
+  /api/v1/me
+```
+
+완료 기준:
+
+- 최초 로그인 시 내부 user row를 생성한다.
+- 재로그인 시 기존 user를 조회한다.
+- planner 데이터를 내부 `userId`에 연결할 수 있다.
+- web의 `/api/auth/me` 의존을 API의 `/api/v1/me`로 교체할 수 있다.
+
 ## Recommended Domain Boundaries
 
 ### Identity

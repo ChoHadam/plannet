@@ -34,6 +34,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser.
 The AI chat route requires `OPENGATEWAY_API_KEY` and `OPENGATEWAY_BASE_URL` in `apps/web/.env.local`.
+Google login requires `AUTH_SECRET`, `AUTH_URL`, `AUTH_GOOGLE_ID`, and `AUTH_GOOGLE_SECRET`.
 
 ### API
 
