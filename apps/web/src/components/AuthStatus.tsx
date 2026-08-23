@@ -1,8 +1,19 @@
 'use client';
 
 import { signIn, signOut, useSession } from 'next-auth/react';
+import { useAuthEnabled } from '@/components/AuthSessionProvider';
 
 export function AuthStatus() {
+  const authEnabled = useAuthEnabled();
+
+  // useSession은 SessionProvider 안에서만 동작한다.
+  // 토글이 꺼지면 Provider가 없으므로 훅을 호출하는 컴포넌트 자체를 렌더하지 않는다.
+  if (!authEnabled) return null;
+
+  return <AuthStatusContent />;
+}
+
+function AuthStatusContent() {
   const { data: session, status } = useSession();
   const isLoading = status === 'loading';
   const user = session?.user;
