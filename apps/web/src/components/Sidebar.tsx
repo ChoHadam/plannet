@@ -15,11 +15,11 @@ import {
   TEMPLATE_TYPES,
 } from '@/lib/templateRegistry';
 import { useAllPlansReactive } from '@/hooks/useAllPlans';
-import { DatePicker, formatPlanDate } from './DatePicker';
+import { planDisplayTitle, planKey, PlanCategoryFilter, recentPlans, RECENT_PLAN_LIMIT } from '@/lib/planLibrary';
+import { DatePicker } from './DatePicker';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { useAuth } from './AuthProvider';
-
-const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
+import { PlanLibrary, PLAN_CATEGORIES, planDateLabel } from './PlanLibrary';
 
 function generateDefaultTitle(
   category: PlanCategory,
@@ -59,6 +59,11 @@ function generateDefaultTitle(
   return `${base} (${n})`;
 }
 
+/** 초점 관리가 없는 모달을 감싼 요소에 붙이는 ref callback */
+function focusFirstControl(node: HTMLDivElement | null) {
+  node?.querySelector<HTMLElement>('button, input, select')?.focus();
+}
+
 // ---- Section Component ----
 
 interface SectionProps {
@@ -70,14 +75,14 @@ interface SectionProps {
   onCreateClick: () => void;
   onDelete: (id: string, template: TemplateType) => void;
   onDuplicate: (id: string, template: TemplateType) => void;
+  onShowAll: () => void;
 }
 
-function Section({ category, plans, currentId, currentTemplate, onSelect, onCreateClick, onDelete, onDuplicate }: SectionProps) {
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const recentPlans = plans
-    .slice()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+function Section({ category, plans, currentId, currentTemplate, onSelect, onCreateClick, onDelete, onDuplicate, onShowAll }: SectionProps) {
+  // 템플릿이 달라도 id가 겹칠 수 있으므로 메뉴는 template+id 키로 연다.
+  const [menuOpenKey, setMenuOpenKey] = useState<string | null>(null);
+  const visiblePlans = recentPlans(plans);
+  const hiddenCount = plans.length - visiblePlans.length;
 
   return (
     <div className="mb-6">
@@ -102,17 +107,18 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
       </div>
 
       <div className="space-y-1">
-        {recentPlans.length === 0 ? (
+        {visiblePlans.length === 0 ? (
           <p className="text-xs text-slate-400 px-2 py-2">
             플랜이 없습니다
           </p>
         ) : (
-          recentPlans.map((plan) => {
+          visiblePlans.map((plan) => {
             const isSelected = currentId === plan.id && currentTemplate === plan.template;
             const entry = templateRegistry[plan.template];
+            const key = planKey(plan);
             return (
               <div
-                key={plan.id}
+                key={key}
                 className={`
                   group flex items-center justify-between
                   px-2 py-1.5 rounded-lg cursor-pointer
@@ -123,10 +129,15 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                 `}
                 onClick={() => onSelect(plan.id, plan.template)}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                {/* 행 전체 클릭은 위 onClick이 받는다. 버튼은 키보드 초점·Enter 선택용이며 click이 행으로 전파된다. */}
+                <button
+                  type="button"
+                  className="flex-1 min-w-0 text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                  aria-current={isSelected ? 'true' : undefined}
+                >
+                  <span className="flex items-center gap-1.5">
                     <span className="text-sm truncate">
-                      {plan.title || '제목 없음'}
+                      {planDisplayTitle(plan)}
                     </span>
                     <span className={`
                       flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full
@@ -134,22 +145,21 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                     `}>
                       {entry.label}
                     </span>
-                  </div>
-                  <span className="text-xs text-slate-400">
-                    {plan.template === 'monthly'
-                      ? formatPlanDate('monthly', plan.year, plan.month, undefined, undefined, true)
-                      : formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day, true)
-                    }
                   </span>
-                </div>
+                  <span className="text-xs text-slate-400">
+                    {planDateLabel(plan)}
+                  </span>
+                </button>
                 <div className="relative ml-1">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setMenuOpenId(menuOpenId === plan.id ? null : plan.id);
+                      setMenuOpenKey(menuOpenKey === key ? null : key);
                     }}
+                    aria-label={`${planDisplayTitle(plan)} 메뉴`}
+                    aria-expanded={menuOpenKey === key}
                     className="
-                      opacity-0 group-hover:opacity-100
+                      opacity-0 group-hover:opacity-100 focus:opacity-100
                       w-5 h-5 rounded flex items-center justify-center
                       text-slate-400 hover:text-slate-600 hover:bg-slate-100
                       transition-all
@@ -162,14 +172,14 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                       <circle cx="12" cy="19" r="2" />
                     </svg>
                   </button>
-                  {menuOpenId === plan.id && (
+                  {menuOpenKey === key && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpenId(null)} />
+                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpenKey(null)} />
                       <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[90px]">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setMenuOpenId(null);
+                            setMenuOpenKey(null);
                             onDuplicate(plan.id, plan.template);
                           }}
                           className="w-full px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"
@@ -183,7 +193,7 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setMenuOpenId(null);
+                            setMenuOpenKey(null);
                             onDelete(plan.id, plan.template);
                           }}
                           className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
@@ -201,6 +211,16 @@ function Section({ category, plans, currentId, currentTemplate, onSelect, onCrea
               </div>
             );
           })
+        )}
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={onShowAll}
+            className="w-full px-2 py-1.5 rounded-lg text-left text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            aria-label={`${PLAN_CATEGORY_LABELS[category]} 전체 ${plans.length}개 보기`}
+          >
+            더보기 · 전체 {plans.length}개 (최근 {RECENT_PLAN_LIMIT}개 표시 중)
+          </button>
         )}
       </div>
     </div>
@@ -312,9 +332,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
-  const { currentTemplate, currentId, getPlansByCategory } = useAllPlansReactive();
+  const { allPlans, currentTemplate, currentId, getPlansByCategory } = useAllPlansReactive();
   // 서버 백업이 막힌 환경에서는 진입점을 숨긴다. 실제 차단은 /api/backup이 한다.
-  const { config } = useAuth();
+  const { config, storageScope } = useAuth();
+  // 보관함 상태는 연 시점의 저장 범위에 묶는다. 범위가 바뀌면 이전 계정의 목록을 이어서 보여주지 않는다.
+  const [libraryRequest, setLibraryRequest] = useState<{ scope: string | null; category: PlanCategoryFilter } | null>(null);
+  const libraryCategory = libraryRequest && libraryRequest.scope === storageScope ? libraryRequest.category : null;
+  const openLibrary = (category: PlanCategoryFilter) => setLibraryRequest({ scope: storageScope, category });
+  const closeLibrary = () => setLibraryRequest(null);
 
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ plan: BasePlanData; template: TemplateType } | null>(null);
@@ -348,6 +373,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         if (t !== duplicateTarget.template) templateRegistry[t].clearSelection();
       }
       duplicatePlan(duplicateTarget.id, duplicateTarget.template, date);
+      // 복제본이 선택되므로 보관함을 닫아 편집 화면을 보여준다.
+      closeLibrary();
       setDuplicateTarget(null);
       setPendingDate({});
     } else {
@@ -358,6 +385,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
   const handleSelect = (id: string, template: TemplateType) => {
     selectExclusive(template, id);
+    closeLibrary();
     // 모바일: 항목 선택하면 사이드바 자동으로 닫기 (md 미만에서만)
     if (typeof window !== 'undefined' && window.innerWidth < 768 && onToggleCollapse) {
       onToggleCollapse();
@@ -438,13 +466,31 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         <div className="p-4 border-b border-slate-200">
           <h1 className="text-xl font-bold text-slate-800">Plannet</h1>
           <p className="text-xs text-slate-400 mt-1">나만의 플래너</p>
+          <button
+            type="button"
+            onClick={() => openLibrary('all')}
+            className="
+              mt-3 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg
+              border border-slate-200 bg-white
+              text-xs text-slate-500 hover:text-slate-700 hover:border-slate-300
+              transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400
+            "
+            aria-label={`전체 플랜 보기 (${allPlans.length}개)`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <span className="flex-1 text-left">전체 플랜 · 검색</span>
+            <span className="text-slate-400">{allPlans.length}</span>
+          </button>
         </div>
 
         {/* Plan Sections */}
         <div className="flex-1 overflow-y-auto p-3">
           {PLAN_CATEGORIES.map((category) => (
             <Section
-              key={category}
+              key={`${storageScope}:${category}`}
               category={category}
               plans={getPlansByCategory(category)}
               currentId={currentId}
@@ -453,6 +499,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               onCreateClick={() => setCreateCategory(category)}
               onDelete={handleDeleteClick}
               onDuplicate={handleDuplicate}
+              onShowAll={() => openLibrary(category)}
             />
           ))}
         </div>
@@ -526,6 +573,22 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         </svg>
       </button>
 
+      {/* Plan Library — 복제 날짜 선택·삭제 확인 모달이 위에 뜨도록 먼저 렌더링한다 */}
+      {libraryCategory && (
+        <PlanLibrary
+          key={storageScope}
+          plans={allPlans}
+          initialCategory={libraryCategory}
+          currentId={currentId}
+          currentTemplate={currentTemplate}
+          onSelect={handleSelect}
+          onDuplicate={handleDuplicate}
+          onDelete={handleDeleteClick}
+          onClose={closeLibrary}
+          suspended={showDatePicker !== null || deleteTarget !== null}
+        />
+      )}
+
       {/* Template Selection Modal */}
       {createCategory && showDatePicker === null && !showGuide && (
         <TemplateModal
@@ -536,8 +599,9 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         />
       )}
 
-      {/* Date Picker Modal */}
+      {/* Date Picker Modal — 키보드 사용자가 바로 조작할 수 있게 열릴 때 첫 버튼으로 초점을 옮긴다 */}
       {showDatePicker && (
+        <div ref={focusFirstControl} className="contents">
         <DatePicker
           category={(showDatePicker === 'duplicate' ? duplicateTarget?.category : createCategory) ?? 'weekly'}
           onSelect={handleDateSelect}
@@ -546,6 +610,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
             setDuplicateTarget(null);
           }}
         />
+        </div>
       )}
 
       {/* Guide Modal (unified) */}
@@ -565,13 +630,14 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               플랜을 삭제하시겠습니까?
             </h3>
             <p className="text-sm text-slate-500 mb-1">
-              <span className="font-medium text-slate-700">{deleteTarget.plan.title || '제목 없음'}</span>
+              <span className="font-medium text-slate-700">{planDisplayTitle(deleteTarget.plan)}</span>
             </p>
             <p className="text-sm text-slate-500 mb-6">
               삭제된 플랜은 복구할 수 없습니다.
             </p>
             <div className="flex gap-3">
               <button
+                autoFocus
                 onClick={() => setDeleteTarget(null)}
                 className="
                   flex-1 px-4 py-2 rounded-lg
