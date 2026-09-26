@@ -2,12 +2,13 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage, PLANNER_STORAGE_KEYS } from '@/lib/plannerStorage';
 import { PlanCategory } from '@/types/mandalart';
 import { DailyData, DailyTodo, createInitialDaily } from '@/types/daily';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 
-const DAILY_STORAGE_KEY = 'plannet-daily';
+const DAILY_STORAGE_KEY = PLANNER_STORAGE_KEYS.daily;
 
 interface DailyStore {
   // Multiple plans support
@@ -427,6 +428,9 @@ export const useDailyStore = create<DailyStore>()(
     }),
     {
       name: DAILY_STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
+      skipHydration: true,
       partialize: (state) => ({
         dailyPlans: state.dailyPlans,
         currentDailyId: state.currentDailyId,
@@ -435,23 +439,5 @@ export const useDailyStore = create<DailyStore>()(
   )
 );
 
-// Hydration hook
-export const useDailyHydration = () => {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = useDailyStore.persist.onFinishHydration(() => {
-      setHydrated(true);
-    });
-
-    if (useDailyStore.persist.hasHydrated()) {
-      setHydrated(true);
-    }
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useDailyHydration = (): boolean => usePersistHydrated(useDailyStore);

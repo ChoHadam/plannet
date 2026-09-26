@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AuthSessionProvider } from "@/components/AuthSessionProvider";
-import { isAuthEnabled } from "@/lib/featureFlags";
+import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,7 +28,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthSessionProvider enabled={isAuthEnabled()}>{children}</AuthSessionProvider>
+        {/* 인증 설정은 빌드 시점이 아니라 브라우저에서 요청 시점에 받아온다 */}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

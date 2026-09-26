@@ -2,7 +2,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage, PLANNER_STORAGE_KEYS } from '@/lib/plannerStorage';
 import { PlanCategory } from '@/types/mandalart';
 import {
   Block6Data,
@@ -15,7 +16,7 @@ import {
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 import { getWeekOfMonth } from '@/lib/weekUtils';
 
-const BLOCK6_STORAGE_KEY = 'plannet-block6';
+const BLOCK6_STORAGE_KEY = PLANNER_STORAGE_KEYS.block6;
 
 interface Block6Store {
   // Multiple plans support
@@ -714,6 +715,8 @@ export const useBlock6Store = create<Block6Store>()(
     }),
     {
       name: BLOCK6_STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
       version: 2,
       skipHydration: true,
       partialize: (state) => ({
@@ -738,14 +741,5 @@ export const useBlock6Store = create<Block6Store>()(
   )
 );
 
-// Hydration hook for Next.js
-export const useBlock6Hydration = () => {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    useBlock6Store.persist.rehydrate();
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useBlock6Hydration = (): boolean => usePersistHydrated(useBlock6Store);

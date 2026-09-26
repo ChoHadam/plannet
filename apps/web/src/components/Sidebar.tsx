@@ -17,6 +17,7 @@ import {
 import { useAllPlansReactive } from '@/hooks/useAllPlans';
 import { DatePicker, formatPlanDate } from './DatePicker';
 import { BackupRestoreModal } from './BackupRestoreModal';
+import { useAuth } from './AuthProvider';
 
 const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
@@ -312,6 +313,8 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const { currentTemplate, currentId, getPlansByCategory } = useAllPlansReactive();
+  // 서버 백업이 막힌 환경에서는 진입점을 숨긴다. 실제 차단은 /api/backup이 한다.
+  const { config } = useAuth();
 
   const [createCategory, setCreateCategory] = useState<PlanCategory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ plan: BasePlanData; template: TemplateType } | null>(null);
@@ -455,21 +458,23 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         </div>
 
         {/* Footer: Backup */}
-        <div className="p-3 border-t border-slate-200">
-          <button
-            onClick={() => setShowBackup(true)}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg
-                     text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100
-                     transition-colors"
-            title="백업 복원"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-            백업 복원
-          </button>
-        </div>
+        {config.backupEnabled && (
+          <div className="p-3 border-t border-slate-200">
+            <button
+              onClick={() => setShowBackup(true)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg
+                       text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100
+                       transition-colors"
+              title="백업 복원"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+              백업 복원
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Sidebar Toggle Button
@@ -550,7 +555,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       })()}
 
       {/* Backup Restore Modal */}
-      <BackupRestoreModal isOpen={showBackup} onClose={() => setShowBackup(false)} />
+      <BackupRestoreModal isOpen={showBackup && config.backupEnabled} onClose={() => setShowBackup(false)} />
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (

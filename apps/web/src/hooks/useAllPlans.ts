@@ -5,6 +5,8 @@ import { useBlock6Store, useBlock6Hydration } from '@/hooks/useBlock6';
 import { useMonthlyStore, useMonthlyHydration } from '@/hooks/useMonthly';
 import { useDailyStore, useDailyHydration } from '@/hooks/useDaily';
 import { useHolidayHydration } from '@/hooks/useHolidays';
+import { useRecurringHydration } from '@/hooks/useRecurring';
+import { usePlannerStorageHydration } from '@/hooks/usePlannerStorageHydration';
 import { TemplateType, PlanCategory } from '@/types/mandalart';
 import { BasePlanData } from '@/lib/templateRegistry';
 
@@ -47,13 +49,16 @@ export function useAllPlansReactive() {
 
 /**
  * 모든 store의 hydration 상태 집계.
+ * 계정 범위가 정해진 뒤 복원을 시작하고, 모든 store가 끝나야 true.
  * ESLint hooks 규칙 준수를 위해 명시적 호출.
  */
 export function useAllHydrated(): boolean {
+  usePlannerStorageHydration();
   const h1 = useHydration();
   const h2 = useBlock6Hydration();
   const h3 = useMonthlyHydration();
   const h4 = useDailyHydration();
   const h5 = useHolidayHydration();
-  return h1 && h2 && h3 && h4 && h5;
+  const h6 = useRecurringHydration();
+  return h1 && h2 && h3 && h4 && h5 && h6;
 }

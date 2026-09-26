@@ -2,7 +2,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage } from '@/lib/plannerStorage';
 import {
   MandalartData,
   SubGridData,
@@ -566,6 +567,8 @@ export const useMandalartStore = create<MandalartStore>()(
     }),
     {
       name: STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
       version: 3,
       skipHydration: true,
       partialize: (state) => ({
@@ -600,14 +603,5 @@ export const useMandalartStore = create<MandalartStore>()(
   )
 );
 
-// Hydration hook for Next.js
-export const useHydration = () => {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    useMandalartStore.persist.rehydrate();
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useHydration = (): boolean => usePersistHydrated(useMandalartStore);

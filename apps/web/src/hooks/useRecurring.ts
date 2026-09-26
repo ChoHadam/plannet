@@ -2,12 +2,13 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage, PLANNER_STORAGE_KEYS } from '@/lib/plannerStorage';
 import { RecurringTodo } from '@/types/recurring';
 import { TodoColor } from '@/types/block6';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 
-const STORAGE_KEY = 'plannet-recurring';
+const STORAGE_KEY = PLANNER_STORAGE_KEYS.recurring;
 
 interface RecurringStore {
   todos: RecurringTodo[];
@@ -56,24 +57,12 @@ export const useRecurringStore = create<RecurringStore>()(
     }),
     {
       name: STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
+      skipHydration: true,
     }
   )
 );
 
-export const useRecurringHydration = () => {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = useRecurringStore.persist.onFinishHydration(() => {
-      setHydrated(true);
-    });
-
-    if (useRecurringStore.persist.hasHydrated()) {
-      setHydrated(true);
-    }
-
-    return () => { unsubscribe(); };
-  }, []);
-
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useRecurringHydration = (): boolean => usePersistHydrated(useRecurringStore);

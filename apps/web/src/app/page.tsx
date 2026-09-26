@@ -8,11 +8,13 @@ import { templateRegistry } from '@/lib/templateRegistry';
 import { useAllPlansReactive, useAllHydrated } from '@/hooks/useAllPlans';
 import { useAutoBackup } from '@/lib/autoBackup';
 import { AuthStatus } from '@/components/AuthStatus';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function Home() {
   const allHydrated = useAllHydrated();
   const { currentTemplate } = useAllPlansReactive();
-  useAutoBackup();
+  const { config } = useAuth();
+  useAutoBackup(config.backupEnabled);
   const [showAIChat, setShowAIChat] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 

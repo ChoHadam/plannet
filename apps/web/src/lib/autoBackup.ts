@@ -140,9 +140,12 @@ function scheduleBackup() {
 /**
  * 모든 store의 변경을 구독하고 디바운스된 자동 백업을 수행.
  * 페이지 한 곳에서 한 번 호출하면 됨.
+ * serverEnabled는 서버가 백업을 허용하는지(/api/runtime-config). 차단 자체는 서버가 한다.
  */
-export function useAutoBackup() {
+export function useAutoBackup(serverEnabled: boolean) {
   useEffect(() => {
+    if (!serverEnabled) return;
+
     // 각 store의 변경 구독
     const unsubMandalart = useMandalartStore.subscribe(scheduleBackup);
     const unsubBlock6 = useBlock6Store.subscribe(scheduleBackup);
@@ -160,7 +163,7 @@ export function useAutoBackup() {
       unsubHolidays();
       if (pendingTimer) clearTimeout(pendingTimer);
     };
-  }, []);
+  }, [serverEnabled]);
 }
 
 export interface BackupItem {

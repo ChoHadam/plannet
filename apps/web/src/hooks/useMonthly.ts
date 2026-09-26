@@ -2,7 +2,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage, PLANNER_STORAGE_KEYS } from '@/lib/plannerStorage';
 import { PlanCategory } from '@/types/mandalart';
 import {
   MonthlyData,
@@ -12,7 +13,7 @@ import {
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 import { useMandalartStore } from './useMandalart';
 
-const MONTHLY_STORAGE_KEY = 'plannet-monthly';
+const MONTHLY_STORAGE_KEY = PLANNER_STORAGE_KEYS.monthly;
 
 interface MonthlyStore {
   // Multiple plans support
@@ -436,6 +437,8 @@ export const useMonthlyStore = create<MonthlyStore>()(
     }),
     {
       name: MONTHLY_STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
       version: 1,
       skipHydration: true,
       partialize: (state) => ({
@@ -446,14 +449,5 @@ export const useMonthlyStore = create<MonthlyStore>()(
   )
 );
 
-// Hydration hook for Next.js
-export const useMonthlyHydration = () => {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    useMonthlyStore.persist.rehydrate();
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useMonthlyHydration = (): boolean => usePersistHydrated(useMonthlyStore);
