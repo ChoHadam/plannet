@@ -7,6 +7,7 @@ import { plannerStorage, PLANNER_STORAGE_KEYS } from '@/lib/plannerStorage';
 import { PlanCategory } from '@/types/mandalart';
 import { DailyData, DailyTodo, createInitialDaily } from '@/types/daily';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
+import { clampPlanDay, DailyPeriod, findPeriodPlan, shiftDay, validMonth } from '@/lib/planPeriod';
 
 const DAILY_STORAGE_KEY = PLANNER_STORAGE_KEYS.daily;
 
@@ -14,6 +15,7 @@ interface DailyStore {
   // Multiple plans support
   dailyPlans: DailyData[];
   currentDailyId: string | null;
+  viewedDay: DailyPeriod | null;
 
   // Plan management
   createDailyPlan: (category: PlanCategory, year?: number, month?: number, day?: number) => string;
@@ -63,6 +65,7 @@ const createInitialDailyPlan = (
   const initial = createInitialDaily(category, year, month, day);
   return {
     ...initial,
+    day: clampPlanDay(initial.year, initial.month, initial.day),
     id: generateId(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -74,25 +77,27 @@ export const useDailyStore = create<DailyStore>()(
     (set, get) => ({
       dailyPlans: [],
       currentDailyId: null,
+      viewedDay: null,
 
       createDailyPlan: (category: PlanCategory, year?: number, month?: number, day?: number) => {
         const newPlan = createInitialDailyPlan(category, year, month, day);
         set((state) => ({
           dailyPlans: [...state.dailyPlans, newPlan],
           currentDailyId: newPlan.id,
+          viewedDay: null,
         }));
         return newPlan.id;
       },
 
       selectDailyPlan: (id: string | null) => {
-        set({ currentDailyId: id });
+        set({ currentDailyId: id, viewedDay: null });
       },
 
       deleteDailyPlan: (id: string) => {
         set((state) => {
           const newPlans = state.dailyPlans.filter((p) => p.id !== id);
           const newCurrentId = state.currentDailyId === id ? null : state.currentDailyId;
-          return { dailyPlans: newPlans, currentDailyId: newCurrentId };
+          return { dailyPlans: newPlans, currentDailyId: newCurrentId, viewedDay: state.currentDailyId === id ? null : state.viewedDay };
         });
       },
 
@@ -371,59 +376,36 @@ export const useDailyStore = create<DailyStore>()(
       },
 
       navigateDay: (direction: 'prev' | 'next') => {
-        const currentId = get().currentDailyId;
-        if (!currentId) return;
-
         set((state) => {
-          const planIndex = state.dailyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const plan = state.dailyPlans[planIndex];
-          const currentDate = new Date(plan.year, plan.month - 1, plan.day);
-
-          if (direction === 'prev') {
-            currentDate.setDate(currentDate.getDate() - 1);
-          } else {
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-
-          const newPlans = [...state.dailyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            year: currentDate.getFullYear(),
-            month: currentDate.getMonth() + 1,
-            day: currentDate.getDate(),
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { dailyPlans: newPlans };
+          const plan = state.dailyPlans.find((p) => p.id === state.currentDailyId);
+          const period = plan ?? state.viewedDay;
+          if (!period) return state;
+          const next = shiftDay({ category: period.category, year: period.year, month: period.month, day: period.day }, direction);
+          if (!next) return state;
+          const match = findPeriodPlan(state.dailyPlans, next);
+          return { currentDailyId: match?.id ?? null, viewedDay: match ? null : next };
         });
       },
 
+      // Explicit date reassignment keeps the selected plan and its contents.
       updatePlanDate: (year?: number, month?: number, day?: number) => {
-        const currentId = get().currentDailyId;
-        if (!currentId) return;
-
         set((state) => {
-          const planIndex = state.dailyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
-
-          const plan = state.dailyPlans[planIndex];
-          const newPlans = [...state.dailyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            year: year ?? plan.year,
-            month: month ?? plan.month,
-            day: day ?? plan.day,
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { dailyPlans: newPlans };
+          const index = state.dailyPlans.findIndex((p) => p.id === state.currentDailyId);
+          if (index === -1) return state;
+          const plan = state.dailyPlans[index];
+          const nextYear = year ?? plan.year;
+          const nextMonth = month ?? plan.month;
+          if (!validMonth(nextYear, nextMonth) || !Number.isInteger(day ?? plan.day)) return state;
+          const nextDay = clampPlanDay(nextYear, nextMonth, day ?? plan.day);
+          if (nextYear === plan.year && nextMonth === plan.month && nextDay === plan.day) return state;
+          const dailyPlans = [...state.dailyPlans];
+          dailyPlans[index] = { ...plan, year: nextYear, month: nextMonth, day: nextDay, updatedAt: new Date().toISOString() };
+          return { dailyPlans, viewedDay: null };
         });
       },
 
       resetCurrent: () => {
-        set({ currentDailyId: null });
+        set({ currentDailyId: null, viewedDay: null });
       },
     }),
     {
@@ -434,6 +416,7 @@ export const useDailyStore = create<DailyStore>()(
       partialize: (state) => ({
         dailyPlans: state.dailyPlans,
         currentDailyId: state.currentDailyId,
+        viewedDay: state.viewedDay,
       }),
     }
   )

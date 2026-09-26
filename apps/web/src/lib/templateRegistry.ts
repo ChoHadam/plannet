@@ -157,15 +157,19 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
 
     getPlans: () => useMonthlyStore.getState().monthlyPlans as BasePlanData[],
     getCurrentId: () => useMonthlyStore.getState().currentMonthlyId,
-    clearSelection: () => useMonthlyStore.setState({ currentMonthlyId: null }),
+    clearSelection: () => useMonthlyStore.getState().selectMonthlyPlan(null),
     select: (id) => useMonthlyStore.getState().selectMonthlyPlan(id),
     deletePlan: (id) => useMonthlyStore.getState().deleteMonthlyPlan(id),
     addPlanAndSelect: (plan) => {
       const state = useMonthlyStore.getState();
-      useMonthlyStore.setState({ monthlyPlans: [plan as MonthlyData, ...state.monthlyPlans], currentMonthlyId: plan.id });
+      useMonthlyStore.setState({ monthlyPlans: [plan as MonthlyData, ...state.monthlyPlans], currentMonthlyId: plan.id, viewedMonth: null });
     },
     create: (category, date) => useMonthlyStore.getState().createMonthlyPlan(category, date.year, date.month),
-    applyTitleAndDate: (title) => useMonthlyStore.getState().updateTitle(title),
+    applyTitleAndDate: (title, date) => {
+      const state = useMonthlyStore.getState();
+      state.updateTitle(title);
+      state.updatePlanDate(date.year, date.month);
+    },
 
     GuideComponent: MonthlyGuide,
     GridComponent: MonthlyGrid,
@@ -174,7 +178,7 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
       state.currentMonthlyId ? (state.monthlyPlans.find(p => p.id === state.currentMonthlyId) as BasePlanData | undefined) ?? null : null
     ),
     useUpdateTitle: () => useMonthlyStore((s) => s.updateTitle),
-    useUpdatePlanDate: () => () => {}, // Monthly has no updatePlanDate
+    useUpdatePlanDate: () => useMonthlyStore((s) => s.updatePlanDate),
     useHydration: useMonthlyHydration,
   },
 
@@ -190,12 +194,12 @@ export const templateRegistry: Record<TemplateType, TemplateEntry> = {
 
     getPlans: () => useDailyStore.getState().dailyPlans as BasePlanData[],
     getCurrentId: () => useDailyStore.getState().currentDailyId,
-    clearSelection: () => useDailyStore.setState({ currentDailyId: null }),
+    clearSelection: () => useDailyStore.getState().selectDailyPlan(null),
     select: (id) => useDailyStore.getState().selectDailyPlan(id),
     deletePlan: (id) => useDailyStore.getState().deleteDailyPlan(id),
     addPlanAndSelect: (plan) => {
       const state = useDailyStore.getState();
-      useDailyStore.setState({ dailyPlans: [plan as DailyData, ...state.dailyPlans], currentDailyId: plan.id });
+      useDailyStore.setState({ dailyPlans: [plan as DailyData, ...state.dailyPlans], currentDailyId: plan.id, viewedDay: null });
     },
     create: (category, date) => useDailyStore.getState().createDailyPlan(category, date.year, date.month, date.day),
     applyTitleAndDate: (title) => useDailyStore.getState().updateTitle(title),

@@ -12,6 +12,8 @@ import {
 } from '@/types/monthly';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 import { useMandalartStore } from './useMandalart';
+import { findPeriodPlan, MonthlyPeriod, shiftMonth, validMonth } from '@/lib/planPeriod';
+import { MonthlyImportItem, monthlySourceKey } from '@/lib/monthlyImport';
 
 const MONTHLY_STORAGE_KEY = PLANNER_STORAGE_KEYS.monthly;
 
@@ -19,6 +21,7 @@ interface MonthlyStore {
   // Multiple plans support
   monthlyPlans: MonthlyData[];
   currentMonthlyId: string | null;
+  viewedMonth: MonthlyPeriod | null;
 
   // Computed getter
   data: MonthlyData | null;
@@ -35,7 +38,7 @@ interface MonthlyStore {
   updateGoalProgress: (goalId: string, progress: number) => void;
   toggleGoalCompleted: (goalId: string, syncDecision?: boolean) => void;
   deleteGoal: (goalId: string) => void;
-  importActionPlans: (plans: Array<{ text: string; cellId: string }>, sourceMandalartId?: string) => void;
+  importActionPlans: (plans: MonthlyImportItem[], sourceMandalartId?: string) => void;
 
   // Weekly focus operations
   updateWeeklyFocus: (weekNumber: number, text: string) => void;
@@ -46,6 +49,7 @@ interface MonthlyStore {
   // Plan metadata
   updateTitle: (title: string) => void;
   navigateMonth: (direction: 'prev' | 'next') => void;
+  updatePlanDate: (year?: number, month?: number) => void;
   resetCurrent: () => void;
 }
 
@@ -79,6 +83,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
     (set, get) => ({
       monthlyPlans: [],
       currentMonthlyId: null,
+      viewedMonth: null,
 
       get data() {
         const state = get();
@@ -91,12 +96,13 @@ export const useMonthlyStore = create<MonthlyStore>()(
         set((state) => ({
           monthlyPlans: [newPlan, ...state.monthlyPlans],
           currentMonthlyId: newPlan.id,
+          viewedMonth: null,
         }));
         return newPlan.id;
       },
 
       selectMonthlyPlan: (id: string | null) => {
-        set({ currentMonthlyId: id });
+        set({ currentMonthlyId: id, viewedMonth: null });
       },
 
       deleteMonthlyPlan: (id: string) => {
@@ -106,6 +112,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
           return {
             monthlyPlans: newPlans,
             currentMonthlyId: newCurrentId,
+            viewedMonth: state.currentMonthlyId === id ? null : state.viewedMonth,
           };
         });
       },
@@ -275,7 +282,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
         });
       },
 
-      importActionPlans: (plans: Array<{ text: string; cellId: string }>, sourceMandalartId?: string) => {
+      importActionPlans: (plans: MonthlyImportItem[], sourceMandalartId?: string) => {
         const currentId = get().currentMonthlyId;
         if (!currentId) return;
 
@@ -284,14 +291,25 @@ export const useMonthlyStore = create<MonthlyStore>()(
           if (planIndex === -1) return state;
 
           const plan = state.monthlyPlans[planIndex];
-          const newGoals: MonthlyGoal[] = plans.map((item) => ({
-            id: generateId(),
-            text: sanitizeInput(item.text),
-            progress: 0,
-            completed: false,
-            sourceMandalartId,
-            sourceCellId: item.cellId,
-          }));
+          const seen = new Set(plan.goals.flatMap((goal) =>
+            goal.sourceMandalartId && goal.sourceCellId
+              ? [monthlySourceKey(goal.sourceMandalartId, goal.sourceCellId)] : []));
+          const newGoals: MonthlyGoal[] = [];
+          for (const item of plans) {
+            const text = sanitizeInput(item.text);
+            if (!text.trim()) continue;
+            // The optional batch source remains supported for older single-source callers.
+            const sourceId = item.sourceMandalartId ?? sourceMandalartId;
+            const key = sourceId ? monthlySourceKey(sourceId, item.cellId) : null;
+            if (key && seen.has(key)) continue;
+            if (key) seen.add(key);
+            newGoals.push({
+              id: generateId(), text, progress: 0, completed: false,
+              sourceMandalartId: sourceId,
+              sourceCellId: item.cellId,
+            });
+          }
+          if (newGoals.length === 0) return state;
 
           const newPlans = [...state.monthlyPlans];
           newPlans[planIndex] = {
@@ -378,40 +396,29 @@ export const useMonthlyStore = create<MonthlyStore>()(
       },
 
       navigateMonth: (direction: 'prev' | 'next') => {
-        const currentId = get().currentMonthlyId;
-        if (!currentId) return;
-
         set((state) => {
-          const planIndex = state.monthlyPlans.findIndex((p) => p.id === currentId);
-          if (planIndex === -1) return state;
+          const plan = state.monthlyPlans.find((p) => p.id === state.currentMonthlyId);
+          const period = plan ?? state.viewedMonth;
+          if (!period) return state;
+          const next = shiftMonth({ category: period.category, year: period.year, month: period.month }, direction);
+          if (!next) return state;
+          const match = findPeriodPlan(state.monthlyPlans, next);
+          return { currentMonthlyId: match?.id ?? null, viewedMonth: match ? null : next };
+        });
+      },
 
-          const plan = state.monthlyPlans[planIndex];
-          let newYear = plan.year;
-          let newMonth = plan.month;
-
-          if (direction === 'prev') {
-            newMonth -= 1;
-            if (newMonth < 1) {
-              newMonth = 12;
-              newYear -= 1;
-            }
-          } else {
-            newMonth += 1;
-            if (newMonth > 12) {
-              newMonth = 1;
-              newYear += 1;
-            }
-          }
-
-          const newPlans = [...state.monthlyPlans];
-          newPlans[planIndex] = {
-            ...plan,
-            year: newYear,
-            month: newMonth,
-            updatedAt: new Date().toISOString(),
-          };
-
-          return { monthlyPlans: newPlans };
+      // Explicit date reassignment is separate from browsing periods.
+      updatePlanDate: (year?: number, month?: number) => {
+        set((state) => {
+          const index = state.monthlyPlans.findIndex((p) => p.id === state.currentMonthlyId);
+          if (index === -1) return state;
+          const plan = state.monthlyPlans[index];
+          const nextYear = year ?? plan.year;
+          const nextMonth = month ?? plan.month;
+          if (!validMonth(nextYear, nextMonth) || (nextYear === plan.year && nextMonth === plan.month)) return state;
+          const monthlyPlans = [...state.monthlyPlans];
+          monthlyPlans[index] = { ...plan, year: nextYear, month: nextMonth, updatedAt: new Date().toISOString() };
+          return { monthlyPlans, viewedMonth: null };
         });
       },
 
@@ -444,6 +451,7 @@ export const useMonthlyStore = create<MonthlyStore>()(
       partialize: (state) => ({
         monthlyPlans: state.monthlyPlans,
         currentMonthlyId: state.currentMonthlyId,
+        viewedMonth: state.viewedMonth,
       }),
     }
   )

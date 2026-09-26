@@ -6,6 +6,8 @@ import { Header } from '@/components/Header';
 import { AIChatSidebar } from '@/components/AIChatSidebar';
 import { templateRegistry } from '@/lib/templateRegistry';
 import { useAllPlansReactive, useAllHydrated } from '@/hooks/useAllPlans';
+import { useMonthlyStore } from '@/hooks/useMonthly';
+import { useDailyStore } from '@/hooks/useDaily';
 import { useAutoBackup } from '@/lib/autoBackup';
 import { AuthStatus } from '@/components/AuthStatus';
 import { useAuth } from '@/components/AuthProvider';
@@ -13,6 +15,9 @@ import { useAuth } from '@/components/AuthProvider';
 export default function Home() {
   const allHydrated = useAllHydrated();
   const { currentTemplate } = useAllPlansReactive();
+  const viewedMonth = useMonthlyStore((state) => state.viewedMonth);
+  const viewedDay = useDailyStore((state) => state.viewedDay);
+  const displayedTemplate = currentTemplate ?? (viewedMonth ? 'monthly' : viewedDay ? 'daily' : null);
   const { config } = useAuth();
   useAutoBackup(config.backupEnabled);
   const [showAIChat, setShowAIChat] = useState(false);
@@ -47,9 +52,9 @@ export default function Home() {
 
         <Header onOpenAIChat={() => setShowAIChat(true)} />
 
-        {currentTemplate ? (
+        {displayedTemplate ? (
           (() => {
-            const Grid = templateRegistry[currentTemplate].GridComponent;
+            const Grid = templateRegistry[displayedTemplate].GridComponent;
             return <Grid />;
           })()
         ) : (

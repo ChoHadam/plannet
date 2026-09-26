@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useMonthlyStore } from '@/hooks/useMonthly';
 import { extractGroupedActionPlans, extractCellsForMonth, GroupedActionPlans, ScheduledCellItem } from '@/lib/mandalartIntegration';
+import { MONTHLY_IMPORT_GOAL_LIMIT, MonthlyImportItem, monthlySourceKey } from '@/lib/monthlyImport';
 
 interface ImportGoalsModalProps {
   isOpen: boolean;
@@ -23,14 +24,16 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
   const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
 
   const currentMonthly = monthlyPlans.find(p => p.id === currentMonthlyId);
-  const availableGoalSlots = Math.max(0, 5 - currentGoalsCount);
+  const availableGoalSlots = Math.max(0, MONTHLY_IMPORT_GOAL_LIMIT - currentGoalsCount);
   const reachedSelectionLimit = selectedPlans.size >= availableGoalSlots;
 
   // 이번 달 추천 항목 (모든 만다라트에서 현재 월 대상 셀 추출)
-  const recommendedCells = useMemo<ScheduledCellItem[]>(() => {
+  const recommendedCells = useMemo<Array<ScheduledCellItem & { sourceMandalartId: string; sourceTitle: string }>>(() => {
     if (!currentMonthly) return [];
     return mandalarts.flatMap(m =>
-      extractCellsForMonth(m, currentMonthly.year, currentMonthly.month)
+      extractCellsForMonth(m, currentMonthly.year, currentMonthly.month).map((cell) => ({
+        ...cell, sourceMandalartId: m.id, sourceTitle: m.title || '제목 없음',
+      }))
     );
   }, [mandalarts, currentMonthly]);
 
@@ -57,6 +60,9 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
     }
   }, [isOpen, mandalarts, selectedMandalartId]);
 
+  const alreadyImported = (sourceId: string, cellId: string) =>
+    currentMonthly?.goals.some((goal) => goal.sourceMandalartId === sourceId && goal.sourceCellId === cellId) ?? false;
+
   const togglePlan = (planId: string) => {
     const newSelected = new Set(selectedPlans);
     if (newSelected.has(planId)) {
@@ -81,29 +87,21 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
   const handleImport = () => {
     if (selectedPlans.size === 0) return;
 
-    // 선택된 실천 계획 수집 (텍스트 + cellId)
-    const selectedItems: Array<{ text: string; cellId: string }> = [];
+    const selectedItems: MonthlyImportItem[] = [];
     const addedIds = new Set<string>();
-
-    // 추천 셀에서 수집
-    recommendedCells.forEach(cell => {
-      if (selectedPlans.has(cell.cellId) && !addedIds.has(cell.cellId)) {
-        selectedItems.push({ text: cell.text, cellId: cell.cellId });
-        addedIds.add(cell.cellId);
-      }
-    });
-
-    // 그룹 플랜에서 수집
-    groupedPlans.forEach(group => {
-      group.actionPlans.forEach(plan => {
-        if (selectedPlans.has(plan.id) && !addedIds.has(plan.id)) {
-          selectedItems.push({ text: plan.text, cellId: plan.id });
-          addedIds.add(plan.id);
-        }
-      });
-    });
-
-    importActionPlans(selectedItems, selectedMandalartId || undefined);
+    const collect = (text: string, cellId: string, sourceMandalartId: string) => {
+      const key = monthlySourceKey(sourceMandalartId, cellId);
+      if (!selectedPlans.has(key) || addedIds.has(key)) return;
+      selectedItems.push({ text, cellId, sourceMandalartId });
+      addedIds.add(key);
+    };
+    recommendedCells.forEach((cell) => collect(cell.text, cell.cellId, cell.sourceMandalartId));
+    if (selectedMandalartId) {
+      groupedPlans.forEach((group) => group.actionPlans.forEach((plan) =>
+        collect(plan.text, plan.id, selectedMandalartId)));
+    }
+    importActionPlans(selectedItems);
+    setSelectedPlans(new Set());
     onClose();
   };
 
@@ -121,6 +119,9 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
       onClick={handleClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="만다라트에서 목표 불러오기"
         className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -131,6 +132,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
           </h2>
           <button
             onClick={handleClose}
+            aria-label="닫기"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,6 +145,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
         {/* Mandalart selector */}
         <div className="p-4 border-b border-slate-100">
           <select
+            aria-label="원본 만다라트"
             value={selectedMandalartId || ''}
             onChange={(e) => setSelectedMandalartId(e.target.value || null)}
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
@@ -163,7 +166,7 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
               <p>만다라트가 없습니다.</p>
               <p className="text-sm mt-2">먼저 만다라트를 생성해주세요.</p>
             </div>
-          ) : groupedPlans.length === 0 ? (
+          ) : groupedPlans.length === 0 && recommendedCells.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <p>실천 계획이 없습니다.</p>
               <p className="text-sm mt-2">만다라트에 세부 목표와 실천 계획을 입력해주세요.</p>
@@ -189,23 +192,25 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                   </div>
                   <div className="divide-y divide-blue-100">
                     {recommendedCells.map((cell) => {
-                      const isSelected = selectedPlans.has(cell.cellId);
-                      const isDisabled = !isSelected && reachedSelectionLimit;
+                      const key = monthlySourceKey(cell.sourceMandalartId, cell.cellId);
+                      const isSelected = selectedPlans.has(key);
+                      const imported = alreadyImported(cell.sourceMandalartId, cell.cellId);
+                      const isDisabled = imported || (!isSelected && reachedSelectionLimit);
                       return (
                         <label
-                          key={`rec-${cell.cellId}`}
+                          key={`rec-${key}`}
                           className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-blue-50"
                         >
                           <input
                             type="checkbox"
                             checked={isSelected}
                             disabled={isDisabled}
-                            onChange={() => togglePlan(cell.cellId)}
+                            onChange={() => togglePlan(key)}
                             className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                           />
                           <div className="flex-1 min-w-0">
                             <span className="text-sm text-slate-600 block">{cell.text}</span>
-                            <span className="text-xs text-slate-400">{cell.subGoalText}</span>
+                            <span className="text-xs text-slate-400">{cell.sourceTitle} · {cell.subGoalText}{imported ? ' · 이미 불러옴' : ''}</span>
                           </div>
                         </label>
                       );
@@ -250,8 +255,10 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                   {expandedGroups.has(group.subGoalText) && (
                     <div className="divide-y divide-slate-100">
                       {group.actionPlans.map((plan) => {
-                        const isSelected = selectedPlans.has(plan.id);
-                        const isDisabled = !isSelected && reachedSelectionLimit;
+                        const key = monthlySourceKey(selectedMandalartId!, plan.id);
+                        const isSelected = selectedPlans.has(key);
+                        const imported = alreadyImported(selectedMandalartId!, plan.id);
+                        const isDisabled = imported || (!isSelected && reachedSelectionLimit);
                         return (
                           <label
                             key={plan.id}
@@ -261,11 +268,11 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
                               type="checkbox"
                               checked={isSelected}
                               disabled={isDisabled}
-                              onChange={() => togglePlan(plan.id)}
+                              onChange={() => togglePlan(key)}
                               className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                             />
                             <span className="text-sm text-slate-600 flex-1">
-                              {plan.text}
+                              {plan.text}{imported ? ' · 이미 불러옴' : ''}
                             </span>
                           </label>
                         );

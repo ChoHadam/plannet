@@ -23,7 +23,7 @@ import { useBlock6Store } from '@/hooks/useBlock6';
 import { extractDailyHabits } from '@/lib/mandalartIntegration';
 import { getWeekDates } from '@/lib/weekUtils';
 import { getBlocksByDay, DayOfWeek } from '@/types/block6';
-import { DailyTodo, DAY_LABELS } from '@/types/daily';
+import { DailyData, DailyTodo, DAY_LABELS } from '@/types/daily';
 import { RecurringTodosInline } from '../RecurringTodos';
 import { WeeklyImportModal } from './WeeklyImportModal';
 
@@ -234,8 +234,57 @@ export function DailyGrid() {
   const currentDailyId = useDailyStore((state) => state.currentDailyId);
   const dailyPlans = useDailyStore((state) => state.dailyPlans);
   const data = dailyPlans.find((p) => p.id === currentDailyId) || null;
-
+  const viewedDay = useDailyStore((state) => state.viewedDay);
   const navigateDay = useDailyStore((state) => state.navigateDay);
+  const createDailyPlan = useDailyStore((state) => state.createDailyPlan);
+  const period = data ?? viewedDay;
+
+  if (!period) {
+    return <div className="flex items-center justify-center h-96 text-slate-400">일간 플랜을 선택하거나 새로 만들어주세요</div>;
+  }
+  const date = new Date(period.year, period.month - 1, period.day);
+
+  return (
+    <div className="w-full max-w-2xl mx-auto px-2 py-2 md:p-4">
+      <div className="flex items-center justify-center gap-4 mb-6">
+        <button
+          onClick={() => navigateDay('prev')}
+          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
+          title="이전 날"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <h2 className="text-xl font-semibold text-slate-700">
+          {period.year}년 {period.month}월 {period.day}일 ({DAY_LABELS[date.getDay()]})
+        </h2>
+        <button
+          onClick={() => navigateDay('next')}
+          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
+          title="다음 날"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+      {data ? <DailyPlanContent key={data.id} data={data} /> : (
+        <div className="text-center py-16 text-slate-500">
+          <p className="mb-4">이 날에는 일간 플랜이 없습니다</p>
+          <button
+            onClick={() => createDailyPlan(period.category, period.year, period.month, period.day)}
+            className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm hover:bg-emerald-600"
+          >
+            이 날의 플랜 만들기
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DailyPlanContent({ data }: { data: DailyData }) {
   const addTodo = useDailyStore((state) => state.addTodo);
   const updateTodo = useDailyStore((state) => state.updateTodo);
   const toggleTodo = useDailyStore((state) => state.toggleTodo);
@@ -258,17 +307,6 @@ export function DailyGrid() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center h-96 text-slate-400">
-        일간 플랜을 선택하거나 새로 만들어주세요
-      </div>
-    );
-  }
-
-  const date = new Date(data.year, data.month - 1, data.day);
-  const dayOfWeek = DAY_LABELS[date.getDay()];
 
   // Split todos into active and completed
   const activeTodos = data.todos.filter((t) => !t.completed);
@@ -402,32 +440,7 @@ export function DailyGrid() {
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-2 py-2 md:p-4">
-      {/* Header with date navigation */}
-      <div className="flex items-center justify-center gap-4 mb-6">
-        <button
-          onClick={() => navigateDay('prev')}
-          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
-          title="이전 날"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
-        </button>
-        <h2 className="text-xl font-semibold text-slate-700">
-          {data.year}년 {data.month}월 {data.day}일 ({dayOfWeek})
-        </h2>
-        <button
-          onClick={() => navigateDay('next')}
-          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
-          title="다음 날"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-        </button>
-      </div>
-
+    <>
       {/* Progress bar */}
       {totalCount > 0 && (
         <div className="mb-6">
@@ -606,6 +619,6 @@ export function DailyGrid() {
           onImport={handleImportWeekly}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -110,6 +110,8 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
   const isMandalart = plan.template === 'mandalart';
   const placeholder = templateRegistry[plan.template].placeholder;
+  // Daily always displays a day, even when stored under another sidebar category.
+  const dateCategory = plan.template === 'daily' ? 'daily' : plan.category;
 
   // Mandalart-specific: check if plan is empty
   const isCurrentPlanEmpty = () => {
@@ -234,9 +236,9 @@ export function Header({ onOpenAIChat }: HeaderProps) {
                   text-sm font-medium
                   shrink-0
                 "
-                title="날짜 변경"
+                title="플랜 날짜 변경"
               >
-                {formatPlanDate(plan.category, plan.year, plan.month, plan.week, plan.day)}
+                {formatPlanDate(dateCategory, plan.year, plan.month, plan.week, plan.day)}
               </button>
 
               {/* 모바일에서 우측에 그룹화될 액션들 */}
@@ -356,7 +358,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
       {showDatePicker && (
         <DatePicker
-          category={plan.category}
+          category={dateCategory}
           year={plan.year}
           month={plan.month}
           week={plan.week}
