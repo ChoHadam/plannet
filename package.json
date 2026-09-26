@@ -14,12 +14,19 @@
     "build:all": "npm run web:build && npm run api:build",
     "test:e2e": "npm run web:test:e2e",
     "api:dev": "./gradlew :apps:api:bootRun",
+    "api:dev:storage": "./infra/storage/db.sh run -- ./gradlew :apps:api:bootRun",
     "api:build": "./gradlew :apps:api:build",
     "api:test": "./gradlew :apps:api:test",
     "web:dev": "npm --workspace apps/web run dev",
     "web:build": "npm --workspace apps/web run build",
     "web:start": "npm --workspace apps/web run start",
     "web:lint": "npm --workspace apps/web run lint",
-    "web:test:e2e": "npm --workspace apps/web run test:e2e"
+    "web:test:e2e": "npm --workspace apps/web run test:e2e",
+    "test:storage": "npm --workspace apps/web exec -- playwright test --config playwright.server-storage.config.ts",
+    "db:init": "./infra/storage/db.sh init",
+    "db:up": "./infra/storage/db.sh up",
+    "db:status": "./infra/storage/db.sh status",
+    "db:backup": "./infra/storage/db.sh backup",
+    "db:stop": "./infra/storage/db.sh stop"
   }
 }
