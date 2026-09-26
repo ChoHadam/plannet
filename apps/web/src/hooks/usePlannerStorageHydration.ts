@@ -2,29 +2,16 @@
 
 import { useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { useMandalartStore } from '@/hooks/useMandalart';
-import { useBlock6Store } from '@/hooks/useBlock6';
-import { useMonthlyStore } from '@/hooks/useMonthly';
-import { useDailyStore } from '@/hooks/useDaily';
-import { useRecurringStore } from '@/hooks/useRecurring';
-import { useHolidayStore } from '@/hooks/useHolidays';
 import { getPlannerStorageScope, setPlannerStorageScope } from '@/lib/plannerStorage';
-
-const PLANNER_STORES = [
-  useMandalartStore,
-  useBlock6Store,
-  useMonthlyStore,
-  useDailyStore,
-  useRecurringStore,
-  useHolidayStore,
-];
+import { PLANNER_STORES } from '@/lib/plannerSyncStores';
+import { startPlannerSync } from '@/hooks/usePlannerSync';
 
 /**
  * 로그인 상태 확인이 끝나 저장 범위가 정해지면 모든 플래너 store를 그 범위에서 복원한다.
  * 한 페이지 수명 동안 범위는 하나다. 로그인·로그아웃은 페이지를 새로 불러오며 범위를 바꾼다.
  */
 export function usePlannerStorageHydration(): void {
-  const { storageScope } = useAuth();
+  const { storageScope, storageEnabled, user } = useAuth();
 
   useEffect(() => {
     if (!storageScope) return;
@@ -38,6 +25,8 @@ export function usePlannerStorageHydration(): void {
     }
 
     setPlannerStorageScope(storageScope);
-    PLANNER_STORES.forEach((store) => store.persist.rehydrate());
-  }, [storageScope]);
+    void Promise.all(PLANNER_STORES.map((store) => store.persist.rehydrate())).then(() => {
+      if (storageEnabled && user?.userId) startPlannerSync(user.userId);
+    });
+  }, [storageScope, storageEnabled, user]);
 }

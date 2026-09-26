@@ -33,6 +33,8 @@ export const LOGIN_ERROR_MESSAGES: Record<string, string> = {
 export const DEFAULT_LOGIN_ERROR_MESSAGE = LOGIN_ERROR_MESSAGES.login_failed;
 
 export interface AuthUser {
+  /** 서버 저장용 내부 UUID. provider/subject와 별개다. */
+  userId?: string;
   /** provider 내 고유 식별자 (계약의 externalSubject = Google `sub`). 내부 userId가 아니다. */
   subject: string;
   provider: string;
@@ -43,7 +45,7 @@ export interface AuthUser {
 
 /** `/api/v1/me` 응답을 해석한 결과 */
 export type MeParseResult =
-  | { kind: 'authenticated'; user: AuthUser }
+  | { kind: 'authenticated'; user: AuthUser; storageEnabled: boolean }
   | { kind: 'unauthenticated' }
   | { kind: 'invalid' };
 
@@ -79,10 +81,16 @@ export function parseMeBody(body: unknown): MeParseResult {
   const source = body.user;
   const subject = readString(source, 'externalSubject');
   if (!subject) return { kind: 'invalid' };
+  const userId = readString(source, 'userId');
+  if (body.storageEnabled === true && (!userId || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(userId))) {
+    return { kind: 'invalid' };
+  }
 
   return {
     kind: 'authenticated',
+    storageEnabled: body.storageEnabled === true,
     user: {
+      userId,
       subject,
       provider: readString(source, 'authProvider') ?? DEFAULT_PROVIDER,
       email: readString(source, 'email'),

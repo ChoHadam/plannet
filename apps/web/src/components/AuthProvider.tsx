@@ -13,7 +13,7 @@ import {
   LOGOUT_SUCCESS_STATUS,
   parseMeBody,
 } from '@/lib/authContract';
-import { accountStorageScope, LOCAL_STORAGE_SCOPE } from '@/lib/plannerStorage';
+import { accountStorageScope, cloudStorageScope, LOCAL_STORAGE_SCOPE } from '@/lib/plannerStorage';
 import { FALLBACK_RUNTIME_CONFIG, RUNTIME_CONFIG_PATH, RuntimeConfig } from '@/lib/runtimeConfig';
 
 /**
@@ -29,6 +29,7 @@ interface AuthContextValue {
   config: RuntimeConfig;
   /** 플래너 LocalStorage 범위. 확인이 끝나기 전에는 null */
   storageScope: string | null;
+  storageEnabled: boolean;
   /** 로그인 실패 후 돌아왔을 때 보여줄 안내 (`?authError=`) */
   loginError: string | null;
   login: () => void;
@@ -60,7 +61,7 @@ async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   }
 }
 
-type MeResult = { status: 'authenticated'; user: AuthUser } | { status: 'anonymous' | 'unavailable' };
+type MeResult = { status: 'authenticated'; user: AuthUser; storageEnabled: boolean } | { status: 'anonymous' | 'unavailable' };
 
 async function fetchMe(): Promise<MeResult> {
   let response: Response;
@@ -84,7 +85,7 @@ async function fetchMe(): Promise<MeResult> {
 
   try {
     const parsed = parseMeBody(await response.json());
-    if (parsed.kind === 'authenticated') return { status: 'authenticated', user: parsed.user };
+    if (parsed.kind === 'authenticated') return { status: 'authenticated', user: parsed.user, storageEnabled: parsed.storageEnabled };
     if (parsed.kind === 'unauthenticated') return { status: 'anonymous' };
   } catch {
     // JSON이 아니면 계약 불일치
@@ -135,6 +136,7 @@ interface ResolvedState {
   status: Exclude<AuthStatus, 'loading'>;
   user: AuthUser | null;
   config: RuntimeConfig;
+  storageEnabled: boolean;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -150,12 +152,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const config = await fetchRuntimeConfig();
       if (!config.authEnabled) {
-        if (!cancelled) setResolved({ status: 'disabled', user: null, config });
+        if (!cancelled) setResolved({ status: 'disabled', user: null, config, storageEnabled: false });
         return;
       }
       const me = await fetchMe();
       if (cancelled) return;
-      setResolved({ status: me.status, user: me.status === 'authenticated' ? me.user : null, config });
+      setResolved({ status: me.status, user: me.status === 'authenticated' ? me.user : null, config, storageEnabled: me.status === 'authenticated' && me.storageEnabled });
     })();
 
     return () => {
@@ -207,13 +209,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: null,
         config: FALLBACK_RUNTIME_CONFIG,
         storageScope: null,
+        storageEnabled: false,
         loginError,
         login,
         logout,
         retry,
       };
     }
-    const storageScope = resolved.user ? accountStorageScope(authUserKey(resolved.user)) : LOCAL_STORAGE_SCOPE;
+    const storageScope = resolved.user
+      ? resolved.storageEnabled && resolved.user.userId
+        ? cloudStorageScope(resolved.user.userId)
+        : accountStorageScope(authUserKey(resolved.user))
+      : LOCAL_STORAGE_SCOPE;
     return { ...resolved, storageScope, loginError, login, logout, retry };
   }, [resolved, loginError, login, logout, retry]);
 

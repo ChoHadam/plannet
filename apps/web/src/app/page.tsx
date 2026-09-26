@@ -11,6 +11,7 @@ import { useDailyStore } from '@/hooks/useDaily';
 import { useAutoBackup } from '@/lib/autoBackup';
 import { AuthStatus } from '@/components/AuthStatus';
 import { useAuth } from '@/components/AuthProvider';
+import { PlannerSyncStatus } from '@/components/PlannerSyncStatus';
 
 export default function Home() {
   const allHydrated = useAllHydrated();
@@ -32,8 +33,10 @@ export default function Home() {
 
   if (!allHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-slate-400">로딩 중...</div>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+        <AuthStatus />
+        <PlannerSyncStatus />
+        <div className="text-xs text-slate-400">로딩 중...</div>
       </div>
     );
   }
@@ -46,8 +49,9 @@ export default function Home() {
       />
 
       <main className="flex-1 py-4 px-3 md:py-8 md:px-4 overflow-x-auto min-w-0">
-        <div className="w-full max-w-4xl mx-auto px-4 pl-14 md:pl-4 flex justify-end">
+        <div className="w-full max-w-4xl mx-auto px-4 pl-14 md:pl-4 flex flex-col items-end gap-2">
           <AuthStatus />
+          <PlannerSyncStatus />
         </div>
 
         <Header onOpenAIChat={() => setShowAIChat(true)} />

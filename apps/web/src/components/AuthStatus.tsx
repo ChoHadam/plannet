@@ -45,7 +45,7 @@ function AuthUnavailable() {
 }
 
 function SignedIn() {
-  const { user, logout } = useAuth();
+  const { user, logout, storageEnabled } = useAuth();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   // 로그인 전 공통 데이터는 계정에 귀속하지 않고 LOCAL 범위에 남겨 둔다.
@@ -85,7 +85,7 @@ function SignedIn() {
           로그아웃하지 못했어요. 다시 시도해주세요.
         </p>
       )}
-      {hasLocalData && (
+      {hasLocalData && !storageEnabled && (
         <p className="text-xs text-slate-500">
           로그인 전에 이 브라우저에 저장한 플랜은 계정과 분리해 보존했어요. 로그아웃하면 다시 볼 수 있어요.
         </p>

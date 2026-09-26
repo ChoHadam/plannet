@@ -1,5 +1,7 @@
 # 월간 플래너 (Monthly Compass)
 
+**저장·인증:** 서버 저장 활성화 시 계정별 PostgreSQL에 기록과 출처를 보존하고, 브라우저에는 캐시·미전송 초안을 남긴다. 기존 로컬 기록은 명시적으로 가져온다. 현재 선택·조회 기간은 기기별 상태다. [공통 저장 정책](../web-auth-integration.md)을 참고한다.
+
 ## 개요
 
 **컨셉: "Monthly Compass (월간 나침반)"**
@@ -99,7 +101,7 @@ export interface MonthlyData {
 
 ### 신규 파일: `src/hooks/useMonthly.ts`
 
-- 비로그인 localStorage key: `'plannet-monthly'`. 로그인 시 계정별 접미사를 붙이며 기존 비로그인 기록은 보존한다. [공통 저장 정책](../web-auth-integration.md)을 따른다.
+- 비로그인 localStorage key: `'plannet-monthly'`. 로그인 시 계정별 캐시를 사용하며 서버 저장 활성화 시 PostgreSQL에 동기화한다. 기존 비로그인 기록은 명시적으로 가져오고 원본을 보존한다. [공통 저장 정책](../web-auth-integration.md)을 따른다.
 - persist 미들웨어 + skipHydration. 인증 상태와 저장 범위를 확인한 뒤 복원한다.
 
 **주요 액션:**

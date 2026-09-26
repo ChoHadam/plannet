@@ -24,7 +24,7 @@ export const PLANNER_STORAGE_KEYS = {
 
 let activeScope: string | null = null;
 
-function scopedKey(name: string, scope: string): string {
+export function scopedKey(name: string, scope: string): string {
   return scope === LOCAL_STORAGE_SCOPE ? name : `${name}${SCOPE_SEPARATOR}${scope}`;
 }
 
@@ -74,6 +74,11 @@ export function setPlannerStorageScope(scope: string): void {
  */
 export function accountStorageScope(userKey: string): string {
   return `acct:${encodeURIComponent(userKey)}`;
+}
+
+/** 내부 사용자별 서버 캐시. 이전 계정/비로그인 키는 명시적 이전 전까지 그대로 둔다. */
+export function cloudStorageScope(userId: string): string {
+  return `cloud:${userId}`;
 }
 
 /** 로그인 전(LOCAL 범위)에 저장된 플랜이 이 브라우저에 남아 있는지 */
