@@ -112,6 +112,11 @@ Each template has documentation in `docs/templates/`:
 - Block6 시간대: `amber-50` (오전), `sky-50` (오후), `violet-50` (저녁)
 - 이번 주 포커스 카드: `indigo` 계열 (violet과 조화)
 
+### Image Export
+- 만다라트 PNG는 화면 크기와 무관한 전체 9×9 고정 레이아웃(2080×2192)으로 저장
+- 저장된 영역 색상과 시스템 글꼴을 사용하며, 긴 텍스트는 줄바꿈·크기 조정으로 표시
+- Canvas 출력 크기·간격·색상은 `apps/web/src/lib/mandalartImage.ts`의 상수로 관리
+
 **Note**: 디자인 시스템 관련 결정(색상, 타이포그래피, 간격 등)은 이 섹션에 문서화할 것
 
 ## Key Features

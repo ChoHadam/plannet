@@ -24,6 +24,8 @@ interface MandalartStore {
   // Multiple plans support
   mandalarts: MandalartData[];
   currentId: string | null;
+  // Transient identity for destructive replacement; excluded from persisted planner data.
+  resetToken: object | null;
 
   // Computed getter
   data: MandalartData | null;
@@ -43,6 +45,7 @@ interface MandalartStore {
   updateTitle: (title: string) => void;
   updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
+  replaceCurrentMandalart: (data: MandalartData) => boolean;
 
   // Cell schedule
   updateCellSchedule: (gridId: GridPosition, cellIndex: number, schedule: CellSchedule | undefined) => void;
@@ -89,6 +92,7 @@ export const useMandalartStore = create<MandalartStore>()(
     (set, get) => ({
       mandalarts: [],
       currentId: null,
+      resetToken: null,
 
       get data() {
         const state = get();
@@ -478,8 +482,24 @@ export const useMandalartStore = create<MandalartStore>()(
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = newMandalart;
 
-          return { mandalarts: newMandalarts };
+          return { mandalarts: newMandalarts, resetToken: {} };
         });
+      },
+
+      // Import has already validated the data. Preserve the selected local identity and
+      // invalidate pending work in the same notification as the complete replacement.
+      replaceCurrentMandalart: (data: MandalartData) => {
+        let replaced = false;
+        set((state) => {
+          const index = state.mandalarts.findIndex((plan) => plan.id === state.currentId);
+          if (index === -1) return state;
+
+          const mandalarts = [...state.mandalarts];
+          mandalarts[index] = { ...data, id: mandalarts[index].id, updatedAt: new Date().toISOString() };
+          replaced = true;
+          return { mandalarts, resetToken: {} };
+        });
+        return replaced;
       },
 
       updateCellSchedule: (gridId: GridPosition, cellIndex: number, schedule: CellSchedule | undefined) => {

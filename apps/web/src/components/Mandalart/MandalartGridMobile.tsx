@@ -75,7 +75,7 @@ export function MandalartGridMobile() {
       </p>
 
       {/* 중앙 그리드 */}
-      <div id="mandalart-grid" className="bg-slate-100/50 rounded-2xl p-3 shadow-inner">
+      <div id="mandalart-grid-mobile" className="bg-slate-100/50 rounded-2xl p-3 shadow-inner">
         {centerGrid && (
           <SubGrid
             gridId="center"

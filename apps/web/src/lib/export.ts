@@ -1,78 +1,69 @@
-import html2canvas from 'html2canvas';
 import { MandalartData } from '@/types/mandalart';
+import { MAX_MANDALART_JSON_BYTES, MandalartImportError, parseMandalartJSON } from './mandalartImport';
+import { renderMandalartImage } from './mandalartImage';
 
-// JSON Export
-export const exportToJSON = (data: MandalartData) => {
-  const jsonString = JSON.stringify(data, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
+const OBJECT_URL_LIFETIME_MS = 1_000;
+
+function downloadBlob(blob: Blob, title: string, extension: 'json' | 'png'): void {
   const url = URL.createObjectURL(blob);
-
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${data.title || 'mandalart'}-${new Date().toISOString().split('T')[0]}.json`;
+  const safeTitle = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 120) || 'mandalart';
+  link.download = `${safeTitle}-${new Date().toISOString().split('T')[0]}.${extension}`;
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  link.remove();
+  // Let browsers consume the URL before revoking it (including mobile downloads).
+  setTimeout(() => URL.revokeObjectURL(url), OBJECT_URL_LIFETIME_MS);
+}
+
+export const exportToJSON = (data: MandalartData) => {
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), data.title, 'json');
 };
 
-// JSON Import
-export const importFromJSON = (): Promise<MandalartData | null> => {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+export const importFromJSON = (): Promise<MandalartData | null> => new Promise((resolve) => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.hidden = true;
+  let settled = false;
+  const finish = (data: MandalartData | null) => {
+    if (settled) return;
+    settled = true;
+    input.remove();
+    resolve(data);
+  };
+  input.addEventListener('cancel', () => finish(null), { once: true });
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return finish(null);
+    try {
+      if (file.size > MAX_MANDALART_JSON_BYTES) throw new MandalartImportError('파일은 2MB 이하여야 합니다.');
+      finish(parseMandalartJSON(await file.text()));
+    } catch (error) {
+      alert(error instanceof MandalartImportError ? error.message : '파일을 읽는 중 오류가 발생했습니다.');
+      finish(null);
+    }
+  }, { once: true });
+  document.body.appendChild(input);
+  input.click();
+});
 
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) {
-        resolve(null);
-        return;
-      }
-
-      try {
-        const text = await file.text();
-        const data = JSON.parse(text) as MandalartData;
-
-        // Basic validation
-        if (!data.grids || !Array.isArray(data.grids)) {
-          alert('유효하지 않은 파일 형식입니다.');
-          resolve(null);
-          return;
-        }
-
-        resolve(data);
-      } catch {
-        alert('파일을 읽는 중 오류가 발생했습니다.');
-        resolve(null);
-      }
-    };
-
-    input.click();
-  });
-};
-
-// Image Export
-export const exportToImage = async (elementId: string, filename: string) => {
-  const element = document.getElementById(elementId);
-  if (!element) {
-    alert('내보낼 요소를 찾을 수 없습니다.');
-    return;
-  }
-
+// The optional snapshot keeps existing two-argument callers compatible. Both layouts share
+// a single export root containing the complete plan, never just the mobile center grid.
+export const exportToImage = async (elementId: string, filename: string, data?: MandalartData) => {
   try {
-    const canvas = await html2canvas(element, {
-      backgroundColor: '#f8fafc',
-      scale: 2, // Higher resolution
-      logging: false,
+    const serialized = data ? undefined : document.getElementById(elementId)?.dataset.mandalartExport;
+    const plan = data ?? (serialized ? parseMandalartJSON(serialized) : null);
+    if (!plan) {
+      alert('내보낼 만다라트를 찾을 수 없습니다.');
+      return;
+    }
+    const canvas = await renderMandalartImage(plan);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(value => value ? resolve(value) : reject(new Error('PNG encoding failed')), 'image/png');
     });
-
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = `${filename || 'mandalart'}-${new Date().toISOString().split('T')[0]}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadBlob(blob, filename, 'png');
   } catch {
     alert('이미지 생성 중 오류가 발생했습니다.');
   }

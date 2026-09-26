@@ -104,7 +104,7 @@ export function MandalartGrid() {
   };
 
   return (
-    <>
+    <div id="mandalart-grid" data-mandalart-export={JSON.stringify(data)}>
       {/* 모바일: Focus + Detail 레이아웃 */}
       <div className="md:hidden">
         <MandalartGridMobile />
@@ -113,7 +113,7 @@ export function MandalartGrid() {
       {/* 데스크탑: 9x9 그리드 */}
       <div className="hidden md:block">
     <div className="relative">
-      <div id="mandalart-grid" className="grid grid-cols-3 gap-2 p-4 bg-slate-100/50 rounded-2xl shadow-inner max-w-4xl mx-auto">
+      <div id="mandalart-grid-desktop" className="grid grid-cols-3 gap-2 p-4 bg-slate-100/50 rounded-2xl shadow-inner max-w-4xl mx-auto">
         {GRID_POSITIONS.map((position) => {
           const grid = getGrid(position);
           if (!grid) return null;
@@ -183,6 +183,6 @@ export function MandalartGrid() {
       )}
     </div>
       </div>
-    </>
+    </div>
   );
 }

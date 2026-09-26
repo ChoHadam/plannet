@@ -3,18 +3,24 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { useAuth } from '@/components/AuthProvider';
-import { GridPosition, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
+import { GridPosition } from '@/types/mandalart';
+import { getPlannerStorageScope } from '@/lib/plannerStorage';
+import {
+  AIRequestContext,
+  ChatActionData,
+  CORE_GOAL_INDEX,
+  findStaleReason,
+  planGridAction,
+  readCellValue,
+  snapshotGridValues,
+  SUB_GOAL_POSITIONS,
+} from '@/lib/aiResponseSafety';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   action?: string;
-  data?: {
-    coreGoal?: string;
-    subGoal?: string;
-    subGoalIndex?: number;
-    actions?: string[];
-  };
+  data?: ChatActionData;
 }
 
 interface TokenUsage {
@@ -34,6 +40,27 @@ interface ChatErrorBody {
   message?: string;
 }
 
+/** 진행 중인 요청. 취소 시 보낸 메시지를 되돌리는 데 쓴다. */
+interface PendingRequest {
+  context: AIRequestContext;
+  controller: AbortController;
+  baseMessages: Message[];
+  pendingMessages: Message[];
+  text: string;
+}
+
+type CancelMode = 'restore' | 'discard';
+
+const EMPTY_USAGE: TokenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  estimatedCostUSD: '0',
+};
+
+/** generate_actions를 이 횟수만큼 도우면 대화를 끝낸다 */
+const MAX_ASSISTED_COUNT = 2;
+
 interface AIChatSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -44,18 +71,18 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [assistedCount, setAssistedCount] = useState(0);
-  const [totalUsage, setTotalUsage] = useState<TokenUsage>({
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    estimatedCostUSD: '0',
-  });
+  const [totalUsage, setTotalUsage] = useState<TokenUsage>(EMPTY_USAGE);
   const [isEnded, setIsEnded] = useState(false);
   // 서버가 401을 돌려주면(세션 만료 등) 로그인 안내로 전환한다.
   const [sessionRejected, setSessionRejected] = useState(false);
-  const { status: authStatus, login } = useAuth();
+  const { status: authStatus, storageScope: authStorageScope, login } = useAuth();
   const canChat = authStatus === 'authenticated' && !sessionRejected;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 요청 세대. 플랜 전환·초기화·닫기·계정 변경·해제 때마다 올려서 이전 응답을 무효로 만든다.
+  const generationRef = useRef(0);
+  const pendingRef = useRef<PendingRequest | null>(null);
+  const authScopeRef = useRef(authStorageScope);
 
   const currentId = useMandalartStore((state) => state.currentId);
   const data = useMandalartStore((state) => {
@@ -64,45 +91,95 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
   });
   const updateCell = useMandalartStore((state) => state.updateCell);
 
-  // 셀 값 조회 헬퍼
-  const getCellValue = useCallback((gridId: GridPosition, cellIndex: number): string => {
-    const grid = data?.grids.find((g) => g.id === gridId);
-    return grid?.cells[cellIndex]?.value?.trim() || '';
-  }, [data]);
+  // 셀 값 조회 헬퍼 (화면 표시용. 요청·응답 처리는 store의 최신 값을 직접 읽는다)
+  const getCellValue = useCallback(
+    (gridId: GridPosition, cellIndex: number): string => readCellValue(data, gridId, cellIndex),
+    [data],
+  );
 
-  // 빈 하위목표 슬롯 찾기
-  const findEmptySubGoalSlot = (): number | null => {
-    const positions = [0, 1, 2, 3, 5, 6, 7, 8];
-    for (const pos of positions) {
-      if (!getCellValue('center', pos)) {
-        return pos;
-      }
-    }
-    return null;
+  /** 인증이 알려준 범위와 실제 저장 범위가 같을 때만 그 범위를, 아니면 null */
+  const readStorageScope = (): string | null => {
+    const scope = getPlannerStorageScope();
+    return scope !== null && scope === authScopeRef.current ? scope : null;
   };
+
+  const readCurrentPlan = () => {
+    const state = useMandalartStore.getState();
+    const plan = state.currentId ? state.mandalarts.find((m) => m.id === state.currentId) ?? null : null;
+    return { planId: state.currentId, plan, resetToken: state.resetToken };
+  };
+
+  /** 진행 중인 요청을 끊고, 이후 도착하는 응답이 어떤 상태도 바꾸지 못하게 한다. */
+  const cancelPendingRequest = useCallback((mode: CancelMode) => {
+    generationRef.current += 1;
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (!pending) return;
+    pending.controller.abort();
+    setIsLoading(false);
+    if (mode === 'restore') {
+      // 답을 받지 못한 질문은 대화에서 빼고 입력창으로 돌려준다.
+      setMessages((prev) => (prev === pending.pendingMessages ? pending.baseMessages : prev));
+      setInput((prev) => prev || pending.text);
+    }
+  }, []);
 
   // 스크롤 자동 이동
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 만다라트가 변경되면 채팅 초기화
-  useEffect(() => {
+  const resetConversation = useCallback(() => {
+    cancelPendingRequest('discard');
     setMessages([]);
     setAssistedCount(0);
-    setTotalUsage({
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      estimatedCostUSD: '0',
-    });
+    setTotalUsage(EMPTY_USAGE);
     setIsEnded(false);
-  }, [currentId]);
+  }, [cancelPendingRequest]);
+
+  // Invalidate synchronously with the store update, before a response continuation can run.
+  // Identity changes survive equal values/timestamps and same-tick A → B → A selections.
+  useEffect(() => {
+    resetConversation();
+    return useMandalartStore.subscribe((state, previous) => {
+      if (state.currentId !== previous.currentId || state.resetToken !== previous.resetToken) {
+        resetConversation();
+      }
+    });
+  }, [resetConversation]);
+
+  // 계정 저장 범위가 바뀌면 이전 계정 문맥의 요청을 버린다.
+  useEffect(() => {
+    authScopeRef.current = authStorageScope;
+    cancelPendingRequest('discard');
+  }, [authStorageScope, cancelPendingRequest]);
+
+  // 닫히면 진행 중인 요청을 취소한다.
+  useEffect(() => {
+    if (!isOpen) cancelPendingRequest('restore');
+  }, [isOpen, cancelPendingRequest]);
+
+  // 로그아웃·로그인 이동 등으로 페이지를 떠나기 시작하면 늦은 응답이 이전 계정 기록을 바꾸지 못하게 한다.
+  // 해제될 때도 같은 이유로 세대를 올린다 (해제 후에는 setState하지 않는다).
+  useEffect(() => {
+    const onLeave = () => {
+      generationRef.current += 1;
+      pendingRef.current?.controller.abort();
+      pendingRef.current = null;
+    };
+    window.addEventListener('beforeunload', onLeave);
+    window.addEventListener('pagehide', onLeave);
+    return () => {
+      window.removeEventListener('beforeunload', onLeave);
+      window.removeEventListener('pagehide', onLeave);
+      onLeave();
+    };
+  }, []);
 
   const initChat = useCallback(() => {
     // 현재 그리드 상태 확인
-    const coreGoal = getCellValue('center', 4);
-    const emptySlotCount = [0, 1, 2, 3, 5, 6, 7, 8].filter(
+    const coreGoal = getCellValue('center', CORE_GOAL_INDEX);
+    const emptySlotCount = SUB_GOAL_POSITIONS.filter(
       (pos) => !getCellValue('center', pos)
     ).length;
 
@@ -132,8 +209,28 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
   const handleSend = async () => {
     if (!input.trim() || isLoading || isEnded) return;
 
-    const userMessage: Message = { role: 'user', content: input.trim() };
+    const storageScope = readStorageScope();
+    const { planId, plan, resetToken } = readCurrentPlan();
+    if (!storageScope || !planId || !plan) return;
+
+    const text = input.trim();
+    const userMessage: Message = { role: 'user', content: text };
+    const baseMessages = messages;
     const newMessages = [...messages, userMessage];
+
+    cancelPendingRequest('discard');
+    const context: AIRequestContext = {
+      generation: generationRef.current,
+      storageScope,
+      planId,
+      resetToken,
+      snapshot: snapshotGridValues(plan),
+    };
+    const controller = new AbortController();
+    pendingRef.current = { context, controller, baseMessages, pendingMessages: newMessages, text };
+    const isCurrent = () => generationRef.current === context.generation
+      && useMandalartStore.getState().resetToken === context.resetToken;
+
     setMessages(newMessages);
     setInput('');
     setIsLoading(true);
@@ -145,24 +242,35 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
         content: m.content,
       }));
 
-      // 현재 그리드 상태 정보
+      // 요청 시점의 그리드 상태 정보
+      const subGoals = SUB_GOAL_POSITIONS.map((pos) => readCellValue(plan, 'center', pos));
       const gridState = {
-        coreGoal: getCellValue('center', 4),
-        emptySubGoalCount: [0, 1, 2, 3, 5, 6, 7, 8].filter(
-          (pos) => !getCellValue('center', pos)
-        ).length,
-        existingSubGoals: [0, 1, 2, 3, 5, 6, 7, 8]
-          .map((pos) => getCellValue('center', pos))
-          .filter(Boolean),
+        coreGoal: readCellValue(plan, 'center', CORE_GOAL_INDEX),
+        emptySubGoalCount: subGoals.filter((value) => !value).length,
+        existingSubGoals: subGoals.filter(Boolean),
       };
 
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages, assistedCount, gridState }),
+        signal: controller.signal,
       });
 
       const result = await response.json();
+
+      // 응답 처리 직전: 세대 → 계정 범위 → 플랜을 최신 값으로 다시 확인한다.
+      if (!isCurrent()) return;
+      const current = readCurrentPlan();
+      const staleReason = findStaleReason(context, {
+        generation: generationRef.current,
+        storageScope: readStorageScope(),
+        ...current,
+      });
+      if (staleReason || !current.plan) {
+        cancelPendingRequest('discard');
+        return;
+      }
 
       if (!response.ok) {
         const errorBody = result as ChatErrorBody;
@@ -187,13 +295,20 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
         }));
       }
 
-      // 액션 처리 (에러 메시지 반환 가능)
-      const actionError = handleAction(result.action, result.data);
+      // 액션 처리: 최신 플랜 기준으로 계산하고, 기다리는 동안 바뀐 칸은 건드리지 않는다.
+      const gridAction = planGridAction(result.action, result.data, context.snapshot, current.plan);
+      gridAction.writes.forEach(({ gridId, cellIndex, value }) => updateCell(gridId, cellIndex, value));
+      if (gridAction.assisted) {
+        const newCount = assistedCount + 1;
+        setAssistedCount(newCount);
+        if (newCount >= MAX_ASSISTED_COUNT) setIsEnded(true);
+      }
+      if (gridAction.endConversation) setIsEnded(true);
 
-      // AI 응답 추가 (에러가 있으면 메시지에 추가)
+      // AI 응답 추가 (경고가 있으면 메시지에 추가)
       let finalMessage = result.message;
-      if (actionError) {
-        finalMessage = `${result.message}\n\n⚠️ ${actionError}`;
+      if (gridAction.notice) {
+        finalMessage = `${result.message}\n\n⚠️ ${gridAction.notice}`;
       }
 
       const assistantMessage: Message = {
@@ -204,84 +319,19 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
       };
       setMessages([...newMessages, assistantMessage]);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to send message:', error);
       setMessages([
         ...newMessages,
         { role: 'assistant', content: GENERIC_ERROR_MESSAGE },
       ]);
     } finally {
-      setIsLoading(false);
+      // 이전 요청의 finally가 새 요청의 loading을 끄지 않게 한다.
+      if (isCurrent()) {
+        pendingRef.current = null;
+        setIsLoading(false);
+      }
     }
-  };
-
-  const handleAction = (action: string, actionData: Message['data']): string | null => {
-    if (!data || !actionData) return null;
-
-    switch (action) {
-      case 'set_core_goal':
-        if (actionData.coreGoal) {
-          // 핵심 목표가 비어있을 때만 설정
-          if (!getCellValue('center', 4)) {
-            updateCell('center', 4, actionData.coreGoal);
-          }
-        }
-        break;
-
-      case 'set_sub_goal':
-        if (actionData.subGoal) {
-          const emptySlot = findEmptySubGoalSlot();
-          if (emptySlot !== null) {
-            updateCell('center', emptySlot, actionData.subGoal);
-          } else {
-            return '모든 하위 목표 슬롯이 이미 채워져 있어요. 기존 목표를 수정하거나 삭제해주세요.';
-          }
-        }
-        break;
-
-      case 'generate_actions':
-        if (actionData.subGoal && actionData.actions) {
-          const positions = [0, 1, 2, 3, 5, 6, 7, 8];
-
-          // 빈 하위목표 슬롯 찾기
-          const emptySlot = findEmptySubGoalSlot();
-
-          if (emptySlot === null) {
-            return '비어있는 하위 목표가 없어서 그리드 채우기를 하지 않았어요. 기존 목표를 수정하거나 삭제해주세요.';
-          }
-
-          // 빈 슬롯에 하위 목표 설정
-          updateCell('center', emptySlot, actionData.subGoal);
-
-          // 외곽 그리드에 실천 계획 채우기
-          const outerGridId = CENTER_TO_OUTER_MAP[emptySlot] as GridPosition;
-
-          // 외곽 그리드 중앙에 하위 목표 설정
-          updateCell(outerGridId, 4, actionData.subGoal);
-
-          // 실천 계획 8개 채우기 (AI가 생성한 내용으로 덮어쓰기)
-          actionData.actions.forEach((actionItem, idx) => {
-            if (idx < 8) {
-              const actionCellIndex = positions[idx];
-              updateCell(outerGridId, actionCellIndex, actionItem);
-            }
-          });
-
-          const newCount = assistedCount + 1;
-          setAssistedCount(newCount);
-
-          // 2개 완료 시 대화 종료
-          if (newCount >= 2) {
-            setIsEnded(true);
-          }
-        }
-        break;
-
-      case 'end_conversation':
-        setIsEnded(true);
-        break;
-    }
-
-    return null;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -292,15 +342,7 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
   };
 
   const handleReset = () => {
-    setMessages([]);
-    setAssistedCount(0);
-    setTotalUsage({
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      estimatedCostUSD: '0',
-    });
-    setIsEnded(false);
+    resetConversation();
     initChat();
   };
 

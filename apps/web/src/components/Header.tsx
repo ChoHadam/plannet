@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
 import { exportToJSON, importFromJSON, exportToImage } from '@/lib/export';
 import { MandalartData, TemplateType, PlanCategory } from '@/types/mandalart';
 import { templateRegistry, TEMPLATE_TYPES, BasePlanData } from '@/lib/templateRegistry';
 import { DatePicker, formatPlanDate } from './DatePicker';
 import { MandalartGuide } from './MandalartGuide';
+import { getPlannerStorageScope } from '@/lib/plannerStorage';
+
+interface ImportContext {
+  epoch: number;
+  scope: string;
+  original: MandalartData;
+}
+
+interface PendingImport {
+  data: MandalartData;
+  context: ImportContext;
+}
+
+const IMPORT_CONTEXT_CHANGED_MESSAGE = '파일을 불러오는 동안 플랜이 바뀌었어요. 현재 내용을 보존했으니 다시 불러와 주세요.';
 
 interface HeaderProps {
   onOpenAIChat?: () => void;
@@ -70,10 +84,27 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const [pendingImport, setPendingImport] = useState<MandalartData | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const importEpoch = useRef(0);
+
+  // File selection and confirmation can outlive the plan they were opened for.
+  // Invalidate synchronously, including A → B → A and full plan replacement.
+  useEffect(() => {
+    const unsubscribe = useMandalartStore.subscribe((state, previous) => {
+      if (state.currentId !== previous.currentId || state.resetToken !== previous.resetToken) {
+        importEpoch.current += 1;
+        setPendingImport(null);
+        setShowImportConfirm(false);
+      }
+    });
+    return () => {
+      importEpoch.current += 1;
+      unsubscribe();
+    };
+  }, []);
 
   if (!plan) return null;
 
@@ -126,30 +157,39 @@ export function Header({ onOpenAIChat }: HeaderProps) {
 
   const handleImportJSON = async () => {
     setShowMenu(false);
+    const scope = getPlannerStorageScope();
+    if (!mandalartData || !scope) return;
+    const context: ImportContext = { epoch: ++importEpoch.current, scope, original: mandalartData };
     const importedData = await importFromJSON();
-    if (importedData && mandalartData) {
+    if (importedData) {
+      if (!isImportContextCurrent(context)) {
+        alert(IMPORT_CONTEXT_CHANGED_MESSAGE);
+        return;
+      }
       if (isCurrentPlanEmpty()) {
-        applyImport(importedData);
+        applyImport({ data: importedData, context });
       } else {
-        setPendingImport(importedData);
+        setPendingImport({ data: importedData, context });
         setShowImportConfirm(true);
       }
     }
   };
 
-  const applyImport = (importedData: MandalartData) => {
-    if (!mandalartData) return;
+  const isImportContextCurrent = (context: ImportContext) => {
     const store = useMandalartStore.getState();
-    const idx = store.mandalarts.findIndex(m => m.id === mandalartData.id);
-    if (idx !== -1) {
-      store.mandalarts[idx] = {
-        ...importedData,
-        id: mandalartData.id,
-        category: mandalartData.category,
-        updatedAt: new Date().toISOString(),
-      };
-      useMandalartStore.setState({ mandalarts: [...store.mandalarts] });
+    return context.epoch === importEpoch.current
+      && context.scope === getPlannerStorageScope()
+      && store.currentId === context.original.id
+      && store.mandalarts.find((item) => item.id === context.original.id) === context.original;
+  };
+
+  const applyImport = ({ data, context }: PendingImport) => {
+    if (!isImportContextCurrent(context)) {
+      alert(IMPORT_CONTEXT_CHANGED_MESSAGE);
+      return;
     }
+    // Validation is complete. Replace atomically and invalidate any pending AI response.
+    useMandalartStore.getState().replaceCurrentMandalart(data);
   };
 
   const handleConfirmImport = () => {
@@ -159,7 +199,7 @@ export function Header({ onOpenAIChat }: HeaderProps) {
   };
 
   const handleExportImage = () => {
-    if (mandalartData) exportToImage('mandalart-grid', mandalartData.title || 'mandalart');
+    if (mandalartData) exportToImage('mandalart-grid', mandalartData.title || 'mandalart', mandalartData);
     setShowMenu(false);
   };
 
