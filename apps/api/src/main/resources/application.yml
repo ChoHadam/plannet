@@ -24,6 +24,11 @@ server:
         secure: ${PLANNET_SESSION_COOKIE_SECURE:false}
 
 plannet:
+  storage:
+    enabled: ${PLANNET_STORAGE_ENABLED:false}
+    url: ${PLANNET_DB_URL:}
+    username: ${PLANNET_DB_USERNAME:}
+    password: ${PLANNET_DB_PASSWORD:}
   auth:
     login-success-url: ${PLANNET_LOGIN_SUCCESS_URL:/}
     login-failure-url: ${PLANNET_LOGIN_FAILURE_URL:/}

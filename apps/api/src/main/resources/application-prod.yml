@@ -17,6 +17,8 @@ server:
         secure: true
 
 plannet:
+  storage:
+    enabled: ${PLANNET_STORAGE_ENABLED:true}
   auth:
     require-google-client: true
     google:

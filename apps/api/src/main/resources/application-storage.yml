@@ -1,0 +1,5 @@
+# Local PostgreSQL-backed development: SPRING_PROFILES_ACTIVE=storage.
+# URL, username and password must be provided; a DB failure never falls back to memory.
+plannet:
+  storage:
+    enabled: true

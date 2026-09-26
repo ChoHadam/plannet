@@ -11,6 +11,12 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("tools.jackson.module:jackson-module-kotlin")
+    // Explicit conditional configuration keeps authentication-only mode independent of a DB.
+    implementation("org.springframework:spring-jdbc")
+    implementation("com.zaxxer:HikariCP")
+    implementation("org.flywaydb:flyway-core")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
+    runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-webmvc-test")
@@ -33,5 +39,7 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-
+    // Switching between authentication-only and PostgreSQL runs must not reuse the other result.
+    inputs.property("postgresIntegrationTestsEnabled", providers.environmentVariable("PLANNET_TEST_DB_URL")
+        .map { it.isNotBlank() }.orElse(false))
 }

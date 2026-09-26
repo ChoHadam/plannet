@@ -61,7 +61,7 @@ class AuthSecurityPolicyTests @Autowired constructor(
                 content {
                     json(
                         """
-                        {"authenticated":true,"user":{
+                        {"authenticated":true,"storageEnabled":false,"user":{
                           "authProvider":"google","externalSubject":"google-sub-123",
                           "name":"Test User","email":"test@example.com","image":"https://example.com/p.png"}}
                         """,
@@ -83,6 +83,22 @@ class AuthSecurityPolicyTests @Autowired constructor(
     @Test
     fun `health is public`() {
         mockMvc.get("/api/v1/health").andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `planner endpoints report explicitly disabled storage in authentication only mode`() {
+        mockMvc.get("/api/v1/planner") { with(googleLogin()) }.andExpect {
+            status { isServiceUnavailable() }
+            jsonPath("$.error", equalTo("storage_disabled"))
+        }
+        mockMvc.post("/api/v1/planner/commit") {
+            with(googleLogin()); with(csrf())
+            contentType = org.springframework.http.MediaType.APPLICATION_JSON
+            content = "{}"
+        }.andExpect {
+            status { isServiceUnavailable() }
+            jsonPath("$.error", equalTo("storage_disabled"))
+        }
     }
 
     @Test

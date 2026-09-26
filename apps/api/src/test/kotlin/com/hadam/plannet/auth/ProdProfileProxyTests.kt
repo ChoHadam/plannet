@@ -27,6 +27,7 @@ class ProdProfileProxyTests {
     @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = [
+            "plannet.storage.enabled=false",
             "plannet.auth.google.client-id=prod-client",
             "plannet.auth.google.client-secret=prod-secret",
             "plannet.auth.google.redirect-uri={baseUrl}/login/oauth2/code/{registrationId}",
@@ -54,6 +55,7 @@ class ProdProfileProxyTests {
     @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = [
+            "plannet.storage.enabled=false",
             "plannet.auth.google.client-id=prod-client",
             "plannet.auth.google.client-secret=prod-secret",
             "plannet.auth.google.redirect-uri={baseUrl}/login/oauth2/code/{registrationId}",

@@ -7,15 +7,15 @@ Spring API가 Google 로그인·세션·로그아웃을 소유한다. Web은 아
 ## 1. 전제
 
 - 브라우저 기준 **같은 origin**에서 Web과 API를 제공한다. 진입점(Ingress)은 `/api/v1/**`, `/oauth2/**`, `/login/oauth2/**`를 API로 보내고, 나머지(`/api/chat` 등 포함)는 Web으로 보낸다.
-- 세션은 API 메모리에 저장한다(**API replica 1개**). API 재시작 시 다시 로그인해야 한다.
-- `externalSubject`는 Google `sub`(외부 식별자)이며 **내부 userId가 아니다**. 내부 사용자 매핑은 서버 저장 단계에서 추가한다. 이메일은 표시용이다.
+- 세션은 API 메모리에 저장한다(**API replica 1개**). API 재시작 시 다시 로그인해야 하지만 PostgreSQL의 사용자·플랜은 유지된다.
+- `externalSubject`는 Google `sub`(외부 식별자)이며 **내부 userId가 아니다**. 서버 저장 활성화 시 API가 검증된 `(authProvider, externalSubject)`를 내부 UUID로 매핑하고, 플랜 소유권은 이 UUID로 제한한다. 이메일은 표시용이다.
 - v1 허용 범위: `authProvider:externalSubject` 쌍을 **파생·비권한 키**로 쓸 수 있다. 예: 브라우저 LocalStorage 네임스페이스, Web 서버 메모리의 호출 한도 키. 조건은 다음과 같다.
   - 값은 서버가 검증한 `/api/v1/me` 200 응답에서만 얻는다. 브라우저가 보낸 값은 쓰지 않는다.
   - `externalSubject` 단독이 아니라 `authProvider`와 쌍으로 쓴다.
-  - 파생 키를 플랜 소유자 키나 서버 영속 저장 키로 쓰지 않는다.
+  - 파생 키 자체를 플랜 소유자 키로 쓰지 않는다. API 내부 identity 매핑은 예외이며 DB 고유 제약으로 관리한다.
   - LocalStorage 네임스페이스는 계정 간 데이터 섞임 방지용일 뿐, 같은 브라우저 사용자에 대한 보안 경계가 아니다.
   - 키 충돌로 계정 데이터가 섞이지 않도록 짧은 비암호 해시 대신 원문 쌍(인코딩)이나 SHA-256 같은 충돌 저항 값을 쓴다.
-  - 내부 userId가 생기면 그 값으로 다시 키를 잡는다.
+  - 서버 저장 활성화 시 Web의 플랜 캐시는 내부 userId로 바뀐다. 기존 키는 명시적 가져오기 원본으로 보존한다.
 
 ## 2. 엔드포인트
 
@@ -36,7 +36,9 @@ Spring API가 Google 로그인·세션·로그아웃을 소유한다. Web은 아
 // 200
 {
   "authenticated": true,
+  "storageEnabled": true,          // false면 기존 로컬 저장 모드
   "user": {
+    "userId": "d27c07f4-c94a-4a54-8b35-d43fdc8a2658", // 서버 저장 활성화 시 내부 UUID; 비활성 시 null
     "authProvider": "google",
     "externalSubject": "1098...",   // Google sub. 내부 userId 아님
     "name": "홍길동",                // string | null
@@ -49,6 +51,8 @@ Spring API가 Google 로그인·세션·로그아웃을 소유한다. Web은 아
 ```
 
 - 응답에는 `Cache-Control: no-cache, no-store, max-age=0, must-revalidate`가 붙는다. Web도 캐시하지 않는다.
+- `storageEnabled`와 `user.userId`는 v1 호환 필드 추가다. 이전 응답처럼 플래그가 없으면 Web은 로컬 모드를 유지한다. 활성화했는데 UUID가 없으면 계약 오류로 처리한다. DB 장애는 503이며 로컬 저장 모드로 조용히 전환하지 않는다.
+- 저장 API와 `X-Plannet-User-Id` 계정 전환 방어 규칙은 [planner-storage-v1](./planner-storage-v1.md)을 따른다. 헤더는 세션의 사용자와 일치하는지 검사할 뿐 소유자를 선택하지 않는다.
 - `/api/v1/**`의 미인증 응답은 **절대 로그인 HTML로 redirect하지 않는다**(항상 401 JSON). 요청의 `Accept`와 관계없다.
 
 ### `GET /api/v1/csrf` → `POST /api/v1/logout`
@@ -113,6 +117,8 @@ const res = session
 | `PLANNET_SESSION_TIMEOUT` | `8h` | 유휴 세션 만료 |
 | `PLANNET_SESSION_COOKIE_SECURE` | `false` | 로컬에서 HTTPS 프록시를 쓸 때만 `true`. prod 프로필은 항상 `true` |
 | `SPRING_PROFILES_ACTIVE` | 없음 | HTTPS 배포는 `prod` |
+| `PLANNET_STORAGE_ENABLED` | `false` / prod `true` | PostgreSQL 저장 활성화. `storage` 프로필도 활성화한다 |
+| `PLANNET_DB_URL` / `PLANNET_DB_USERNAME` / `PLANNET_DB_PASSWORD` | 없음 | 저장 활성화 시 필수. API에만 주입하며 DB는 외부에 공개하지 않는다 |
 | `PLANNET_TRUSTED_PROXIES` | 없음 | prod 필수. `X-Forwarded-*`를 신뢰할 프록시 IP 정규식. 예: `10\.1\.\d{1,3}\.\d{1,3}` |
 
 로컬 예시 (Ingress `localhost:18080` 뒤):
@@ -134,6 +140,7 @@ PLANNET_TRUSTED_PROXIES='10\.1\.\d{1,3}\.\d{1,3}'        # Ingress controller po
 - 로컬 기본값은 `X-Forwarded-*` 헤더를 무시한다. Ingress가 `Host`를 그대로 전달하면 callback은 `http://localhost:18080/...`로 계산된다.
 - prod는 신뢰 프록시에서 온 `X-Forwarded-Proto/Host/Port/For`만 반영한다. 로그인 redirect는 상대 경로(`Location: /`)로 보낸다.
 - prod에서 Google client, redirect URI, 신뢰 프록시 중 하나라도 빠지면 기동에 실패한다.
+- 저장 활성화 시 PostgreSQL 연결과 Flyway migration도 성공해야 기동한다. DB 실행·백업·홈서버 이전은 [운영 문서](../postgresql-operations.md)를 참고한다.
 
 ## 7. 변경 규칙
 
