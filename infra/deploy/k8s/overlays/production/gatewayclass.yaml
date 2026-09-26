@@ -1,0 +1,8 @@
+# Envoy Gateway를 쓰는 예. 다른 Gateway API 컨트롤러를 쓰면 controllerName과
+# base/network-policy.yaml 의 프록시 선택자를 함께 바꾼다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: plannet
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller

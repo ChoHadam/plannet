@@ -1,0 +1,123 @@
+# Spring API (Google 로그인·세션 소유). 세션이 메모리에 있으므로 replica 1개를 유지한다
+# (docs/contracts/auth-v1.md §1). 재시작하면 모든 사용자가 다시 로그인한다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plannet-api
+  labels:
+    app.kubernetes.io/name: plannet-api
+spec:
+  replicas: 1
+  # 메모리 세션 단일 인스턴스 전제. 두 pod가 동시에 떠서 세션이 갈리지 않게 한다.
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plannet-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plannet-api
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001 # API 이미지의 기본 사용자 UID와 동일
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: plannet-api
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: plannet-api-config
+            - configMapRef:
+                name: plannet-public # overlay의 public.env (GOOGLE_REDIRECT_URI, PLANNET_TRUSTED_PROXIES 등)
+          env:
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: plannet-api-secret
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: plannet-api-secret
+                  key: GOOGLE_CLIENT_SECRET
+            - name: PLANNET_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: plannet-api-secret
+                  key: PLANNET_DB_URL
+                  optional: false
+            - name: PLANNET_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: plannet-api-secret
+                  key: PLANNET_DB_USERNAME
+                  optional: false
+            - name: PLANNET_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: plannet-api-secret
+                  key: PLANNET_DB_PASSWORD
+                  optional: false
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp # Tomcat 작업 디렉터리
+              mountPath: /tmp
+          # 기동 약 10~15초. startupProbe 성공 전에는 readiness/liveness를 보지 않는다.
+          startupProbe:
+            httpGet:
+              port: http
+              path: /api/v1/health
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24 # 최대 120초
+          readinessProbe:
+            httpGet:
+              port: http
+              path: /api/v1/health
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              port: http
+              path: /api/v1/health
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plannet-api
+spec:
+  type: ClusterIP # 외부 진입은 Gateway만. Web은 이 주소로 세션을 확인한다.
+  selector:
+    app.kubernetes.io/name: plannet-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

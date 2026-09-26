@@ -1,0 +1,54 @@
+# Web/API에는 공통 진입점(Gateway 프록시)만 들어올 수 있다. API는 Web 서버의 세션 확인 요청도 받는다.
+# 다른 namespace의 pod가 Service로 직접 접근해 Gateway 정책을 우회하지 못하게 한다.
+# 프록시 pod 선택자는 Envoy Gateway 기본값이다. 다른 컨트롤러를 쓰면 overlay에서 바꾼다.
+# (NetworkPolicy를 강제하지 않는 CNI에서는 효과가 없다. 적용 후 verify 절차로 확인한다)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plannet-web-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plannet-web
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: proxy
+      ports:
+        - port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plannet-api-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plannet-api
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: proxy
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: plannet-web
+      ports:
+        - port: 8080

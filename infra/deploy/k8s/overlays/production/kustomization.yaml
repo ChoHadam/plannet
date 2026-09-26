@@ -1,0 +1,21 @@
+# 공개 배포 예제. 비밀값·인증서는 포함하지 않는다 (docs/deployment-readiness.md).
+#   1) public/public.env, images 를 실제 값으로 바꾼다
+#   2) infra/deploy/scripts/validate-manifests.sh --strict production
+#   3) API Pod에서 연결 가능한 private PostgreSQL과 영구 저장·백업을 준비한다
+#   4) Secret plannet-web-secret / plannet-api-secret(Google + DB 3값), TLS Secret plannet-tls 를 먼저 만든다
+#   5) kubectl apply -k infra/deploy/k8s/overlays/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - public
+  - gatewayclass.yaml
+components:
+  - ../../components/public-host
+images:
+  - name: plannet-web
+    newName: registry.example.com/plannet-web
+    newTag: REPLACE_WITH_IMAGE_TAG
+  - name: plannet-api
+    newName: registry.example.com/plannet-api
+    newTag: REPLACE_WITH_IMAGE_TAG

@@ -1,0 +1,106 @@
+# 로컬 검증 전용 overlay. 실제 Spring·Web 이미지에 Google·AI 대역을 연결한다.
+# scripts/verify-local.sh 가 전용 kind 클러스터에 적용한다. 운영 클러스터에 적용하지 않는다.
+# 인증/HTTPS/라우팅 전용으로 storage=false. 실제 PostgreSQL 저장 검증은 별도로 수행한다.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - public
+  - gatewayclass.yaml
+  - mocks.yaml
+components:
+  - ../../components/public-host
+images:
+  - name: plannet-web
+    newTag: verify
+  - name: plannet-api
+    newTag: verify
+configMapGenerator:
+  - name: mock-external-script
+    namespace: plannet-mocks
+    files:
+      - mocks/mock-external.mjs
+  # 대역 자격 증명(가짜 값). Web/API Secret도 같은 값으로 verify-local.sh 가 만든다.
+  - name: mock-external-config
+    namespace: plannet-mocks
+    literals:
+      - MOCK_CLIENT_ID=verify-client-id.apps.example.test
+      - MOCK_CLIENT_SECRET=verify-client-secret-not-real
+      - MOCK_AI_API_KEY=verify-ai-key-not-real
+      - MOCK_ISSUER=https://mock.test:19643
+      - MOCK_ALLOWED_REDIRECT_URIS=https://plannet.test:19643/login/oauth2/code/google
+  # Spring이 Google 대신 대역 endpoint를 쓰게 한다 (plannet.auth.google.provider.*).
+  # authorization은 브라우저가, token·jwks·userinfo는 API pod가 호출한다.
+  - name: plannet-api-mock-provider
+    namespace: plannet
+    literals:
+      - PLANNET_AUTH_GOOGLE_PROVIDER_ISSUERURI=https://mock.test:19643
+      - PLANNET_AUTH_GOOGLE_PROVIDER_AUTHORIZATIONURI=https://mock.test:19643/authorize
+      - PLANNET_AUTH_GOOGLE_PROVIDER_TOKENURI=http://mock-external.plannet-mocks.svc:8080/token
+      - PLANNET_AUTH_GOOGLE_PROVIDER_JWKSETURI=http://mock-external.plannet-mocks.svc:8080/jwks
+      - PLANNET_AUTH_GOOGLE_PROVIDER_USERINFOURI=http://mock-external.plannet-mocks.svc:8080/userinfo
+patches:
+  - target: { kind: ConfigMap, name: plannet-api-config }
+    patch: |-
+      - op: replace
+        path: /data/PLANNET_STORAGE_ENABLED
+        value: "false"
+  # DB 없는 인증 검증에만 DB Secret 참조를 제거한다. 운영 Secret을 optional로 바꾸지 않는다.
+  - target: { kind: Deployment, name: plannet-api }
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: plannet-api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: PLANNET_DB_URL
+                    $patch: delete
+                  - name: PLANNET_DB_USERNAME
+                    $patch: delete
+                  - name: PLANNET_DB_PASSWORD
+                    $patch: delete
+  - target: { kind: Deployment, name: plannet-api }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value: { configMapRef: { name: plannet-api-mock-provider } }
+  - target: { kind: ConfigMap, name: plannet-web-config }
+    patch: |-
+      - op: replace
+        path: /data/OPENGATEWAY_BASE_URL
+        value: http://mock-external.plannet-mocks.svc:8080/v1
+      - op: replace
+        path: /data/OPENGATEWAY_MODEL
+        value: mock-model
+      # 한도 초과(429)를 짧게 검증하기 위해 분당 한도만 낮춘다.
+      - op: replace
+        path: /data/AI_RATE_LIMIT_PER_MINUTE
+        value: "3"
+  - target: { kind: Gateway, name: plannet }
+    patch: |-
+      - op: add
+        path: /spec/listeners/-
+        value:
+          name: https-mock
+          protocol: HTTPS
+          port: 443
+          hostname: mock.test
+          tls:
+            mode: Terminate
+            certificateRefs: [{ kind: Secret, name: plannet-tls }]
+          allowedRoutes:
+            namespaces:
+              from: Selector
+              selector:
+                matchLabels: { kubernetes.io/metadata.name: plannet-mocks }
+  # 호스트 포트가 443이 아니므로 redirect 대상 포트를 명시한다 (운영은 기본 443).
+  - target: { kind: HTTPRoute, name: plannet-https-redirect }
+    patch: |-
+      - op: add
+        path: /spec/rules/0/filters/0/requestRedirect/port
+        value: 19643
