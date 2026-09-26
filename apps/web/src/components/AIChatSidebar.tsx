@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMandalartStore } from '@/hooks/useMandalart';
+import { useAuth } from '@/components/AuthProvider';
 import { GridPosition, CENTER_TO_OUTER_MAP } from '@/types/mandalart';
 
 interface Message {
@@ -23,6 +24,16 @@ interface TokenUsage {
   estimatedCostUSD: string;
 }
 
+/** 서버 검증 한도와 맞춘다 (lib/server/chatValidation.ts CHAT_LIMITS.maxMessages) */
+const MAX_SENT_MESSAGES = 20;
+const GENERIC_ERROR_MESSAGE = '죄송해요, 오류가 발생했어요. 다시 시도해주세요.';
+
+interface ChatErrorBody {
+  ok: false;
+  error: string;
+  message?: string;
+}
+
 interface AIChatSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -40,6 +51,10 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
     estimatedCostUSD: '0',
   });
   const [isEnded, setIsEnded] = useState(false);
+  // 서버가 401을 돌려주면(세션 만료 등) 로그인 안내로 전환한다.
+  const [sessionRejected, setSessionRejected] = useState(false);
+  const { status: authStatus, login } = useAuth();
+  const canChat = authStatus === 'authenticated' && !sessionRejected;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const currentId = useMandalartStore((state) => state.currentId);
@@ -124,8 +139,8 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
     setIsLoading(true);
 
     try {
-      // API에 보낼 메시지 형식으로 변환
-      const apiMessages = newMessages.map((m) => ({
+      // API에 보낼 메시지 형식으로 변환 (서버 한도에 맞춰 최근 메시지만)
+      const apiMessages = newMessages.slice(-MAX_SENT_MESSAGES).map((m) => ({
         role: m.role,
         content: m.content,
       }));
@@ -149,10 +164,12 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
 
       const result = await response.json();
 
-      if (result.error) {
+      if (!response.ok) {
+        const errorBody = result as ChatErrorBody;
+        if (errorBody.error === 'unauthenticated') setSessionRejected(true);
         setMessages([
           ...newMessages,
-          { role: 'assistant', content: `오류가 발생했어요: ${result.error}` },
+          { role: 'assistant', content: errorBody.message || GENERIC_ERROR_MESSAGE },
         ]);
         return;
       }
@@ -190,7 +207,7 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
       console.error('Failed to send message:', error);
       setMessages([
         ...newMessages,
-        { role: 'assistant', content: '죄송해요, 오류가 발생했어요. 다시 시도해주세요.' },
+        { role: 'assistant', content: GENERIC_ERROR_MESSAGE },
       ]);
     } finally {
       setIsLoading(false);
@@ -394,7 +411,9 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
 
         {/* Input */}
         <div className="p-4 border-t border-slate-200">
-          {isEnded ? (
+          {!canChat ? (
+            <ChatLoginNotice authStatus={authStatus} onLogin={login} />
+          ) : isEnded ? (
             <div className="text-center">
               <p className="text-sm text-slate-500 mb-3">대화가 종료되었습니다</p>
               <button
@@ -442,6 +461,33 @@ export function AIChatSidebar({ isOpen, onClose }: AIChatSidebarProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChatLoginNotice({
+  authStatus,
+  onLogin,
+}: {
+  authStatus: ReturnType<typeof useAuth>['status'];
+  onLogin: () => void;
+}) {
+  if (authStatus === 'disabled') {
+    return <p className="text-center text-xs text-slate-500">이 환경에서는 AI 어시스턴트를 사용할 수 없어요.</p>;
+  }
+  if (authStatus === 'unavailable' || authStatus === 'loading') {
+    return <p className="text-center text-xs text-slate-500">로그인 상태를 확인할 수 없어 AI 어시스턴트를 쓸 수 없어요.</p>;
+  }
+  return (
+    <div className="text-center">
+      <p className="text-xs text-slate-500 mb-3">AI 어시스턴트는 로그인 후 사용할 수 있어요.</p>
+      <button
+        type="button"
+        onClick={onLogin}
+        className="px-4 py-2 bg-violet-500 text-white rounded-lg text-sm font-medium hover:bg-violet-600 transition-colors"
+      >
+        Google 로그인
+      </button>
     </div>
   );
 }

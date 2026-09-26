@@ -1,5 +1,17 @@
 import OpenAI from 'openai';
 import { NextRequest, NextResponse } from 'next/server';
+import { authUserKey } from '@/lib/authContract';
+import { apiError } from '@/lib/server/apiErrors';
+import {
+  CHAT_LIMITS,
+  GridState,
+  readJsonWithLimit,
+  validateChatReply,
+  validateChatRequest,
+} from '@/lib/server/chatValidation';
+import { checkCsrf } from '@/lib/server/csrf';
+import { acquireAiQuota } from '@/lib/server/rateLimit';
+import { verifySession } from '@/lib/server/sessionVerifier';
 
 // OpenAI Function Calling 정의
 const tools: OpenAI.ChatCompletionTool[] = [
@@ -143,193 +155,126 @@ const SYSTEM_PROMPT = `당신은 만다라트 목표 설정을 도와주는 친�
 - 하위 목표를 물어볼 때는 반드시 예시 포함 (예: 운동, 독서, 저축, 자격증 취득 등)
 </중요_규칙>`;
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
+const GREETING_MESSAGE = "안녕하세요! 만다라트 작성을 도와드릴 AI 어시스턴트예요. (Beta)\n\n먼저, 이루고 싶은 '핵심 목표'가 있으신가요? 예를 들어 '건강한 삶', '커리어 성장' 같은 것이요.\n\n아직 정해지지 않았다면 '없음'이라고 해주셔도 괜찮아요!";
+const FALLBACK_REPLY_MESSAGE = '응답을 처리하는 중 문제가 발생했어요. 다시 말씀해주세요.';
+const DEFAULT_MODEL = 'anthropic/claude-3-haiku-20240307';
+const MAX_OUTPUT_TOKENS = 1024;
+const AI_TIMEOUT_MS = 20_000;
+const EMPTY_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUSD: '0' };
+
+// 입력 토큰당 $0.25/1M, 출력 토큰당 $1.25/1M 기준의 추정치
+const INPUT_COST_PER_TOKEN = 0.25 / 1_000_000;
+const OUTPUT_COST_PER_TOKEN = 1.25 / 1_000_000;
+
+function buildContextMessage(assistedCount: number, gridState?: GridState): string {
+  let contextMessage = `[시스템 정보: 현재까지 도움 완료한 하위 목표 수: ${assistedCount}/2]`;
+
+  if (gridState) {
+    contextMessage += `\n[그리드 상태: 핵심 목표="${gridState.coreGoal || '없음'}", 빈 하위목표 슬롯=${gridState.emptySubGoalCount}개`;
+    if (gridState.existingSubGoals.length > 0) {
+      contextMessage += `, 기존 하위목표=[${gridState.existingSubGoals.join(', ')}]`;
+    }
+    contextMessage += ']';
+
+    // 그리드가 꽉 찼을 때 특별 지시
+    if (gridState.emptySubGoalCount === 0) {
+      contextMessage += '\n[중요: 모든 하위 목표 슬롯이 꽉 찼습니다! generate_actions나 set_sub_goal 액션을 사용하지 마세요. 사용자에게 기존 목표를 그리드에서 직접 수정/삭제하도록 안내하세요.]';
+    }
+  }
+
+  return contextMessage;
 }
 
-interface FunctionArgs {
-  message: string;
-  action: 'none' | 'set_core_goal' | 'generate_actions' | 'end_conversation';
-  coreGoal?: string;
-  subGoal?: string;
-  actions?: string[];
-}
-
-interface GridState {
-  coreGoal: string;
-  emptySubGoalCount: number;
-  existingSubGoals: string[];
-}
-
+/**
+ * 처리 순서가 곧 보안 경계다.
+ * CSRF → 서버 세션 검증 → 입력 검증 → 사용 제한 → 외부 AI 호출 → 응답 검증.
+ * 앞 단계에서 거부되면 외부 AI를 호출하지 않는다.
+ */
 export async function POST(req: NextRequest) {
-  try {
-    const { messages, assistedCount = 0, gridState } = await req.json() as {
-      messages: Message[];
-      assistedCount: number;
-      gridState?: GridState;
-    };
+  const csrf = checkCsrf(req);
+  if (!csrf.ok) return apiError('csrf_rejected');
 
-    const apiKey = process.env.OPENGATEWAY_API_KEY;
-    const baseURL = process.env.OPENGATEWAY_BASE_URL;
+  // 브라우저가 보낸 사용자 ID·인증 여부는 보지 않는다. 세션 쿠키로 Spring에 직접 확인한다.
+  const session = await verifySession(req);
+  if (session.status === 'disabled') return apiError('auth_disabled');
+  if (session.status === 'unauthenticated') return apiError('unauthenticated');
+  if (session.status === 'unavailable') {
+    console.warn('[AI Chat] auth check unavailable:', session.reason);
+    return apiError('auth_unavailable');
+  }
 
-    if (!apiKey || !baseURL) {
-      return NextResponse.json(
-        { error: 'OpenGateway configuration is missing' },
-        { status: 500 }
-      );
-    }
+  const body = await readJsonWithLimit(req, CHAT_LIMITS.maxBodyBytes);
+  if (!body.ok) return apiError(body.tooLarge ? 'payload_too_large' : 'invalid_request');
 
-    const openai = new OpenAI({
-      apiKey,
-      baseURL,
+  const parsed = validateChatRequest(body.value);
+  if (!parsed.ok) return apiError('invalid_request', { extra: { detail: parsed.error } });
+  const { messages, assistedCount, gridState } = parsed.value;
+
+  // 첫 대화인 경우 시작 메시지 반환 (외부 호출 없음)
+  if (messages.length === 0) {
+    return NextResponse.json({ message: GREETING_MESSAGE, action: 'none', data: {}, usage: EMPTY_USAGE });
+  }
+
+  const apiKey = process.env.OPENGATEWAY_API_KEY;
+  const baseURL = process.env.OPENGATEWAY_BASE_URL;
+  if (!apiKey || !baseURL) return apiError('ai_not_configured');
+
+  const quota = acquireAiQuota(authUserKey(session.user));
+  if (!quota.ok) {
+    return apiError('rate_limited', {
+      headers: { 'Retry-After': String(quota.retryAfterSec) },
+      extra: { reason: quota.reason, retryAfterSec: quota.retryAfterSec },
     });
+  }
 
-    // 첫 대화인 경우 시작 메시지 반환
-    if (!messages || messages.length === 0) {
-      return NextResponse.json({
-        message: "안녕하세요! 만다라트 작성을 도와드릴 AI 어시스턴트예요. (Beta)\n\n먼저, 이루고 싶은 '핵심 목표'가 있으신가요? 예를 들어 '건강한 삶', '커리어 성장' 같은 것이요.\n\n아직 정해지지 않았다면 '없음'이라고 해주셔도 괜찮아요!",
-        action: 'none',
-        data: {},
-        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUSD: '0' },
-      });
-    }
+  try {
+    // 재시도는 비용을 배로 늘리므로 끈다.
+    const openai = new OpenAI({ apiKey, baseURL, timeout: AI_TIMEOUT_MS, maxRetries: 0 });
 
-    // 대화 컨텍스트에 assistedCount와 그리드 상태 추가
-    let contextMessage = `[시스템 정보: 현재까지 도움 완료한 하위 목표 수: ${assistedCount}/2]`;
-
-    if (gridState) {
-      contextMessage += `\n[그리드 상태: 핵심 목표="${gridState.coreGoal || '없음'}", 빈 하위목표 슬롯=${gridState.emptySubGoalCount}개`;
-      if (gridState.existingSubGoals.length > 0) {
-        contextMessage += `, 기존 하위목표=[${gridState.existingSubGoals.join(', ')}]`;
-      }
-      contextMessage += ']';
-
-      // 그리드가 꽉 찼을 때 특별 지시
-      if (gridState.emptySubGoalCount === 0) {
-        contextMessage += '\n[중요: 모든 하위 목표 슬롯이 꽉 찼습니다! generate_actions나 set_sub_goal 액션을 사용하지 마세요. 사용자에게 기존 목표를 그리드에서 직접 수정/삭제하도록 안내하세요.]';
-      }
-    }
-
-    const startTime = Date.now();
-
-    // OpenAI 형식으로 메시지 변환
     const openaiMessages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: 'system', content: SYSTEM_PROMPT + '\n\n' + contextMessage },
-      ...messages.map((m): OpenAI.ChatCompletionMessageParam => ({
-        role: m.role,
-        content: m.content,
-      })),
+      { role: 'system', content: SYSTEM_PROMPT + '\n\n' + buildContextMessage(assistedCount, gridState) },
+      ...messages.map((m): OpenAI.ChatCompletionMessageParam => ({ role: m.role, content: m.content })),
     ];
 
+    const startTime = Date.now();
     const response = await openai.chat.completions.create({
-      model: process.env.OPENGATEWAY_MODEL || 'anthropic/claude-3-haiku-20240307',
-      max_tokens: 1024,
+      model: process.env.OPENGATEWAY_MODEL || DEFAULT_MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
       messages: openaiMessages,
       tools,
       tool_choice: { type: 'function', function: { name: 'respond_to_user' } },
     });
 
-    const endTime = Date.now();
-
-    // 토큰 사용량
+    const inputTokens = response.usage?.prompt_tokens || 0;
+    const outputTokens = response.usage?.completion_tokens || 0;
     const usage = {
-      inputTokens: response.usage?.prompt_tokens || 0,
-      outputTokens: response.usage?.completion_tokens || 0,
+      inputTokens,
+      outputTokens,
       totalTokens: response.usage?.total_tokens || 0,
-      latencyMs: endTime - startTime,
-      estimatedCostUSD: (
-        ((response.usage?.prompt_tokens || 0) * 0.25) / 1_000_000 +
-        ((response.usage?.completion_tokens || 0) * 1.25) / 1_000_000
-      ).toFixed(6),
+      latencyMs: Date.now() - startTime,
+      estimatedCostUSD: (inputTokens * INPUT_COST_PER_TOKEN + outputTokens * OUTPUT_COST_PER_TOKEN).toFixed(6),
     };
+    console.log('[AI Chat Usage]', JSON.stringify(usage));
 
-    console.log('[AI Chat Usage]', JSON.stringify(usage, null, 2));
-
-    // Function Call 응답 처리
-    const choice = response.choices[0];
-    const toolCall = choice?.message?.tool_calls?.[0];
-
+    const toolCall = response.choices[0]?.message?.tool_calls?.[0];
     if (!toolCall || toolCall.type !== 'function' || toolCall.function.name !== 'respond_to_user') {
-      console.error('[AI Error] No function call found:', choice?.message);
-      return NextResponse.json({
-        message: '죄송해요, 응답 처리 중 문제가 발생했어요. 다시 말씀해주시겠어요?',
-        action: 'none',
-        data: {},
-        usage,
-      });
+      console.error('[AI Error] No function call found');
+      return NextResponse.json({ message: FALLBACK_REPLY_MESSAGE, action: 'none', data: {}, usage });
     }
 
-    // Function arguments 파싱
-    let input: FunctionArgs;
-    try {
-      input = JSON.parse(toolCall.function.arguments);
-    } catch {
-      console.error('[AI Error] Failed to parse function arguments:', toolCall.function.arguments);
-      return NextResponse.json({
-        message: '응답을 처리하는 중 문제가 발생했어요. 다시 말씀해주세요.',
-        action: 'none',
-        data: {},
-        usage,
-      });
+    // 모델 출력도 신뢰하지 않는다. 형태가 어긋나면 그리드에 적용하지 않고 안내만 한다.
+    const reply = validateChatReply(toolCall.function.arguments);
+    if (!reply.ok) {
+      console.error('[AI Error] Invalid function arguments:', reply.error);
+      return NextResponse.json({ message: FALLBACK_REPLY_MESSAGE, action: 'none', data: {}, usage });
     }
 
-    // 디버깅: Function 응답 전체 로깅
-    console.log('[AI Function Response]', JSON.stringify(input, null, 2));
-
-    // message 누락 체크
-    if (!input.message) {
-      console.error('[AI Warning] message is missing from function response!', input);
-      return NextResponse.json({
-        message: '응답을 처리하는 중 문제가 발생했어요. 다시 말씀해주세요.',
-        action: 'none',
-        data: {},
-        usage,
-      });
-    }
-
-    // 응답 형식 변환 (기존 프론트엔드와 호환)
-    const responseData: {
-      message: string;
-      action: string;
-      data: {
-        coreGoal?: string;
-        subGoal?: string;
-        actions?: string[];
-      };
-      usage: typeof usage;
-    } = {
-      message: input.message,
-      action: input.action,
-      data: {},
-      usage,
-    };
-
-    // 액션에 따라 data 구성
-    if (input.action === 'set_core_goal' && input.coreGoal) {
-      responseData.data.coreGoal = input.coreGoal;
-    } else if (input.action === 'generate_actions') {
-      if (input.subGoal) responseData.data.subGoal = input.subGoal;
-      if (input.actions && input.actions.length > 0) {
-        responseData.data.actions = input.actions;
-      } else {
-        // actions가 누락된 경우 경고 로그 및 에러 응답
-        console.error('[AI Warning] generate_actions called but actions array is missing or empty!', input);
-        return NextResponse.json({
-          message: '실천 계획 생성 중 문제가 발생했어요. 다시 시도해주세요.',
-          action: 'none',
-          data: {},
-          usage,
-        });
-      }
-    }
-
-    return NextResponse.json(responseData);
+    return NextResponse.json({ ...reply.value, usage });
   } catch (error) {
-    console.error('[AI Error]', error);
-    return NextResponse.json(
-      { error: 'AI request failed', message: String(error) },
-      { status: 500 }
-    );
+    // 내부 오류 문자열은 브라우저로 보내지 않는다.
+    console.error('[AI Error]', error instanceof Error ? error.message : error);
+    return apiError('ai_failed');
+  } finally {
+    quota.release();
   }
 }
