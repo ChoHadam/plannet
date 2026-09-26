@@ -2,6 +2,10 @@
 
 이 문서는 현재 Next.js 단일 앱을 기능 변경 없이 `apps/web` 중심 구조로 옮기는 실행 계획이다. 백엔드 모듈 경계와 MSA-ready 설계는 [msa-ready-backend-design.md](./msa-ready-backend-design.md)를 참고한다.
 
+2026-09-23 상태: `apps/web`·`apps/api` 분리는 반영됐고, DB 없는 Spring Google 인증과 Web 연동을 진행 중이다. 아래 Current/MVP 흐름과 단계 번호는 이전 계획을 보존한 것이다. 현재 우선순위·완료 판정은 [로드맵](./roadmap-status.md), 인증 구현은 [auth-v1](./contracts/auth-v1.md)을 따른다. DB·회원가입·자체 비밀번호·refresh token은 첫 Google 인증의 선행 조건이 아니다.
+
+2026-09-26 범위 갱신: 첫 공개의 계정별 서버 저장을 PostgreSQL로 구현·검증했다. 현재 컴퓨터에서 실행하고 이후 홈서버로 이전한다. 아래 PostgreSQL 예시는 초기 제안이며 실제 저장 구조는 [저장 설계](./account-storage-design.md), 실행·이전은 [DB 운영 문서](./postgresql-operations.md)를 따른다.
+
 ## Current Module Flow
 
 ```mermaid

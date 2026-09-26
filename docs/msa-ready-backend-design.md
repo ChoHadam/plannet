@@ -65,7 +65,7 @@ apps/api/
 
 ## Authentication Phases
 
-인증은 유저 관리와 분리해서 두 단계로 진행한다.
+인증은 유저 관리와 분리해서 두 단계로 진행한다. 2026-09-23부터 인증 소유자는 Spring API로 통일한다. 구현 상태와 실제 Google 검증 여부는 [로드맵](./roadmap-status.md), 경로·응답은 [인증 계약](./contracts/auth-v1.md)을 따른다.
 
 ### Phase 1. Auth Only
 
@@ -74,19 +74,24 @@ apps/api/
 구성:
 
 ```text
+apps/api
+  Spring Security OAuth2 Google login
+  server-side memory session (replica 1)
+  /oauth2/authorization/google
+  /login/oauth2/code/google
+  /api/v1/me, /api/v1/csrf, /api/v1/logout
+
 apps/web
-  Auth.js Google provider
-  JWT session cookie
-  /api/auth/*
-  /api/auth/me
+  Spring 인증 상태를 표시
+  /api/chat에서 내부 Spring API로 세션 검증
 ```
 
 완료 기준:
 
 - Google 로그인/로그아웃이 가능하다.
 - 새로고침 후에도 로그인 상태가 유지된다.
-- `/api/auth/me`가 현재 Google profile을 반환한다.
-- 로그인하지 않아도 기존 LocalStorage 기반 플래너 기능은 그대로 동작한다.
+- `/api/v1/me`가 현재 Google profile을 반환한다.
+- 로그인 전 로컬 기록을 보존하고 계정별 로컬 키를 분리한다. AI는 인증된 요청만 허용한다.
 - 내부 `userId`, 회원 row, refresh token 저장소는 아직 만들지 않는다.
 
 ### Phase 2. Identity/Auth With DB
@@ -108,7 +113,7 @@ apps/api
 - 최초 로그인 시 내부 user row를 생성한다.
 - 재로그인 시 기존 user를 조회한다.
 - planner 데이터를 내부 `userId`에 연결할 수 있다.
-- web의 `/api/auth/me` 의존을 API의 `/api/v1/me`로 교체할 수 있다.
+- 기존 `/api/v1/me` 계약에 내부 사용자 식별자를 추가하고 서버 플랜 소유권과 연결한다.
 
 ## Recommended Domain Boundaries
 
@@ -215,6 +220,8 @@ common -> 특정 도메인 로직 금지
 - 프론트에서 DB entity 형태를 그대로 API 타입으로 사용하기
 
 ## Persistence Strategy
+
+> 2026-09-26: 첫 공개의 계정별 서버 저장은 PostgreSQL로 구현·검증했다. 현재 컴퓨터에서 실행하고 이후 홈서버로 이전한다. 아래 테이블 예시는 초기 제안이며 실제 구조·버전·이전 규칙은 [저장 설계](./account-storage-design.md)와 [저장 API 계약](./contracts/planner-storage-v1.md)을 따른다.
 
 초기에는 단일 PostgreSQL을 사용한다. 단, 테이블 소유권은 모듈별로 분리한다.
 
