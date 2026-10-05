@@ -16,7 +16,7 @@ flowchart LR
 
 | 단위 | 저장 내용 | 규칙 |
 |---|---|---|
-| 사용자 | 내부 UUID와 `(provider, subject)` 고유 매핑 | 동시 최초 로그인도 한 사용자. 이메일은 표시용 |
+| 사용자 | 내부 UUID와 `(provider, subject)` 고유 매핑, 프로필 이메일(V4, nullable) | 동시 최초 로그인도 한 사용자. 이메일은 검증된 Google 클레임으로만 갱신하는 메타데이터이며 고유 키·병합 키가 아니다([보고](session-reports/account-email.md)) |
 | 플랜 1개 | 소유자·kind·기존 ID·본문 JSONB·형식/수정 버전·삭제 표식 | `(user_id, kind, id)`로 격리. 제목·기간 컬럼은 본문에서 같은 트랜잭션으로 추출 |
 | 설정 2개 | 반복 할 일, 사용자 휴일 | 각각 `recurring/default`, `holidays/default` |
 | 저장 영수증 | 사용자·요청 UUID·요청 hash·응답 | 응답 유실 시 같은 요청을 재전송해도 버전은 한 번만 증가 |

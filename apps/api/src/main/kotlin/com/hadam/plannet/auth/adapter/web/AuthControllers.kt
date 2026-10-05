@@ -3,6 +3,7 @@ package com.hadam.plannet.auth.adapter.web
 import com.hadam.plannet.auth.config.AuthPaths
 import com.hadam.plannet.auth.domain.AuthenticatedUser
 import com.hadam.plannet.auth.domain.toAuthenticatedUser
+import com.hadam.plannet.auth.domain.verifiedProfileEmail
 import com.hadam.plannet.storage.PlannerStorage
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.http.HttpStatus
@@ -18,10 +19,11 @@ class MeController(private val storageProvider: ObjectProvider<PlannerStorage>) 
     /** 인증 여부를 401/200으로 구분해 응답한다. Web 서버가 전달한 세션 쿠키로도 호출된다. */
     @GetMapping(AuthPaths.ME)
     fun me(authentication: Authentication?): ResponseEntity<Any> {
-        val user = (authentication as? OAuth2AuthenticationToken)?.toAuthenticatedUser()
+        val token = authentication as? OAuth2AuthenticationToken
+        val user = token?.toAuthenticatedUser()
             ?: return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(UnauthenticatedResponse())
         val storage = storageProvider.ifAvailable
-        val userId = storage?.resolveUser(user.authProvider, user.externalSubject)
+        val userId = storage?.resolveUser(user.authProvider, user.externalSubject, token.verifiedProfileEmail())
         return ResponseEntity.ok(AuthenticatedResponse(user = user.copy(userId = userId?.toString()), storageEnabled = storage != null))
     }
 }

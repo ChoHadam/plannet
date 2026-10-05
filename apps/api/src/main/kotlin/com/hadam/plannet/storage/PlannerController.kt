@@ -1,6 +1,7 @@
 package com.hadam.plannet.storage
 
 import com.hadam.plannet.auth.domain.toAuthenticatedUser
+import com.hadam.plannet.auth.domain.verifiedProfileEmail
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.ObjectProvider
@@ -52,9 +53,9 @@ class PlannerController(
     private fun storage(): PlannerStorage = storageProvider.ifAvailable ?: throw PlannerException(503, "storage_disabled")
 
     private fun owner(storage: PlannerStorage, authentication: Authentication?, request: HttpServletRequest): UUID {
-        val user = (authentication as? OAuth2AuthenticationToken)?.toAuthenticatedUser()
-            ?: throw PlannerException(401, "unauthenticated")
-        val userId = storage.resolveUser(user.authProvider, user.externalSubject)
+        val token = authentication as? OAuth2AuthenticationToken
+        val user = token?.toAuthenticatedUser() ?: throw PlannerException(401, "unauthenticated")
+        val userId = storage.resolveUser(user.authProvider, user.externalSubject, token.verifiedProfileEmail())
         // This header is an account-switch precondition only. It never selects the owner or any DB row.
         if (request.getHeader(ACCOUNT_HEADER) != userId.toString()) throw PlannerException(409, "account_changed")
         return userId

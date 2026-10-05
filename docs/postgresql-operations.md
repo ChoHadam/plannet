@@ -112,6 +112,10 @@ python3 infra/storage/verify.py
 
 PostgreSQL patch 버전을 바꿀 때는 백업 후 새 이미지로 격리 복원 검증하고 앱 검증을 통과한 다음 Compose의 정확한 태그를 갱신한다. major 버전은 기존 볼륨의 이미지 숫자만 변경하지 않는다. 새 major 전용 볼륨을 만들고 공식 업그레이드 절차 또는 검증된 dump/restore를 사용한다. [PostgreSQL 버전 정책](https://www.postgresql.org/support/versioning/).
 
+## 계정 이메일(V4) 운영 유의점
+
+V4는 `plannet_user`에 nullable `email VARCHAR(320)`과 형식 CHECK만 추가한다(기존 행·플랜·영수증 변경 없음, 기존 계정은 NULL). 값은 다음 검증된 로그인 뒤 `/me`·planner 요청에서 채워진다. 이전 API는 이 열을 읽지 않으므로 API만 되돌려도 호환된다. 이메일은 개인정보이므로 dump 보관·공유 기준은 기존 계정 데이터와 같다. [보고](session-reports/account-email.md)
+
 ## 저장 비용 개선(V3) 운영 유의점
 
 V3는 `planner_commit_receipt.response`의 플랜 본문 사본만 제거하고 요청 ID·해시·원래 버전/시각 등 메타데이터를 보존한다. `planner_record`의 실제 플랜·계정은 바꾸지 않는다. 저장 재시도 응답은 같은 해시의 요청 본문으로 복원한다. 지연된 재시도 보호를 위해 영수증 행을 임의로 기간 삭제하지 않는다.

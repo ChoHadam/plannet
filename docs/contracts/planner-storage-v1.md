@@ -6,7 +6,7 @@
 
 - `PLANNET_STORAGE_ENABLED=true`일 때 PostgreSQL을 필수로 연결하고 Flyway를 실행한다. 연결 실패 시 메모리 저장으로 대체하지 않는다. 기본 인증 전용 실행은 false로 유지해 기존 DB 없는 검증을 지원한다. 서버 저장용 로컬 실행과 공개 배포 예제에는 true를 명시한다.
 - 환경변수: `PLANNET_DB_URL`(JDBC URL), `PLANNET_DB_USERNAME`, `PLANNET_DB_PASSWORD`. 저장 활성화 시 누락은 기동 실패다. 비밀번호를 코드/로그에 남기지 않는다.
-- `/api/v1/me`의 기존 필드를 유지하고 최상위 `storageEnabled: boolean`을 추가한다. 활성화된 인증 사용자는 `user.userId: string(UUID)`를 추가로 받는다. 검증된 OAuth `(provider, subject)`를 내부 사용자에 원자적으로 매핑하며 이메일을 키로 쓰지 않는다.
+- `/api/v1/me`의 기존 필드를 유지하고 최상위 `storageEnabled: boolean`을 추가한다. 활성화된 인증 사용자는 `user.userId: string(UUID)`를 추가로 받는다. 검증된 OAuth `(provider, subject)`를 내부 사용자에 원자적으로 매핑하며 이메일을 키로 쓰지 않는다. `/me`와 planner 요청의 사용자 확인에서 검증된 이메일이 새로 오거나 바뀐 경우에만 `plannet_user.email`을 갱신한다(같으면 쓰기 없음, 없거나 무효면 기존 값 유지). 요청 본문·헤더의 이메일은 읽지 않는다.
 - Web은 `storageEnabled === true`와 유효한 userId가 있을 때만 서버 저장을 시작한다. 이전 응답에서 flag가 없으면 기존 로컬 모드로 호환한다. 활성화 상태의 DB 장애는 성공/로컬 저장 완료로 위장하지 않는다.
 - 서버 저장의 로컬 캐시/초안/전송 대기는 내부 userId별로 격리한다. 예전 provider/subject 계정 키와 비로그인 키는 보존하고 명시적 가져오기 대상으로만 읽는다.
 - 모든 planner 요청은 `X-Plannet-User-Id`에 기대하는 내부 사용자 ID를 보낸다. API는 세션에서 검증한 ID와 비교만 하며 소유권을 헤더에서 결정하지 않는다. 누락/불일치는 `409 { error: 'account_changed' }`로 읽기·쓰기를 거부한다. 다른 탭에서 계정이 바뀌었을 때 이전 계정 초안의 오전송을 막으며 `/me` 사전 조회만으로 대체하지 않는다.

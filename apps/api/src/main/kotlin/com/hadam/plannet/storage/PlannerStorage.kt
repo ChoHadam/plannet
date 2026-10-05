@@ -1,5 +1,6 @@
 package com.hadam.plannet.storage
 
+import com.hadam.plannet.auth.domain.isStorableEmail
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.json.JsonMapper
@@ -16,17 +17,32 @@ class PlannerStorage(
     private val transaction: TransactionTemplate,
     private val mapper: JsonMapper,
 ) {
-    fun resolveUser(provider: String, subject: String): UUID {
+    /**
+     * Maps (provider, subject) to the internal UUID. [verifiedEmail] is profile metadata from a verified claim only:
+     * stored when new or changed, while null keeps the known value. An unchanged profile causes no write.
+     */
+    fun resolveUser(provider: String, subject: String, verifiedEmail: String? = null): UUID {
         valid(provider.isNotBlank() && provider.length <= 100 && '\u0000' !in provider)
         valid(subject.isNotBlank() && subject.length <= 512 && '\u0000' !in subject)
+        valid(verifiedEmail == null || isStorableEmail(verifiedEmail))
+        val find = {
+            jdbc.query(
+                "SELECT id, email FROM plannet_user WHERE provider = ? AND subject = ?",
+                { row, _ -> row.getObject("id", UUID::class.java) to row.getString("email") }, provider, subject,
+            ).singleOrNull()
+        }
         return transaction.execute {
-            jdbc.update(
-                "INSERT INTO plannet_user (id, provider, subject) VALUES (?, ?, ?) ON CONFLICT (provider, subject) DO NOTHING",
-                UUID.randomUUID(), provider, subject,
-            )
-            jdbc.queryForObject(
-                "SELECT id FROM plannet_user WHERE provider = ? AND subject = ?", UUID::class.java, provider, subject,
-            )!!
+            val (id, email) = find() ?: run {
+                jdbc.update(
+                    "INSERT INTO plannet_user (id, provider, subject, email) VALUES (?, ?, ?, ?) ON CONFLICT (provider, subject) DO NOTHING",
+                    UUID.randomUUID(), provider, subject, verifiedEmail,
+                )
+                find()!!
+            }
+            if (verifiedEmail != null && verifiedEmail != email) {
+                jdbc.update("UPDATE plannet_user SET email = ? WHERE id = ? AND email IS DISTINCT FROM ?", verifiedEmail, id, verifiedEmail)
+            }
+            id
         }!!
     }
 

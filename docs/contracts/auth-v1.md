@@ -8,7 +8,7 @@ Spring API가 Google 로그인·세션·로그아웃을 소유한다. Web은 아
 
 - 브라우저 기준 **같은 origin**에서 Web과 API를 제공한다. 진입점(Ingress)은 `/api/v1/**`, `/oauth2/**`, `/login/oauth2/**`를 API로 보내고, 나머지(`/api/chat` 등 포함)는 Web으로 보낸다.
 - 세션은 API 메모리에 저장한다(**API replica 1개**). API 재시작 시 다시 로그인해야 하지만 PostgreSQL의 사용자·플랜은 유지된다.
-- `externalSubject`는 Google `sub`(외부 식별자)이며 **내부 userId가 아니다**. 서버 저장 활성화 시 API가 검증된 `(authProvider, externalSubject)`를 내부 UUID로 매핑하고, 플랜 소유권은 이 UUID로 제한한다. 이메일은 표시용이다.
+- `externalSubject`는 Google `sub`(외부 식별자)이며 **내부 userId가 아니다**. 서버 저장 활성화 시 API가 검증된 `(authProvider, externalSubject)`를 내부 UUID로 매핑하고, 플랜 소유권은 이 UUID로 제한한다. 이메일은 표시·프로필 정보이며 소유권을 정하지 않는다. 저장 활성화 시 ID 토큰의 `email_verified`가 Boolean `true`이고 형식이 유효한(320자 이하, 공백·제어 문자 없음, `@` 1개) 이메일만 `plannet_user.email`에 기록한다. 클레임이 없거나 미검증·무효면 로그인은 그대로 되고 기존 값을 유지한다.
 - v1 허용 범위: `authProvider:externalSubject` 쌍을 **파생·비권한 키**로 쓸 수 있다. 예: 브라우저 LocalStorage 네임스페이스, Web 서버 메모리의 호출 한도 키. 조건은 다음과 같다.
   - 값은 서버가 검증한 `/api/v1/me` 200 응답에서만 얻는다. 브라우저가 보낸 값은 쓰지 않는다.
   - `externalSubject` 단독이 아니라 `authProvider`와 쌍으로 쓴다.
@@ -42,7 +42,7 @@ Spring API가 Google 로그인·세션·로그아웃을 소유한다. Web은 아
     "authProvider": "google",
     "externalSubject": "1098...",   // Google sub. 내부 userId 아님
     "name": "홍길동",                // string | null
-    "email": "a@example.com",       // string | null. Google이 미검증으로 표시하면 null
+    "email": "a@example.com",       // string | null. Google이 미검증으로 표시하면 null (표시 규칙은 기존과 같음, DB 기록은 email_verified=true만)
     "image": "https://..."          // string | null
   }
 }
