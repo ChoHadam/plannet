@@ -319,3 +319,7 @@ export const MONTHLY_COLORS = {
 - 기존 단일 출처 호출(`importActionPlans(items, sourceId)`)과 저장된 목표는 계속 지원한다. 출처 없는 목표도 독립적으로 사용할 수 있다. 과거 오류로 잘못 저장된 출처를 추측해서 바꾸지는 않는다.
 
 전용 회귀 테스트: `cd apps/web && ../../node_modules/.bin/playwright test --config playwright.period-and-import.config.ts`.
+
+## API 저장 호환 (2026-10-05)
+
+서버는 `weeklyFocus` 5개(주 번호 1~5) 또는 6개(1~6)를 받으며, 중복·누락·범위 밖 번호는 거부한다. 이전 5개 기록을 읽기만으로 6개로 바꾸지 않는다. W6 화면 변경은 별도이며 API를 먼저 또는 함께 반영한다.

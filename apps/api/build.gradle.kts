@@ -42,4 +42,6 @@ tasks.withType<Test> {
     // Switching between authentication-only and PostgreSQL runs must not reuse the other result.
     inputs.property("postgresIntegrationTestsEnabled", providers.environmentVariable("PLANNET_TEST_DB_URL")
         .map { it.isNotBlank() }.orElse(false))
+    inputs.property("postgresRequired", providers.environmentVariable("PLANNET_REQUIRE_POSTGRES").orElse(""))
+    inputs.property("w6RestoredManifest", providers.environmentVariable("PLANNET_W6_RESTORED_MANIFEST").orElse(""))
 }

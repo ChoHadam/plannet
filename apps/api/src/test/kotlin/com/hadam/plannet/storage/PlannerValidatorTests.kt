@@ -104,6 +104,31 @@ class PlannerValidatorTests {
     }
 
     @Test
+    fun `monthly weekly focus accepts legacy five and six weeks verbatim and rejects other shapes`() {
+        fun monthly(focus: String): JsonNode = (fixture("monthly") as ObjectNode).also {
+            it.set("weeklyFocus", fixtureMapper.readTree(focus))
+        }
+        fun weeks(vararg numbers: Any?) = numbers.joinToString(",", "[", "]") { """{"weekNumber":${fixtureMapper.writeValueAsString(it)},"text":"W$it"}""" }
+
+        // 이전 5개, W6 포함 6개, 순서가 섞인 6개는 받아들이고 내용을 바꾸지 않는다.
+        listOf(weeks(1, 2, 3, 4, 5), weeks(1, 2, 3, 4, 5, 6), weeks(6, 1, 3, 2, 5, 4)).forEach { focus ->
+            val data = monthly(focus)
+            assertEquals(data, validator.parse(bytes(commitJson(listOf(change("monthly", data = data))))).changes.single().data)
+        }
+        listOf(
+            "[]", weeks(1, 2, 3, 4), weeks(1, 2, 3, 4, 5, 6, 7), // 개수
+            weeks(1, 2, 3, 4, 4), weeks(1, 2, 3, 4, 5, 5), // 중복
+            weeks(1, 2, 3, 4, 6), weeks(2, 3, 4, 5, 6), weeks(1, 2, 3, 4, 5, 7), weeks(0, 1, 2, 3, 4, 5), // 빠짐·범위
+            weeks("1", 2, 3, 4, 5), weeks(1.5, 2, 3, 4, 5), weeks(null, 2, 3, 4, 5, 6), // 형식
+            """[1,2,3,4,5]""", """[{"weekNumber":1},{"weekNumber":2,"text":""},{"weekNumber":3,"text":""},{"weekNumber":4,"text":""},{"weekNumber":5,"text":""}]""",
+            """{"1":"W1"}""",
+        ).forEach { focus -> rejected(commitJson(listOf(change("monthly", data = monthly(focus))))) }
+        val longText = monthly(weeks(1, 2, 3, 4, 5, 6))
+        (longText["weeklyFocus"][5] as ObjectNode).put("text", "x".repeat(PlannerLimits.TEXT_LENGTH + 1))
+        rejected(commitJson(listOf(change("monthly", data = longText))))
+    }
+
+    @Test
     fun `idempotency hash ignores object property order but detects changed content`() {
         val first = commitJson(listOf(change())) as ObjectNode
         val reordered = fixtureMapper.createObjectNode().set("changes", first["changes"]).set("requestId", first["requestId"])

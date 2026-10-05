@@ -37,6 +37,27 @@ data class PlannerRecord(
 )
 
 data class PlannerSnapshot(val userId: UUID, val records: List<PlannerRecord>)
+/** [snapshot] is null when the caller's validator matched [etag] (HTTP 304). */
+data class ConditionalSnapshot(val etag: String, val snapshot: PlannerSnapshot?)
+
+/** Immutable per-record metadata of an acknowledged write. Never includes plan data. */
+data class RecordMetadata(
+    val kind: String,
+    val id: String,
+    val schemaVersion: Int,
+    val version: Long,
+    val deleted: Boolean,
+    val updatedAt: String,
+) {
+    fun toRecord(data: JsonNode?) = PlannerRecord(kind, id, schemaVersion, version, data, deleted, updatedAt)
+    companion object {
+        fun of(record: PlannerRecord) =
+            RecordMetadata(record.kind, record.id, record.schemaVersion, record.version, record.deleted, record.updatedAt)
+    }
+}
+
+/** Durable commit receipt body, format 2: metadata only, in request order. */
+data class ReceiptV2(val format: Int = RECEIPT_FORMAT, val records: List<RecordMetadata>)
 data class PlannerCommitResponse(val records: List<PlannerRecord>)
 data class PlannerConflict(val kind: String, val id: String, val expectedVersion: Long, val actualVersion: Long)
 @JsonInclude(JsonInclude.Include.NON_NULL)

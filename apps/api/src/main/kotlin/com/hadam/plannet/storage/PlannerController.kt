@@ -2,9 +2,11 @@ package com.hadam.plannet.storage
 
 import com.hadam.plannet.auth.domain.toAuthenticatedUser
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.dao.DataAccessException
 import org.springframework.http.CacheControl
+import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken
@@ -21,11 +23,20 @@ class PlannerController(
     private val storageProvider: ObjectProvider<PlannerStorage>,
     private val validator: PlannerValidator,
 ) {
+    /**
+     * Snapshot with a weak, owner-scoped ETag. Authentication and the account precondition run first, so a 304 is
+     * only ever issued to the owner. Headers are written on the servlet response and the body is returned directly
+     * (not a ResponseEntity), so Spring's automatic ETag handling cannot add its own 304 (e.g. for `*`).
+     */
     @GetMapping("/api/v1/planner")
-    fun snapshot(authentication: Authentication?, request: HttpServletRequest): PlannerSnapshot {
+    fun snapshot(authentication: Authentication?, request: HttpServletRequest, response: HttpServletResponse): PlannerSnapshot? {
         val storage = storage()
         val userId = owner(storage, authentication, request)
-        return storage.snapshot(userId)
+        val result = storage.conditionalSnapshot(userId, request.getHeaders(HttpHeaders.IF_NONE_MATCH).toList())
+        response.setHeader(HttpHeaders.ETAG, result.etag)
+        response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().headerValue)
+        if (result.snapshot == null) response.status = HttpServletResponse.SC_NOT_MODIFIED
+        return result.snapshot
     }
 
     @PostMapping("/api/v1/planner/commit", consumes = ["application/json"])

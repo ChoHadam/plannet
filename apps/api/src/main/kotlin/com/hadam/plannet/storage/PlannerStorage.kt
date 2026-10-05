@@ -3,8 +3,11 @@ package com.hadam.plannet.storage
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.json.JsonMapper
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.sql.ResultSet
 import java.time.OffsetDateTime
+import java.util.Base64
 import java.util.UUID
 
 /** All ownership predicates are derived from the verified OAuth identity, never from request data. */
@@ -28,9 +31,24 @@ class PlannerStorage(
     }
 
     fun snapshot(userId: UUID): PlannerSnapshot = PlannerSnapshot(userId, jdbc.query(
-        "SELECT * FROM planner_record WHERE user_id = ? ORDER BY kind, id",
+        "SELECT $RECORD_COLUMNS FROM planner_record WHERE user_id = ? ORDER BY kind, id",
         { row, _ -> record(row) }, userId,
     ))
+
+    /**
+     * Snapshot with an owner-scoped weak ETag computed from narrow metadata only. When one of [ifNoneMatch] matches,
+     * the JSONB bodies are not selected at all. The account row is share-locked for the whole read so metadata and
+     * bodies come from one generation (commits hold the same row FOR UPDATE).
+     */
+    fun conditionalSnapshot(userId: UUID, ifNoneMatch: List<String>): ConditionalSnapshot = transaction.execute {
+        jdbc.queryForObject("SELECT id FROM plannet_user WHERE id = ? FOR SHARE", UUID::class.java, userId)
+        val metadata = jdbc.query(
+            "SELECT $METADATA_COLUMNS FROM planner_record WHERE user_id = ? ORDER BY kind, id",
+            { row, _ -> metadata(row) }, userId,
+        )
+        val etag = snapshotEtag(userId, metadata)
+        if (etagMatches(ifNoneMatch, etag)) ConditionalSnapshot(etag, null) else ConditionalSnapshot(etag, snapshot(userId))
+    }!!
 
     fun commit(userId: UUID, commit: PlannerCommit): PlannerCommitResponse = transaction.execute {
         // Locks one account, including first creation/deletion of a record and duplicate request races.
@@ -42,7 +60,7 @@ class PlannerStorage(
         ).singleOrNull()
         if (receipt != null) {
             if (receipt.first != commit.hash) throw PlannerException(409, "idempotency_conflict")
-            return@execute mapper.readValue(receipt.second, PlannerCommitResponse::class.java)
+            return@execute replay(commit, receipt.second)
         }
 
         val conflicts = commit.changes.mapNotNull { change ->
@@ -70,9 +88,10 @@ class PlannerStorage(
                   category = EXCLUDED.category, plan_year = EXCLUDED.plan_year,
                   plan_month = EXCLUDED.plan_month, plan_week = EXCLUDED.plan_week,
                   plan_day = EXCLUDED.plan_day, updated_at = EXCLUDED.updated_at
-                RETURNING *
+                RETURNING $METADATA_COLUMNS
                 """.trimIndent(),
-                { row, _ -> record(row) },
+                // The ACK carries the validated request data, exactly as a later replay reconstructs it.
+                { row, _ -> metadata(row).toRecord(data) },
                 userId, change.kind, change.id, change.expectedVersion + 1,
                 data?.let { mapper.writeValueAsString(it) }, data == null,
                 plan?.get("title")?.asString(), plan?.get("category")?.asString(),
@@ -81,12 +100,39 @@ class PlannerStorage(
             )!!
         }
         val response = PlannerCommitResponse(records)
+        // Receipts keep only immutable metadata (format 2); plan bodies live once, in planner_record.
+        val receiptBody = ReceiptV2(records = records.map { RecordMetadata.of(it) })
         jdbc.update(
             "INSERT INTO planner_commit_receipt (user_id, request_id, request_hash, response) VALUES (?, ?, ?, ?::jsonb)",
-            userId, commit.requestId, commit.hash, mapper.writeValueAsString(response),
+            userId, commit.requestId, commit.hash, mapper.writeValueAsString(receiptBody),
         )
         response
     }!!
+
+    /**
+     * Rebuilds the original ACK from the retried request (same hash, so same validated changes) and the stored
+     * metadata. Never reads current planner_record data. A receipt that does not describe exactly these changes is
+     * refused rather than returned.
+     */
+    private fun replay(commit: PlannerCommit, stored: String): PlannerCommitResponse {
+        val receipt = try { mapper.readValue(stored, ReceiptV2::class.java) } catch (_: Exception) { null }
+        if (receipt == null || receipt.format != RECEIPT_FORMAT || receipt.records.size != commit.changes.size) {
+            throw PlannerException(409, "idempotency_conflict")
+        }
+        return PlannerCommitResponse(commit.changes.zip(receipt.records).map { (change, meta) ->
+            if (meta.kind != change.kind || meta.id != change.id || meta.deleted != (change.data == null)
+                || meta.version != change.expectedVersion + 1 || meta.schemaVersion != 1) {
+                throw PlannerException(409, "idempotency_conflict")
+            }
+            meta.toRecord(change.data)
+        })
+    }
+
+    private fun metadata(row: ResultSet) = RecordMetadata(
+        kind = row.getString("kind"), id = row.getString("id"),
+        schemaVersion = row.getInt("schema_version"), version = row.getLong("version"), deleted = row.getBoolean("deleted"),
+        updatedAt = row.getObject("updated_at", OffsetDateTime::class.java).toInstant().toString(),
+    )
 
     private fun record(row: ResultSet) = PlannerRecord(
         kind = row.getString("kind"), id = row.getString("id"),
@@ -94,4 +140,39 @@ class PlannerStorage(
         data = row.getString("data")?.let { mapper.readTree(it) }, deleted = row.getBoolean("deleted"),
         updatedAt = row.getObject("updated_at", OffsetDateTime::class.java).toInstant().toString(),
     )
+}
+
+internal const val RECEIPT_FORMAT = 2
+private const val METADATA_COLUMNS = "kind, id, schema_version, version, deleted, updated_at"
+private const val RECORD_COLUMNS = "kind, id, schema_version, version, data, deleted, updated_at"
+private const val ETAG_SCHEME = "plannet-snapshot-v1"
+
+/** Weak ETag over the owner and every record's narrow metadata, length-prefixed so field boundaries cannot collide. */
+internal fun snapshotEtag(userId: UUID, records: List<RecordMetadata>): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    fun field(value: String) {
+        val bytes = value.toByteArray(StandardCharsets.UTF_8)
+        digest.update("${bytes.size}:".toByteArray(StandardCharsets.US_ASCII))
+        digest.update(bytes)
+    }
+    field(ETAG_SCHEME)
+    field(userId.toString())
+    field(records.size.toString())
+    records.forEach { record ->
+        field(record.kind); field(record.id); field(record.schemaVersion.toString())
+        field(record.version.toString()); field(record.deleted.toString()); field(record.updatedAt)
+    }
+    val hash = Base64.getUrlEncoder().withoutPadding().encodeToString(digest.digest())
+    return "W/\"ps1-$hash\""
+}
+
+/**
+ * If-None-Match with weak comparison for GET. Only an exact listed tag matches; `*` or anything unexpected never
+ * produces a 304 (a full 200 is always safe).
+ */
+internal fun etagMatches(headers: List<String>, etag: String): Boolean {
+    val opaque = etag.removePrefix("W/")
+    return headers.flatMap { it.split(',') }.map { it.trim() }.any { candidate ->
+        candidate.removePrefix("W/") == opaque
+    }
 }

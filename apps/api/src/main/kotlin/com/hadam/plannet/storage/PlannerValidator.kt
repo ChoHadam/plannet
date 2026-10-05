@@ -28,6 +28,9 @@ class PlannerValidator {
     private val forbiddenKeys = setOf("__proto__", "prototype", "constructor")
     private val categories = setOf("annual", "monthly", "weekly", "daily")
     private val days = setOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    /** Monthly weeklyFocus 개수: 이전 플랜 5(W1~W5), 6주인 달을 지원하는 6(W1~W6) */
+    private val weeklyFocusCounts = setOf(5, 6)
+    private val maxWeeklyFocus = weeklyFocusCounts.max()
     private val positions = setOf("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right")
     private val todoColors = setOf("none", "red", "orange", "yellow", "green", "blue", "purple", "pink", "gray")
 
@@ -143,12 +146,13 @@ class PlannerValidator {
             optional(goal, "sourceMandalartId") { id(it) }
             optional(goal, "sourceCellId") { id(it) }
         }
-        val focus = array(data["weeklyFocus"], 5)
-        valid(focus.size == 5)
+        // 이전 플랜 W1~W5 또는 W6 포함 W1~W6: 번호가 1..개수를 빠짐·중복 없이 한 번씩(순서 무관)
+        val focus = array(data["weeklyFocus"], maxWeeklyFocus)
+        valid(focus.size in weeklyFocusCounts)
         val weeks = focus.map {
-            obj(it); text(it["text"]); integer(it["weekNumber"], 1, 5)
+            obj(it); text(it["text"]); integer(it["weekNumber"], 1, focus.size.toLong())
         }
-        valid(weeks.toSet().size == 5)
+        valid(weeks.toSet().size == focus.size)
     }
 
     private fun block6(data: JsonNode) {

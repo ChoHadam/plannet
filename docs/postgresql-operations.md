@@ -111,3 +111,9 @@ python3 infra/storage/verify.py
 전용 `15433`과 새로운 무작위 프로젝트·볼륨만 사용한다. 비밀번호 인증 거부, 앱 권한, 비밀 파일 권한, localhost 바인딩, stop/start 영속성, custom dump 복원 후 행·Unicode·JSON·삭제 표식·sequence·소유자 일치, 기존 DB/백업 덮어쓰기 거부를 검사한다. 만든 검증용 컨테이너·네트워크·볼륨만 정리하고 private JSON 보고서와 샘플 dump는 `.local/verify-*/`에 보존한다. 실제 API migration·인증/계정별 저장 테스트는 API/브라우저 검증에서 별도로 수행한다.
 
 PostgreSQL patch 버전을 바꿀 때는 백업 후 새 이미지로 격리 복원 검증하고 앱 검증을 통과한 다음 Compose의 정확한 태그를 갱신한다. major 버전은 기존 볼륨의 이미지 숫자만 변경하지 않는다. 새 major 전용 볼륨을 만들고 공식 업그레이드 절차 또는 검증된 dump/restore를 사용한다. [PostgreSQL 버전 정책](https://www.postgresql.org/support/versioning/).
+
+## 저장 비용 개선(V3) 운영 유의점
+
+V3는 `planner_commit_receipt.response`의 플랜 본문 사본만 제거하고 요청 ID·해시·원래 버전/시각 등 메타데이터를 보존한다. `planner_record`의 실제 플랜·계정은 바꾸지 않는다. 저장 재시도 응답은 같은 해시의 요청 본문으로 복원한다. 지연된 재시도 보호를 위해 영수증 행을 임의로 기간 삭제하지 않는다.
+
+적용 전 비공개 dump를 만들고, 별도 검증 DB에서 V2→V3와 과거 요청 재시도를 확인한다. 적용 이후에는 `format: 2` 영수증을 이해하는 API를 유지해야 하므로 **V3 이전 API 바이너리만 되돌리면 안 된다.** 롤백이 필요하면 호환 API를 사용하거나 쓰기를 멈춘 뒤 백업을 새 DB에 복원·검증한다. 백업 이후 저장분이 있는 상태에서 과거 백업으로 즉시 되돌리지 않는다. 영수증 JSON의 논리적 크기 감소와 실제 디스크 회수는 다르며, `VACUUM FULL` 같은 잠금 작업은 자동 실행하지 않는다.
