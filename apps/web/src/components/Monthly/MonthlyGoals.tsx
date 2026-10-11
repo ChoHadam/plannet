@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { MonthlyGoal } from '@/types/monthly';
 import { useMonthlyStore } from '@/hooks/useMonthly';
-import { MONTHLY_COLORS } from '@/lib/constants';
+import { FOCUS_RING, MONTHLY_COLORS, TOUCH_REVEAL, TOUCH_TARGET } from '@/lib/constants';
 import { ImportGoalsModal } from './ImportGoalsModal';
 
 interface MonthlyGoalsProps {
@@ -107,6 +107,7 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
             <input
               type="text"
               value={newGoalText}
+              data-local-draft
               onChange={(e) => setNewGoalText(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="새 목표 추가..."
@@ -144,11 +145,11 @@ export function MonthlyGoals({ goals }: MonthlyGoalsProps) {
       {/* Mandalart sync confirmation modal */}
       {syncPromptGoal && (
         <div
-          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 overlay-safe bg-black/30 flex items-center justify-center z-50"
           onClick={() => setSyncPromptGoal(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 max-h-full overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-slate-800 mb-2">
@@ -260,6 +261,7 @@ function GoalItem({
             <input
               type="text"
               value={editText}
+              data-local-draft
               onChange={(e) => onEditTextChange(e.target.value)}
               onKeyDown={onEditKeyDown}
               onBlur={onCancelEditing}
@@ -328,7 +330,9 @@ function GoalItem({
         {/* Delete button */}
         <button
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+          title="삭제"
+          aria-label="목표 삭제"
+          className={`${TOUCH_REVEAL} ${TOUCH_TARGET} flex items-center justify-center rounded p-1 text-slate-400 hover:text-red-500 transition-all ${FOCUS_RING}`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline>

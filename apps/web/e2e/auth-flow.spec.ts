@@ -3,6 +3,7 @@ import { HOST, PORTS } from './support/stack.config.mjs';
 import {
   chatBody,
   createPlan,
+  expectPlannerClosed,
   loginAs,
   logout,
   mock,
@@ -121,13 +122,11 @@ test('첫 마일스톤: 로그인 → AI 요청 성공 → 로그아웃 → 같�
   expect((await mock.stats()).aiCalls).toBe(2);
 });
 
-test('로그인하지 않으면 AI 입력 대신 로그인 안내가 보인다', async ({ page }) => {
+test('로그인하지 않으면 플래너·AI 진입점 없이 로그인 랜딩만 보인다', async ({ page }) => {
   await page.goto('/');
-  await createPlan(page, '만다라트', 0);
-  await page.locator('button[title="AI 어시스턴트"]').click();
-
-  await expect(page.getByText('AI 어시스턴트는 로그인 후 사용할 수 있어요.')).toBeVisible();
-  await expect(page.getByPlaceholder('메시지를 입력하세요...')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Google 로그인' })).toBeVisible();
+  await expectPlannerClosed(page, []);
+  expect((await mock.stats()).aiCalls).toBe(0);
 });
 
 test('세션이 만료되면 AI 요청이 401로 거부되고 로그인 안내로 바뀐다', async ({ page }) => {
@@ -144,22 +143,19 @@ test('세션이 만료되면 AI 요청이 401로 거부되고 로그인 안내�
   expect((await mock.stats()).aiCalls).toBe(0);
 });
 
-test('인증 서버 장애 시 상태 확인 실패를 표시하고 AI를 쓸 수 없다', async ({ page }) => {
+test('인증 서버 장애 시 상태 확인 실패만 표시하고 플래너·AI를 열지 않는다', async ({ page }) => {
   await loginAs(page, testUser('outage'));
   await mock.configure({ meMode: 'error' });
 
   await page.reload();
   await expect(page.getByRole('status')).toContainText('로그인 상태를 확인할 수 없어요');
   await expect(page.getByRole('button', { name: '다시 시도' })).toBeVisible();
-
-  await createPlan(page, '만다라트', 0);
-  await page.locator('button[title="AI 어시스턴트"]').click();
-  await expect(page.getByText('로그인 상태를 확인할 수 없어 AI 어시스턴트를 쓸 수 없어요.')).toBeVisible();
+  // 확인에 실패하면 플래너·AI를 열지 않는다 (로컬 기록으로 대체하지 않음)
+  await expectPlannerClosed(page, []);
 
   // 복구 후 다시 시도하면 로그인 상태로 돌아온다
-  await page.keyboard.press('Escape');
   await mock.configure({ meMode: 'ok' });
-  await page.goto('/');
+  await page.getByRole('button', { name: '다시 시도' }).click();
   await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
   expect((await mock.stats()).aiCalls).toBe(0);
 });

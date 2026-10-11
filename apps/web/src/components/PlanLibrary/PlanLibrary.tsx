@@ -13,12 +13,12 @@ import {
   sortPlans,
 } from '@/lib/planLibrary';
 import { formatPlanDate } from '@/components/DatePicker';
+import { trapTabKey } from '@/hooks/useModalDialog';
 
 export const PLAN_CATEGORIES: PlanCategory[] = ['annual', 'monthly', 'weekly', 'daily'];
 
 const CATEGORY_FILTERS: PlanCategoryFilter[] = ['all', ...PLAN_CATEGORIES];
 const ALL_CATEGORY_LABEL = '전체';
-const FOCUSABLE_SELECTOR = 'button:not([disabled]), input, select, [tabindex]:not([tabindex="-1"])';
 
 export function planDateLabel(plan: BasePlanData): string {
   return plan.template === 'monthly'
@@ -102,19 +102,8 @@ export function PlanLibrary({
       onClose();
       return;
     }
-    if (e.key !== 'Tab' || !dialogRef.current) return;
     // 모달 밖으로 초점이 빠지지 않게 순환시킨다.
-    const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-    if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
+    if (dialogRef.current) trapTabKey(e, dialogRef.current);
   };
 
   const trimmedQuery = query.trim();
@@ -122,7 +111,7 @@ export function PlanLibrary({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/20 md:items-center"
+      className="fixed inset-0 overlay-safe z-50 flex items-stretch justify-center bg-black/20 md:items-center"
       onClick={suspended ? undefined : onClose}
       inert={suspended}
     >
@@ -138,7 +127,7 @@ export function PlanLibrary({
         onClick={(e) => e.stopPropagation()}
         className="
           flex w-full flex-col bg-white
-          md:mx-4 md:max-h-[80vh] md:max-w-lg md:rounded-2xl md:shadow-2xl
+          md:mx-4 md:max-h-[min(80vh,100%)] md:max-w-lg md:rounded-2xl md:shadow-2xl
         "
       >
         <div className="border-b border-slate-200 p-4">

@@ -84,7 +84,7 @@ export function MonthlyGrid() {
           <MonthlyGoals goals={data.goals} />
 
           {/* Weekly Focus */}
-          <WeeklyFocus weeklyFocus={data.weeklyFocus} />
+          <WeeklyFocus year={data.year} month={data.month} weeklyFocus={data.weeklyFocus} />
 
           {/* Memo */}
           <MemoSection memo={data.memo} />

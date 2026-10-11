@@ -1,14 +1,11 @@
-import { test, expect, Page } from '@playwright/test';
-import { createPlan } from '../support/helpers';
+import { test, expect } from '@playwright/test';
 import {
-  DAILY_STORAGE_KEY,
   dailyPlans,
   libraryDialog,
   loginAs,
   logout,
   mock,
   openLibrary,
-  seedDaily,
   testUser,
 } from './helpers';
 
@@ -18,29 +15,13 @@ test.beforeEach(async () => {
   await mock.reset();
 });
 
-/** 로그인한 계정 범위의 Daily 키를 찾는다 (UI로 한 번 저장해 키를 만든 뒤 조회). */
-async function accountDailyKey(page: Page): Promise<string> {
-  await createPlan(page, '투두리스트', 3);
-  await expect(page.locator('input[placeholder="나의 투두리스트"]')).toBeVisible();
-  const key = await page.evaluate(
-    (prefix) => Object.keys(localStorage).find((k) => k.startsWith(`${prefix}@acct:`)),
-    DAILY_STORAGE_KEY,
-  );
-  expect(key).toBeTruthy();
-  return key!;
-}
-
 test('계정을 바꾸면 이전 계정의 목록·검색 결과·메뉴가 남지 않는다', async ({ page }) => {
   const alice = testUser('alice');
   const bob = testUser('bob');
 
+  // Alice의 기록 7개는 DB에 있다 (로그인한 서비스 모드는 브라우저에 기록을 저장하지 않는다)
+  await mock.seedPlanner(alice, dailyPlans(7).map((p) => ({ kind: 'daily', id: p.id, data: { ...p, title: `Alice ${p.title}` } })));
   await loginAs(page, alice);
-  const aliceKey = await accountDailyKey(page);
-  await seedDaily(
-    page,
-    dailyPlans(7).map((p) => ({ ...p, title: `Alice ${p.title}` })),
-    aliceKey,
-  );
 
   await openLibrary(page);
   const dialog = libraryDialog(page);
@@ -64,12 +45,9 @@ test('계정을 바꾸면 이전 계정의 목록·검색 결과·메뉴가 남�
   await page.keyboard.press('Escape');
   await logout(page);
 
-  // 다시 Alice: 자기 플랜(심은 7개)이 모두 돌아온다. Bob 범위에는 아무것도 쓰지 않았다.
+  // 다시 Alice: 자기 플랜(심은 7개)이 DB에서 모두 돌아온다. Bob 계정 DB에는 아무것도 쓰지 않았다.
   await loginAs(page, alice);
   await expect(page.getByRole('button', { name: '전체 플랜 보기 (7개)' })).toBeVisible();
-  const bobKeys = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes('sub-bob')));
-  for (const key of bobKeys) {
-    const raw = await page.evaluate((k) => localStorage.getItem(k), key);
-    expect(raw).not.toContain('Alice');
-  }
+  expect((await mock.planner(bob)).records).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('plannet')))).toEqual([]);
 });

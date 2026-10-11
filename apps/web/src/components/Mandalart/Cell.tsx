@@ -2,6 +2,12 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { CellSchedule } from '@/types/mandalart';
+import { FOCUS_RING } from '@/lib/constants';
+
+// 셀 모서리 도구: 마우스는 올렸을 때, 키보드는 셀 안에 초점이 있을 때, 터치 기기는 항상 보인다(폭과 무관).
+const TOOL_REVEAL = 'opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 touch:opacity-100';
+// 보이는 크기는 데스크탑 16px·터치 24px, 터치 히트 영역은 touch-hit(44px).
+const TOOL_BUTTON = `w-4 h-4 touch:w-6 touch:h-6 touch-hit ${FOCUS_RING}`;
 
 interface CellProps {
   value: string;
@@ -18,12 +24,13 @@ interface CellProps {
   onClearCell?: () => void;
   schedule?: CellSchedule;
   onScheduleClick?: () => void;
+  /** 입력 칸 이름(모바일 개요처럼 같은 placeholder가 여럿일 때) */
+  ariaLabel?: string;
   /**
-   * 셀 탭 시 추가로 호출되는 콜백 (textarea focus와 별개).
-   * 모바일 만다라트에서 중앙 셀 → 해당 외곽 그리드 표시 같은 동작에 사용.
-   * 데스크탑에서는 사용 안 함.
+   * 이모지가 있어도 글자를 입력 칸으로 둔다(이모지는 왼쪽 위 장식, 이모지 버튼은 늘 보임).
+   * 모바일 개요 전용. 데스크탑은 기본값(이모지 셀은 글자 대신 이모지를 크게 보임)을 그대로 쓴다.
    */
-  onTap?: () => void;
+  keepTextEditable?: boolean;
 }
 
 function hasSchedule(schedule?: CellSchedule): boolean {
@@ -46,7 +53,8 @@ export function Cell({
   onClearCell,
   schedule,
   onScheduleClick,
-  onTap,
+  ariaLabel,
+  keepTextEditable = false,
 }: CellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localValue, setLocalValue] = useState(value);
@@ -86,7 +94,6 @@ export function Cell({
 
   const handleCellClick = () => {
     if (disabled) return;
-    onTap?.();
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -110,7 +117,10 @@ export function Cell({
       `}
       style={{ backgroundColor }}
     >
-      {icon ? (
+      {keepTextEditable && icon && (
+        <span className="pointer-events-none absolute top-0.5 left-1 text-sm" aria-hidden="true">{icon}</span>
+      )}
+      {icon && !keepTextEditable ? (
         <div className={`flex flex-col items-center justify-center gap-0.5 ${completed ? 'opacity-50' : ''}`}>
           <span className={`${isMainGoal ? 'text-2xl' : isSubGoal ? 'text-xl' : 'text-lg'}`}>{icon}</span>
           {localValue && (
@@ -131,6 +141,7 @@ export function Cell({
           value={localValue}
           onChange={handleChange}
           placeholder={placeholder}
+          aria-label={ariaLabel}
           disabled={disabled}
           className={`
             w-full p-0
@@ -159,16 +170,15 @@ export function Cell({
           }}
           className={`
             absolute top-0.5 left-0.5
-            w-4 h-4 rounded-full
+            ${TOOL_BUTTON} rounded-full
             flex items-center justify-center
             shadow-sm border
             z-20
             transition-all duration-200
             ${completed
               ? 'bg-emerald-500 border-emerald-600 text-white opacity-100'
-              : 'bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-slate-300 hover:text-slate-600'
+              : `bg-white border-slate-200 text-slate-400 ${TOOL_REVEAL} hover:border-slate-300 hover:text-slate-600`
             }
-            max-sm:opacity-100
           `}
           title={completed ? '완료 취소' : '완료'}
         >
@@ -179,7 +189,7 @@ export function Cell({
       )}
 
       {/* 이모지 버튼 (우측 상단, 호버 시 표시) - 텍스트가 없거나 이모지가 있는 셀 */}
-      {!disabled && onIconClick && (!localValue.trim() || icon) && (
+      {!disabled && onIconClick && (!localValue.trim() || icon || keepTextEditable) && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -187,16 +197,15 @@ export function Cell({
           }}
           className={`
             absolute top-0.5 right-0.5
-            w-4 h-4 rounded-full
+            ${TOOL_BUTTON} rounded-full
             flex items-center justify-center
             shadow-sm border
             z-20
             transition-all duration-200
             ${icon
               ? 'bg-amber-100 border-amber-300 opacity-100'
-              : 'bg-white border-slate-200 opacity-0 group-hover/cell:opacity-100 hover:border-slate-300'
+              : `bg-white border-slate-200 ${TOOL_REVEAL} hover:border-slate-300`
             }
-            max-sm:opacity-100
           `}
           title="이모지 선택"
         >
@@ -213,16 +222,15 @@ export function Cell({
           }}
           className={`
             absolute bottom-0.5 left-0.5
-            w-4 h-4 rounded-full
+            ${TOOL_BUTTON} rounded-full
             flex items-center justify-center
             shadow-sm border
             z-20
             transition-all duration-200
             ${hasSchedule(schedule)
               ? 'bg-indigo-500 border-indigo-600 text-white opacity-100'
-              : 'bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50'
+              : `bg-white border-slate-200 text-slate-400 ${TOOL_REVEAL} hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50`
             }
-            max-sm:opacity-100
           `}
           title={hasSchedule(schedule) ? '스케줄 편집' : '스케줄 설정'}
         >
@@ -263,10 +271,10 @@ export function Cell({
             shadow-sm border
             z-20
             transition-all duration-200
-            max-sm:opacity-100
+            touch-hit ${FOCUS_RING}
             ${confirmClear
-              ? 'w-auto h-4 px-1.5 bg-red-500 border-red-600 text-white opacity-100'
-              : 'w-4 h-4 bg-white border-slate-200 text-slate-400 opacity-0 group-hover/cell:opacity-100 hover:border-red-300 hover:text-red-500 hover:bg-red-50'
+              ? 'w-auto h-4 touch:h-6 px-1.5 bg-red-500 border-red-600 text-white opacity-100'
+              : `w-4 h-4 touch:w-6 touch:h-6 bg-white border-slate-200 text-slate-400 ${TOOL_REVEAL} hover:border-red-300 hover:text-red-500 hover:bg-red-50`
             }
           `}
           title={confirmClear ? '클릭하여 삭제' : '초기화'}

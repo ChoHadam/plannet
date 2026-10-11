@@ -220,22 +220,44 @@ test('Recommendations remain selectable when current dropdown source has no grou
   expect((await monthlyState(page)).monthlyPlans[0].goals[0]).toMatchObject({ sourceMandalartId: 'Source-B', sourceCellId: 'top-left-0' });
 });
 
-test('Empty-period cursors hydrate only within their authenticated account', async ({ page }) => {
+test('Logged-in service loads each account only from the DB; the period cursor is not persisted in the browser', async ({ page }) => {
+  // 로그인한 서비스 모드는 기록·조회 커서를 브라우저에 저장하지 않는다. 계정별 기록은 (모의) DB에서만 온다.
   let subject = 'account-a';
-  await page.route('**/api/runtime-config', (route) => route.fulfill({ json: { authEnabled: true, backupEnabled: false } }));
-  await page.route('**/api/v1/me', (route) => route.fulfill({ json: { authenticated: true, user: { authProvider: 'google', externalSubject: subject, name: subject } } }));
-  const suffixA = '@acct:google%3Aaccount-a';
+  const userIds: Record<string, string> = { 'account-a': 'aaaaaaaa-0000-4000-8000-00000000000a', 'account-b': 'bbbbbbbb-0000-4000-8000-00000000000b' };
   const plan = monthly('private-A', 2024, 2);
-  await seed(page, { monthly: [plan], monthlyId: plan.id, suffix: suffixA });
+  const db: Record<string, unknown[]> = {
+    'account-a': [{ kind: 'monthly', id: plan.id, schemaVersion: 1, version: 1, deleted: false, data: plan, updatedAt: plan.updatedAt }],
+    'account-b': [],
+  };
+  await page.route('**/api/runtime-config', (route) => route.fulfill({ json: { authEnabled: true, backupEnabled: false } }));
+  await page.route('**/api/v1/me', (route) => route.fulfill({ json: {
+    authenticated: true, storageEnabled: true, user: { authProvider: 'google', externalSubject: subject, name: subject, userId: userIds[subject] },
+  } }));
+  await page.route('**/api/v1/planner', (route) => route.request().headers()['x-plannet-user-id'] === userIds[subject]
+    ? route.fulfill({ json: { userId: userIds[subject], records: db[subject] } })
+    : route.fulfill({ status: 409, json: { error: 'account_changed' } }));
+  const commits: string[] = [];
+  await page.route('**/api/v1/planner/commit', (route) => { commits.push(route.request().postData() ?? ''); return route.fulfill({ status: 500, json: { error: 'unexpected' } }); });
+
+  await page.goto('/');
+  await page.locator('aside').getByText('private-A', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: '2024년 2월', exact: true })).toBeVisible();
   await page.getByTitle('다음 달', { exact: true }).click();
   await expect(page.getByText('이 달에는 월간 플랜이 없습니다')).toBeVisible();
+
   subject = 'account-b';
   await page.reload();
   await expect(page.getByText('account-b', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '이 달의 플랜 만들기' })).toHaveCount(0);
+  await expect(page.locator('aside')).toBeVisible();
   await expect(page.locator('aside').getByText('private-A', { exact: true })).toHaveCount(0);
+
   subject = 'account-a';
   await page.reload();
-  await expect(page.getByRole('heading', { name: '2024년 3월', exact: true })).toBeVisible();
-  expect((await stored<{ monthlyPlans: MonthlyData[] }>(page, MONTHLY_KEY + suffixA)).monthlyPlans).toEqual([plan]);
+  await expect(page.locator('aside').getByText('private-A', { exact: true })).toBeVisible();
+  // 커서는 저장하지 않았으므로 복원되지 않는다. 플랜을 다시 열면 DB 내용 그대로다.
+  await expect(page.getByText('이 달에는 월간 플랜이 없습니다')).toHaveCount(0);
+  await page.locator('aside').getByText('private-A', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: '2024년 2월', exact: true })).toBeVisible();
+  expect(commits).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('plannet')))).toEqual([]);
 });

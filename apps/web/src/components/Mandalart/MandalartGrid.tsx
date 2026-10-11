@@ -105,9 +105,9 @@ export function MandalartGrid() {
 
   return (
     <div id="mandalart-grid" data-mandalart-export={JSON.stringify(data)}>
-      {/* 모바일: Focus + Detail 레이아웃 */}
+      {/* 모바일: Focus + Detail 레이아웃. 플랜이 바뀌면 이전 선택·스크롤 요청 없이 새로 시작한다. */}
       <div className="md:hidden">
-        <MandalartGridMobile />
+        <MandalartGridMobile key={data.id} />
       </div>
 
       {/* 데스크탑: 9x9 그리드 */}

@@ -4,7 +4,13 @@ import { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TodoItem as TodoItemType, TodoColor } from '@/types/block6';
-import { TODO_COLOR_BAR, TODO_COLOR_BG, TODO_COLORS, TODO_COLOR_LABELS } from '@/lib/constants';
+import { FOCUS_RING, TODO_COLOR_BAR, TODO_COLOR_BG, TODO_COLORS, TODO_COLOR_LABELS, TOUCH_REVEAL } from '@/lib/constants';
+import { useMoveTodoRequest } from './MoveTodo';
+
+// 펼침 메뉴 항목. 터치 기기에서는 손가락 높이(약 44px)로 키운다.
+const MENU_ITEM = 'w-full px-3 py-1.5 touch:py-3 text-left text-xs flex items-center gap-2';
+// 행 왼쪽·오른쪽 작은 조작: 데스크탑은 14px, 터치는 28px.
+const ITEM_CONTROL = 'w-3.5 h-3.5 touch:w-7 touch:h-7 flex-shrink-0';
 
 interface DraggableTodoItemProps {
   todo: TodoItemType;
@@ -35,6 +41,7 @@ export function DraggableTodoItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const requestMove = useMoveTodoRequest();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: todo.id,
@@ -125,17 +132,18 @@ export function DraggableTodoItem({
         ${todoColor !== 'none' ? 'pl-1' : ''}
       `}
     >
-      {/* Hover controls container (left side) */}
-      <div className="flex items-center gap-0.5 flex-shrink-0 w-0 group-hover:w-auto overflow-hidden transition-all duration-150">
+      {/* Hover controls container (left side). 키보드 초점이 행 안에 있거나 터치 기기면 항상 펼친다. */}
+      <div className="flex items-center gap-0.5 flex-shrink-0 w-0 group-hover:w-auto group-focus-within:w-auto touch:w-auto overflow-hidden transition-all duration-150">
         {/* Drag handle */}
         <button
           {...listeners}
           {...attributes}
-          className="
-            w-3.5 h-3.5 cursor-grab active:cursor-grabbing
-            text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0
-          "
+          className={`
+            ${ITEM_CONTROL} touch:p-1.5 touch-none rounded cursor-grab active:cursor-grabbing
+            text-slate-300 hover:text-slate-500 transition-colors ${FOCUS_RING}
+          `}
           title="드래그하여 이동"
+          aria-label={`${todo.text} 드래그하여 이동`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -155,8 +163,10 @@ export function DraggableTodoItem({
         {/* Checkbox */}
         <button
           onClick={onToggle}
+          aria-label={`${todo.text} 완료`}
+          aria-pressed={!!todo.completed}
           className={`
-            w-3.5 h-3.5 rounded border transition-colors flex-shrink-0
+            w-3.5 h-3.5 touch:w-6 touch:h-6 rounded border transition-colors flex-shrink-0 ${FOCUS_RING}
             ${todo.completed
               ? 'bg-slate-500 border-slate-500'
               : 'border-slate-300 hover:border-slate-400'}
@@ -181,7 +191,7 @@ export function DraggableTodoItem({
 
       {/* Completion indicator (visible when not hovering) */}
       {todo.completed && (
-        <span className="text-slate-400 text-[10px] group-hover:hidden flex-shrink-0">✓</span>
+        <span className="text-slate-400 text-[10px] group-hover:hidden group-focus-within:hidden touch:hidden flex-shrink-0">✓</span>
       )}
 
       {/* Text */}
@@ -190,6 +200,7 @@ export function DraggableTodoItem({
           ref={inputRef}
           type="text"
           value={editText}
+          data-local-draft
           onChange={(e) => setEditText(e.target.value)}
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
@@ -222,13 +233,15 @@ export function DraggableTodoItem({
             }
             setShowMenu(!showMenu);
           }}
-          className="
-            opacity-0 group-hover:opacity-100
-            w-3.5 h-3.5 rounded flex items-center justify-center
+          className={`
+            ${TOUCH_REVEAL} ${ITEM_CONTROL} relative touch-hit
+            rounded flex items-center justify-center
             text-slate-400 hover:text-slate-600 hover:bg-slate-100
-            transition-all
-          "
+            transition-all ${FOCUS_RING}
+          `}
           title="메뉴"
+          aria-label={`${todo.text} 메뉴`}
+          aria-expanded={showMenu}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -259,7 +272,7 @@ export function DraggableTodoItem({
                 onToggle();
                 setShowMenu(false);
               }}
-              className="w-full px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+              className={`${MENU_ITEM} text-slate-600 hover:bg-slate-50`}
             >
               {todo.completed ? (
                 <>
@@ -285,7 +298,7 @@ export function DraggableTodoItem({
             {/* Color option */}
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="w-full px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+              className={`${MENU_ITEM} text-slate-600 hover:bg-slate-50`}
             >
               <span
                 className="w-3 h-3 rounded-full border border-slate-200"
@@ -332,7 +345,7 @@ export function DraggableTodoItem({
             {/* Duplicate option */}
             <button
               onClick={handleDuplicate}
-              className="w-full px-3 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+              className={`${MENU_ITEM} text-slate-600 hover:bg-slate-50`}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -351,6 +364,27 @@ export function DraggableTodoItem({
               복제
             </button>
 
+            {/* 다른 요일·블록·할 일 목록으로 옮기기 (드래그 대신) */}
+            {requestMove && (
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setShowColorPicker(false);
+                  // 대화상자가 닫힐 때 초점이 돌아올 곳: 사라지는 메뉴 항목 대신 메뉴 버튼
+                  menuBtnRef.current?.focus();
+                  requestMove({ todo, sourceType, sourceId });
+                }}
+                className={`${MENU_ITEM} text-slate-600 hover:bg-slate-50`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="5 9 2 12 5 15" />
+                  <polyline points="19 9 22 12 19 15" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                </svg>
+                옮기기…
+              </button>
+            )}
+
             {/* Divider */}
             <div className="border-t border-slate-100 my-1" />
 
@@ -360,7 +394,7 @@ export function DraggableTodoItem({
                 onDelete();
                 setShowMenu(false);
               }}
-              className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
+              className={`${MENU_ITEM} text-red-500 hover:bg-red-50`}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

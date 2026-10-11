@@ -115,14 +115,14 @@ export function ImportGoalsModal({ isOpen, onClose, currentGoalsCount }: ImportG
 
   return (
     <div
-      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 overlay-safe bg-black/30 flex items-center justify-center z-50"
       onClick={handleClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="만다라트에서 목표 불러오기"
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200"
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[min(80vh,100%)] flex flex-col animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

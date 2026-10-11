@@ -1,13 +1,10 @@
 import { GRID_POSITIONS, GridPosition, MandalartData } from '../../src/types/mandalart';
-import { DEFAULT_COLORS, STORAGE_KEY } from '../../src/lib/constants';
-import { accountStorageScope } from '../../src/lib/plannerStorage';
+import { DEFAULT_COLORS } from '../../src/lib/constants';
 
 /** gridId → { cellIndex: value } */
 export type CellValues = Partial<Record<GridPosition, Record<number, string>>>;
 
 export const FIXED_TIME = '2026-01-01T00:00:00.000Z';
-/** useMandalart persist version */
-const MANDALART_PERSIST_VERSION = 3;
 
 export function buildPlan(id: string, title: string, values: CellValues): MandalartData {
   return {
@@ -38,11 +35,7 @@ export interface TestAccount {
 export const ACCOUNT_A: TestAccount = { subject: 'airs-sub-a', name: 'Airs Tester A' };
 export const ACCOUNT_B: TestAccount = { subject: 'airs-sub-b', name: 'Airs Tester B' };
 
-/** 계정별 Mandalart LocalStorage 키 (plannerStorage의 규칙과 같다) */
-export function mandalartKey(account: TestAccount): string {
-  return `${STORAGE_KEY}@${accountStorageScope(`google:${account.subject}`)}`;
-}
-
-export function persistedMandalarts(plans: MandalartData[], currentId: string | null): string {
-  return JSON.stringify({ state: { mandalarts: plans, currentId }, version: MANDALART_PERSIST_VERSION });
+/** 모의 /me가 돌려주는 내부 사용자 UUID (서버 저장 모드) */
+export function accountUserId(account: TestAccount): string {
+  return account.subject === ACCOUNT_A.subject ? 'a1a1a1a1-0000-4000-8000-00000000000a' : 'b2b2b2b2-0000-4000-8000-00000000000b';
 }

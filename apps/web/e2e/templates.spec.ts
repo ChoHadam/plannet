@@ -146,7 +146,9 @@ test.describe('템플릿 공통 플로우', () => {
     await expect(page.locator('text=플랜을 삭제하시겠습니까?')).toBeVisible();
     await page.locator('button:has-text("삭제")').last().click();
 
-    await expect(page.locator('text=플랜을 선택하거나 새로 만들어주세요')).toBeVisible({ timeout: 3000 });
+    // 선택이 사라지면 빈 작업 공간(오늘 할 일·최근 작업)으로 돌아간다.
+    await expect(page.getByRole('heading', { name: '오늘 할 일' })).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('input[placeholder="나의 투두리스트"]')).toHaveCount(0);
   });
 
   test('제목 편집', async ({ page }) => {

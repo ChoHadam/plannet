@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// ISOLATED_WEB_PORT: 다른 격리 스위트(ux-foundation 등)가 같은 빌드 절차를 다른 포트로 쓴다.
+const port = process.env.ISOLATED_WEB_PORT || '3640';
 const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plannet-period-import-'));
 for (const entry of ['src', 'public', 'package.json', 'next.config.ts', 'postcss.config.mjs']) {
@@ -31,7 +33,7 @@ const build = spawnSync(process.execPath, [next, 'build', '--webpack'], {
 if (build.status !== 0) process.exit(build.status ?? 1);
 
 console.log(`[period-import] isolated build: ${tempDir}`);
-const server = spawn(process.execPath, [next, 'start', '-H', '127.0.0.1', '-p', '3640'], {
+const server = spawn(process.execPath, [next, 'start', '-H', '127.0.0.1', '-p', port], {
   cwd: tempDir, env, stdio: 'inherit',
 });
 for (const signal of ['SIGINT', 'SIGTERM']) {

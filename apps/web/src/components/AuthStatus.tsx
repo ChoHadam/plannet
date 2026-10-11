@@ -1,93 +1,64 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/components/AuthProvider';
-import { hasLocalScopeData } from '@/lib/plannerStorage';
+import { LogoutResult, useAuth } from '@/components/AuthProvider';
 
-const PILL_CLASS =
-  'rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm backdrop-blur transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60';
-
+/** 플래너 안의 로그인 상태 표시. 미로그인·확인 중·확인 실패 화면은 Landing이 맡는다. */
 export function AuthStatus() {
   const { status } = useAuth();
-
-  if (status === 'loading' || status === 'disabled') return null;
-  if (status === 'unavailable') return <AuthUnavailable />;
-  if (status === 'authenticated') return <SignedIn />;
-  return <SignedOut />;
+  return status === 'authenticated' ? <SignedIn /> : null;
 }
 
-function SignedOut() {
-  const { login, loginError } = useAuth();
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <button type="button" onClick={login} className={PILL_CLASS}>
-        Google 로그인
-      </button>
-      {loginError && (
-        <p role="alert" className="text-xs text-red-600">
-          {loginError}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function AuthUnavailable() {
-  const { retry } = useAuth();
-  return (
-    <div role="status" className="flex items-center gap-2 text-xs text-amber-700">
-      <span>로그인 상태를 확인할 수 없어요. 로그인 전 로컬 데이터를 표시합니다.</span>
-      <button type="button" onClick={retry} className={PILL_CLASS}>
-        다시 시도
-      </button>
-    </div>
-  );
-}
+const LOGOUT_FAILURES: Record<Exclude<LogoutResult, 'ok'>, string> = {
+  unsaved: '저장되지 않은 수정이 있어 로그아웃하지 않았어요. 서버 저장을 다시 시도하거나 초안을 파일로 저장해주세요.',
+  failed: '로그아웃하지 못했어요. 다시 시도해주세요.',
+  edited: '로그아웃하는 동안 생긴 수정은 저장되지 않았어요. 초안을 파일로 저장한 뒤 새로고침해주세요.',
+};
 
 function SignedIn() {
-  const { user, logout, storageEnabled } = useAuth();
+  const { user, logout } = useAuth();
   const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
-  // 로그인 전 공통 데이터는 계정에 귀속하지 않고 LOCAL 범위에 남겨 둔다.
-  const [hasLocalData] = useState(() => hasLocalScopeData());
+  const [failure, setFailure] = useState<string | null>(null);
 
   const displayName = user?.name || user?.email || '사용자';
   const initial = displayName.trim().charAt(0).toUpperCase() || 'P';
 
   const handleLogout = async () => {
     setPending(true);
-    setFailed(false);
-    const ok = await logout();
-    if (!ok) {
+    setFailure(null);
+    const result = await logout();
+    if (result !== 'ok') {
       setPending(false);
-      setFailed(true);
+      setFailure(LOGOUT_FAILURES[result]);
     }
   };
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-white">
+      <div className="flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-white">
           {initial}
         </div>
-        <div className="hidden max-w-40 truncate text-sm font-medium text-slate-600 sm:block">{displayName}</div>
+        <div className="min-w-0 max-w-40 sm:max-w-56">
+          <div className="truncate text-sm font-medium text-slate-600">{displayName}</div>
+          {user?.email && user.email !== displayName && (
+            <div data-testid="auth-account-email" title={user.email} className="truncate text-xs text-slate-500">
+              {user.email}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleLogout}
           disabled={pending}
-          className="rounded-full px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-wait disabled:opacity-60"
+          className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60"
         >
           로그아웃
         </button>
       </div>
-      {failed && (
-        <p role="alert" className="text-xs text-red-600">
-          로그아웃하지 못했어요. 다시 시도해주세요.
-        </p>
-      )}
-      {hasLocalData && !storageEnabled && (
-        <p className="text-xs text-slate-500">
-          로그인 전에 이 브라우저에 저장한 플랜은 계정과 분리해 보존했어요. 로그아웃하면 다시 볼 수 있어요.
+      {failure && (
+        <p role="alert" className="max-w-xs text-right text-xs text-red-600">
+          {failure}
         </p>
       )}
     </div>

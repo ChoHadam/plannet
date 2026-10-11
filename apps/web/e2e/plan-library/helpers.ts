@@ -110,6 +110,10 @@ export interface MockUser {
 export const mock = {
   reset: () => mockPost('/__mock/reset'),
   setNextUser: (nextUser: MockUser) => mockPost('/__mock/config', { nextUser }),
+  /** 로그인한 서비스 모드의 기록은 (모의) DB에 있다. 다른 기기에서 저장한 것처럼 심는다 */
+  seedPlanner: (user: MockUser, documents: { kind: string; id: string; data: unknown }[]) => mockPost('/__mock/planner', { sub: user.sub, documents }),
+  planner: async (user: MockUser): Promise<{ records: { id: string; data: Record<string, unknown> | null }[] }> =>
+    (await fetch(`${MOCK_API}/__mock/planner?sub=${encodeURIComponent(user.sub)}`)).json(),
 };
 
 export function testUser(id: string): MockUser {

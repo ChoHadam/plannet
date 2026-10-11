@@ -100,6 +100,7 @@ export function DroppableTodoList({
           ref={inputRef}
           type="text"
           value={newTodoText}
+          data-local-draft
           onChange={(e) => setNewTodoText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}

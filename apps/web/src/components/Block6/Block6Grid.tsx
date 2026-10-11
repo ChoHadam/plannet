@@ -16,6 +16,7 @@ import {
 import { BlockCard } from './BlockCard';
 import { TodoBacklog } from './TodoBacklog';
 import { WeeklyFocusRef } from './WeeklyFocusRef';
+import { MoveTodoContext, MoveTodoDialog, MoveTodoRequest } from './MoveTodo';
 import { Block6GridMobile } from './Block6GridMobile';
 import { useHolidayStore } from '@/hooks/useHolidays';
 import { getHolidaysInWeek, toIsoDate } from '@/lib/holidays';
@@ -77,6 +78,7 @@ const TIME_STYLES: Record<TimeOfDay, { bg: string; bar: string; text: string; ic
 
 export function Block6Grid() {
   const [activeTodo, setActiveTodo] = useState<TodoItem | null>(null);
+  const [moveRequest, setMoveRequest] = useState<MoveTodoRequest | null>(null);
 
   const currentBlock6Id = useBlock6Store((state) => state.currentBlock6Id);
   const block6Plans = useBlock6Store((state) => state.block6Plans);
@@ -192,149 +194,160 @@ export function Block6Grid() {
 
       {/* 데스크탑 그리드. 모바일에서는 hidden. */}
       <div className="hidden md:block">
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className={`flex w-full max-w-screen-2xl mx-auto items-start ${LAYOUT.outerGap}`}>
-        {/* Left Sidebar (sticky to viewport so click targets stay in place) */}
-        {/* TODO: top-4/2rem are tied to <main>'s py-8. If another template needs the same sticky-sidebar pattern, extract to a tailwind theme spacing token. */}
-        <div className="w-48 flex flex-col gap-3 flex-shrink-0 sticky top-4 h-[calc(100vh-2rem)]">
-          <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
-          <TodoBacklog
-            todos={data.backlog}
-            onAddTodo={addBacklogTodo}
-            onToggleTodo={toggleBacklogTodo}
-            onUpdateTodo={updateBacklogTodo}
-            onDeleteTodo={deleteBacklogTodo}
-            onColorChange={updateBacklogTodoColor}
-            onDuplicate={duplicateBacklogTodo}
-          />
-        </div>
+    <MoveTodoContext.Provider value={setMoveRequest}>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className={`flex w-full max-w-screen-2xl mx-auto items-start ${LAYOUT.outerGap}`}>
+          {/* Left Sidebar (sticky to viewport so click targets stay in place) */}
+          {/* TODO: top-4/2rem are tied to <main>'s py-8. If another template needs the same sticky-sidebar pattern, extract to a tailwind theme spacing token. */}
+          <div className="w-48 flex flex-col gap-3 flex-shrink-0 sticky top-4 h-[calc(100vh-2rem)] supports-[height:100dvh]:h-[calc(100dvh-2rem)]">
+            <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
+            <TodoBacklog
+              todos={data.backlog}
+              onAddTodo={addBacklogTodo}
+              onToggleTodo={toggleBacklogTodo}
+              onUpdateTodo={updateBacklogTodo}
+              onDeleteTodo={deleteBacklogTodo}
+              onColorChange={updateBacklogTodoColor}
+              onDuplicate={duplicateBacklogTodo}
+            />
+          </div>
 
-        {/* Main Grid */}
-        <div className="flex-1 min-w-0 overflow-x-auto pb-3 overscroll-x-contain">
-          <div className="min-w-full pr-4">
-            <div className={`${LAYOUT.surface} ${LAYOUT.surfacePadding} ${LAYOUT.gridMinWidth} w-full`}>
-              <div className={`grid grid-cols-[56px_repeat(7,minmax(150px,1fr))] ${LAYOUT.gridGap}`}>
-              {/* Header Row */}
-              <div />
-              {DAYS_OF_WEEK.map((day) => {
-                const isWeekend = day === 'sat' || day === 'sun';
-                const date = dateByDay[day];
-                const iso = date ? toIsoDate(date) : '';
-                const holiday = iso ? holidayMap[iso] : undefined;
-                const isAuto = holiday?.source === 'auto';
-                const isManualHoliday = holiday?.source === 'manual';
-                const isWeekendManualHoliday = isWeekend && isManualHoliday;
-                const handleContextMenu = (e: React.MouseEvent) => {
-                  if (!date) return;
-                  e.preventDefault();
-                  if (isAuto) return; // 자동 휴일은 read-only
-                  toggleManualHoliday(date);
-                };
-                return (
-                  <div
-                    key={day}
-                    onContextMenu={handleContextMenu}
-                    title={
-                      holiday?.name
-                        ? holiday.name + (isAuto ? ' · 공휴일' : ' · 수동')
-                        : date
-                          ? '우클릭으로 수동 휴일 토글'
-                          : ''
-                    }
-                    className={`
-                      h-12 flex flex-col items-center justify-center
-                      text-xs font-bold uppercase tracking-wider rounded-lg
-                      transition-colors
-                      ${isAuto ? 'bg-red-50 text-red-600 cursor-not-allowed' : ''}
-                      ${isManualHoliday ? `${isWeekendManualHoliday ? 'bg-slate-100 text-slate-500' : 'bg-red-100 text-red-700'} cursor-pointer` : ''}
-                      ${!holiday ? `${isWeekend ? 'text-slate-400' : 'text-slate-500'} ${LAYOUT.weekdayHeaderBg}` : ''}
-                    `}
-                  >
-                    <span>{DAY_LABELS[day]}</span>
-                    {date && (
-                      <span className="text-[10px] font-normal opacity-70 leading-none mt-0.5">
-                        {date.getMonth() + 1}/{date.getDate()}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Block Rows */}
-              {BLOCK_NUMBERS.map((blockNumber) => {
-                const timeOfDay = BLOCK_TIME_OF_DAY[blockNumber];
-                const style = TIME_STYLES[timeOfDay];
-                const isFirstInGroup = blockNumber === 1 || blockNumber === 3 || blockNumber === 5;
-
-                return (
-                  <React.Fragment key={blockNumber}>
-                    {/* Time label — spans 2 rows for first block in group */}
-                    {isFirstInGroup ? (
-                      <div
-                        className={`
-                          row-span-2 flex flex-col items-center justify-center
-                          rounded-xl relative overflow-hidden
-                          ${style.bg} ${style.text}
-                        `}
-                      >
-                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${style.bar}`} />
-                        <span className="mb-1">{style.icon}</span>
-                        <span className="text-[10px] font-bold leading-tight">
-                          {TIME_OF_DAY_LABELS[timeOfDay]}
+          {/* Main Grid */}
+          <div className="flex-1 min-w-0 overflow-x-auto pb-3 overscroll-x-contain">
+            <div className="min-w-full pr-4">
+              <div className={`${LAYOUT.surface} ${LAYOUT.surfacePadding} ${LAYOUT.gridMinWidth} w-full`}>
+                <div className={`grid grid-cols-[56px_repeat(7,minmax(150px,1fr))] ${LAYOUT.gridGap}`}>
+                {/* Header Row */}
+                <div />
+                {DAYS_OF_WEEK.map((day) => {
+                  const isWeekend = day === 'sat' || day === 'sun';
+                  const date = dateByDay[day];
+                  const iso = date ? toIsoDate(date) : '';
+                  const holiday = iso ? holidayMap[iso] : undefined;
+                  const isAuto = holiday?.source === 'auto';
+                  const isManualHoliday = holiday?.source === 'manual';
+                  const isWeekendManualHoliday = isWeekend && isManualHoliday;
+                  const handleContextMenu = (e: React.MouseEvent) => {
+                    if (!date) return;
+                    e.preventDefault();
+                    if (isAuto) return; // 자동 휴일은 read-only
+                    toggleManualHoliday(date);
+                  };
+                  return (
+                    <div
+                      key={day}
+                      onContextMenu={handleContextMenu}
+                      title={
+                        holiday?.name
+                          ? holiday.name + (isAuto ? ' · 공휴일' : ' · 수동')
+                          : date
+                            ? '우클릭으로 수동 휴일 토글'
+                            : ''
+                      }
+                      className={`
+                        h-12 flex flex-col items-center justify-center
+                        text-xs font-bold uppercase tracking-wider rounded-lg
+                        transition-colors
+                        ${isAuto ? 'bg-red-50 text-red-600 cursor-not-allowed' : ''}
+                        ${isManualHoliday ? `${isWeekendManualHoliday ? 'bg-slate-100 text-slate-500' : 'bg-red-100 text-red-700'} cursor-pointer` : ''}
+                        ${!holiday ? `${isWeekend ? 'text-slate-400' : 'text-slate-500'} ${LAYOUT.weekdayHeaderBg}` : ''}
+                      `}
+                    >
+                      <span>{DAY_LABELS[day]}</span>
+                      {date && (
+                        <span className="text-[10px] font-normal opacity-70 leading-none mt-0.5">
+                          {date.getMonth() + 1}/{date.getDate()}
                         </span>
-                      </div>
-                    ) : null}
+                      )}
+                    </div>
+                  );
+                })}
 
-                    {/* Block Cards */}
-                    {DAYS_OF_WEEK.map((day) => {
-                      const block = getBlock(day, blockNumber);
-                      if (!block) return <div key={`${day}-${blockNumber}`} />;
+                {/* Block Rows */}
+                {BLOCK_NUMBERS.map((blockNumber) => {
+                  const timeOfDay = BLOCK_TIME_OF_DAY[blockNumber];
+                  const style = TIME_STYLES[timeOfDay];
+                  const isFirstInGroup = blockNumber === 1 || blockNumber === 3 || blockNumber === 5;
 
-                      const date = dateByDay[day];
-                      const iso = date ? toIsoDate(date) : '';
-                      const holiday = iso ? holidayMap[iso] : undefined;
-                      const isWeekend = day === 'sat' || day === 'sun';
-                      const isWeekendManualHoliday = isWeekend && holiday?.source === 'manual';
-                      const isHolidayCol = !!holiday;
-
-                      return (
+                  return (
+                    <React.Fragment key={blockNumber}>
+                      {/* Time label — spans 2 rows for first block in group */}
+                      {isFirstInGroup ? (
                         <div
-                          key={`${day}-${blockNumber}`}
                           className={`
-                            rounded-lg
-                            ${isWeekendManualHoliday ? 'bg-slate-100/80' : isHolidayCol ? 'ring-1 ring-red-200 bg-red-50/30' : ''}
+                            row-span-2 flex flex-col items-center justify-center
+                            rounded-xl relative overflow-hidden
+                            ${style.bg} ${style.text}
                           `}
                         >
-                          <BlockCard
-                            block={block}
-                            onAddTodo={(text) => addTodo(block.id, text)}
-                            onToggleTodo={(todoId) => toggleTodo(block.id, todoId)}
-                            onUpdateTodo={(todoId, text) => updateTodo(block.id, todoId, text)}
-                            onDeleteTodo={(todoId) => deleteTodo(block.id, todoId)}
-                            onTodoColorChange={(todoId, color) => updateTodoColor(block.id, todoId, color)}
-                            onDuplicateTodo={(todoId) => duplicateTodo(block.id, todoId)}
-                          />
+                          <div className={`absolute left-0 top-0 bottom-0 w-1 ${style.bar}`} />
+                          <span className="mb-1">{style.icon}</span>
+                          <span className="text-[10px] font-bold leading-tight">
+                            {TIME_OF_DAY_LABELS[timeOfDay]}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
+                      ) : null}
+
+                      {/* Block Cards */}
+                      {DAYS_OF_WEEK.map((day) => {
+                        const block = getBlock(day, blockNumber);
+                        if (!block) return <div key={`${day}-${blockNumber}`} />;
+
+                        const date = dateByDay[day];
+                        const iso = date ? toIsoDate(date) : '';
+                        const holiday = iso ? holidayMap[iso] : undefined;
+                        const isWeekend = day === 'sat' || day === 'sun';
+                        const isWeekendManualHoliday = isWeekend && holiday?.source === 'manual';
+                        const isHolidayCol = !!holiday;
+
+                        return (
+                          <div
+                            key={`${day}-${blockNumber}`}
+                            className={`
+                              rounded-lg
+                              ${isWeekendManualHoliday ? 'bg-slate-100/80' : isHolidayCol ? 'ring-1 ring-red-200 bg-red-50/30' : ''}
+                            `}
+                          >
+                            <BlockCard
+                              block={block}
+                              onAddTodo={(text) => addTodo(block.id, text)}
+                              onToggleTodo={(todoId) => toggleTodo(block.id, todoId)}
+                              onUpdateTodo={(todoId, text) => updateTodo(block.id, todoId, text)}
+                              onDeleteTodo={(todoId) => deleteTodo(block.id, todoId)}
+                              onTodoColorChange={(todoId, color) => updateTodoColor(block.id, todoId, color)}
+                              onDuplicateTodo={(todoId) => duplicateTodo(block.id, todoId)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Drag Overlay */}
-      <DragOverlay>
-        {activeTodo ? (
-          <div className="bg-white shadow-lg rounded-md px-3 py-2 text-sm text-slate-700 border border-slate-200 font-medium">
-            {activeTodo.text}
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        {/* Drag Overlay */}
+        <DragOverlay>
+          {activeTodo ? (
+            <div className="bg-white shadow-lg rounded-md px-3 py-2 text-sm text-slate-700 border border-slate-200 font-medium">
+              {activeTodo.text}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+      {moveRequest && (
+        <MoveTodoDialog
+          request={moveRequest}
+          blocks={data.blocks}
+          defaultDay={'mon'}
+          onMove={(destType, destId) => moveTodo(moveRequest.todo.id, moveRequest.sourceType, moveRequest.sourceId, destType, destId)}
+          onClose={() => setMoveRequest(null)}
+        />
+      )}
+    </MoveTodoContext.Provider>
       </div>
     </>
   );

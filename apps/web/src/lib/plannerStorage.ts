@@ -2,16 +2,24 @@ import { createJSONStorage, StateStorage } from 'zustand/middleware';
 import { STORAGE_KEY as MANDALART_STORAGE_KEY } from '@/lib/constants';
 
 /**
- * 계정별로 분리된 플래너 LocalStorage.
+ * 플래너 store의 persist 저장소 어댑터. 범위(scope)에 따라 저장 위치가 다르다.
  *
- * - 로그인하지 않은 상태(또는 인증 꺼짐)는 LOCAL 범위를 쓴다. 기존 키(`plannet-*`)를 그대로 쓰므로
- *   로그인 도입 전 데이터가 이 범위에 보존된다.
- * - 로그인한 계정은 `plannet-*@acct:<provider>%3A<subject>` 키를 쓴다. 기존 공통 데이터를 계정에 자동 귀속하지 않는다.
- * - 범위가 정해지기 전에는 읽기는 빈 값, 쓰기는 버린다. 잘못된 범위에 저장되는 것을 막는다.
+ * - LOCAL: 명시적으로 인증을 끈 로컬 개발 모드만. 기존 키(`plannet-*`)를 그대로 쓴다.
+ * - SERVER(`server:<내부 UUID>`): 로그인한 서비스 모드. 이 어댑터는 브라우저에 전체 상태를 읽거나 쓰지 않는다.
+ *   기록은 PostgreSQL에서 불러온다. PlannerSync가 저장 전 변경분만 sessionStorage에 임시 보관하고 확인 후 지운다.
+ * - 인증이 켜진 환경의 미로그인·확인 중·확인 실패 상태, 서버 저장이 없는 로그인 상태에는 범위를 열지 않는다.
+ * - 범위가 정해지기 전에는 읽기는 빈 값, 쓰기는 버린다.
+ * - 예전 설계의 `@acct:`·`@cloud:` 키는 이 어댑터가 더 이상 쓰지 않는다. 삭제하지 않고 명시적 가져오기·복구에서 읽기만 한다.
  */
 
 export const LOCAL_STORAGE_SCOPE = 'local';
 const SCOPE_SEPARATOR = '@';
+const SERVER_SCOPE_PREFIX = 'server:';
+
+/** 브라우저 저장소를 쓰지 않는 범위인지 */
+export function isMemoryScope(scope: string | null): boolean {
+  return !!scope && scope.startsWith(SERVER_SCOPE_PREFIX);
+}
 
 export const PLANNER_STORAGE_KEYS = {
   mandalart: MANDALART_STORAGE_KEY,
@@ -30,7 +38,7 @@ export function scopedKey(name: string, scope: string): string {
 
 const scopedLocalStorage: StateStorage = {
   getItem: (name) => {
-    if (!activeScope) return null;
+    if (!activeScope || isMemoryScope(activeScope)) return null;
     try {
       return localStorage.getItem(scopedKey(name, activeScope));
     } catch {
@@ -38,7 +46,7 @@ const scopedLocalStorage: StateStorage = {
     }
   },
   setItem: (name, value) => {
-    if (!activeScope) return;
+    if (!activeScope || isMemoryScope(activeScope)) return;
     try {
       localStorage.setItem(scopedKey(name, activeScope), value);
     } catch {
@@ -46,7 +54,7 @@ const scopedLocalStorage: StateStorage = {
     }
   },
   removeItem: (name) => {
-    if (!activeScope) return;
+    if (!activeScope || isMemoryScope(activeScope)) return;
     try {
       localStorage.removeItem(scopedKey(name, activeScope));
     } catch {
@@ -67,7 +75,7 @@ export function setPlannerStorageScope(scope: string): void {
 }
 
 /**
- * 계정 식별 키(`${authProvider}:${externalSubject}`)로 LocalStorage 범위 이름을 만든다.
+ * 예전 설계의 계정별 LocalStorage 범위 이름. 이제 읽기 전용(`이전 계정 기록 가져오기`)이다.
  * - 서버가 검증한 /api/v1/me 200 응답에서 얻은 값만 넘길 것 (브라우저 입력 금지)
  * - 해시로 줄이면 충돌 시 두 계정 데이터가 섞일 수 있어 원문을 인코딩해 쓴다. 이메일은 넣지 않는다.
  * - 계정 간 섞임을 막기 위한 구분이지 보안 경계가 아니다. 내부 userId가 생기면 그 값으로 다시 키를 만든다.
@@ -76,23 +84,12 @@ export function accountStorageScope(userKey: string): string {
   return `acct:${encodeURIComponent(userKey)}`;
 }
 
-/** 내부 사용자별 서버 캐시. 이전 계정/비로그인 키는 명시적 이전 전까지 그대로 둔다. */
-export function cloudStorageScope(userId: string): string {
+/** 예전 설계의 내부 사용자별 서버 캐시 키 범위. 읽기 전용(수동 복구 파일에만 포함). */
+export function legacyCloudStorageScope(userId: string): string {
   return `cloud:${userId}`;
 }
 
-/** 로그인 전(LOCAL 범위)에 저장된 플랜이 이 브라우저에 남아 있는지 */
-export function hasLocalScopeData(): boolean {
-  try {
-    return Object.values(PLANNER_STORAGE_KEYS).some((key) => {
-      const raw = localStorage.getItem(key);
-      if (!raw) return false;
-      const state = (JSON.parse(raw) as { state?: Record<string, unknown> }).state ?? {};
-      return Object.values(state).some((value) =>
-        Array.isArray(value) ? value.length > 0 : typeof value === 'object' && value !== null && Object.keys(value).length > 0,
-      );
-    });
-  } catch {
-    return false;
-  }
+/** 로그인한 서비스 모드의 범위. 브라우저 저장소를 쓰지 않는다. */
+export function serverMemoryScope(userId: string): string {
+  return `${SERVER_SCOPE_PREFIX}${userId}`;
 }

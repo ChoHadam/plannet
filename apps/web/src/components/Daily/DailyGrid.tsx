@@ -26,10 +26,14 @@ import { getBlocksByDay, DayOfWeek } from '@/types/block6';
 import { DailyData, DailyTodo, DAY_LABELS } from '@/types/daily';
 import { RecurringTodosInline } from '../RecurringTodos';
 import { WeeklyImportModal } from './WeeklyImportModal';
+import { isImeComposing } from '@/lib/keyboard';
+import { FOCUS_RING, TOUCH_REVEAL, TOUCH_TARGET } from '@/lib/constants';
 
 // JS Date.getDay() (0=일) → block6 DayOfWeek
 const JS_DAY_TO_DOW: DayOfWeek[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const IMPORT_COUNT_BADGE_CLASS = 'px-1.5 py-0.5 rounded-full text-white text-xs leading-none';
+// 행 끝 버튼: 터치 기기에서 44px이지만 음수 여백으로 행 높이(p-4)는 그대로 둔다.
+const ROW_TOUCH_BUTTON = `${TOUCH_TARGET} touch:-my-3 flex items-center justify-center flex-shrink-0`;
 
 // ---- Sortable Todo Item ----
 
@@ -72,6 +76,8 @@ function SortableTodoItem({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 한글 조합 확정 Enter/Esc는 IME가 처리한다. 편집을 끝내지 않는다.
+    if (isImeComposing(e)) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       onEditSave();
@@ -94,8 +100,9 @@ function SortableTodoItem({
       <button
         {...listeners}
         {...attributes}
-        className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0"
+        className={`${ROW_TOUCH_BUTTON} touch:-ml-3 touch-none cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors rounded ${FOCUS_RING}`}
         title="드래그하여 순서 변경"
+        aria-label={`${todo.text} 순서 변경`}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <circle cx="9" cy="6" r="1.5" />
@@ -110,9 +117,11 @@ function SortableTodoItem({
       {/* Checkbox */}
       <button
         onClick={onToggle}
+        aria-label={`${todo.text} 완료`}
+        aria-pressed={todo.completed}
         className={`
-          w-5 h-5 rounded-full border-2 flex items-center justify-center
-          transition-colors flex-shrink-0
+          relative w-5 h-5 rounded-full border-2 flex items-center justify-center touch-hit
+          transition-colors flex-shrink-0 ${FOCUS_RING}
           ${todo.completed
             ? 'bg-emerald-500 border-emerald-500 text-white'
             : 'border-slate-300 hover:border-emerald-500'}
@@ -130,6 +139,7 @@ function SortableTodoItem({
         <input
           type="text"
           value={editText}
+          data-local-draft
           onChange={(e) => onEditChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={onEditSave}
@@ -160,9 +170,11 @@ function SortableTodoItem({
       {/* Delete button */}
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 p-1 rounded
+        aria-label={`${todo.text} 삭제`}
+        title="삭제"
+        className={`${TOUCH_REVEAL} ${ROW_TOUCH_BUTTON} touch:-mr-3 p-1 rounded
                  text-slate-400 hover:text-red-500 hover:bg-red-50
-                 transition-all"
+                 transition-all ${FOCUS_RING}`}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -187,14 +199,16 @@ function CompletedTodoItem({
   return (
     <div className="group flex items-center gap-3 p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors">
       {/* Spacer (same width as drag handle) */}
-      <div className="w-[14px] flex-shrink-0" />
+      <div className="w-[14px] touch:w-11 touch:-ml-3 flex-shrink-0" />
 
       {/* Checkbox */}
       <button
         onClick={onToggle}
-        className="w-5 h-5 rounded-full border-2 flex items-center justify-center
+        aria-label={`${todo.text} 완료`}
+        aria-pressed
+        className={`relative w-5 h-5 rounded-full border-2 flex items-center justify-center touch-hit
                  transition-colors flex-shrink-0
-                 bg-emerald-500 border-emerald-500 text-white"
+                 bg-emerald-500 border-emerald-500 text-white ${FOCUS_RING}`}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
@@ -215,9 +229,11 @@ function CompletedTodoItem({
       {/* Delete button */}
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 p-1 rounded
+        aria-label={`${todo.text} 삭제`}
+        title="삭제"
+        className={`${TOUCH_REVEAL} ${ROW_TOUCH_BUTTON} touch:-mr-3 p-1 rounded
                  text-slate-400 hover:text-red-500 hover:bg-red-50
-                 transition-all"
+                 transition-all ${FOCUS_RING}`}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -249,7 +265,7 @@ export function DailyGrid() {
       <div className="flex items-center justify-center gap-4 mb-6">
         <button
           onClick={() => navigateDay('prev')}
-          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
+          className={`p-2 ${TOUCH_TARGET} flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700 ${FOCUS_RING}`}
           title="이전 날"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -261,7 +277,7 @@ export function DailyGrid() {
         </h2>
         <button
           onClick={() => navigateDay('next')}
-          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
+          className={`p-2 ${TOUCH_TARGET} flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700 ${FOCUS_RING}`}
           title="다음 날"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -320,7 +336,7 @@ function DailyPlanContent({ data }: { data: DailyData }) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (isImeComposing(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleAddTodo();
@@ -467,6 +483,7 @@ function DailyPlanContent({ data }: { data: DailyData }) {
               ref={inputRef}
               type="text"
               value={newTodoText}
+              data-local-draft
               onChange={(e) => setNewTodoText(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="할 일을 입력하세요..."
@@ -477,7 +494,7 @@ function DailyPlanContent({ data }: { data: DailyData }) {
             <button
               onClick={handleAddTodo}
               disabled={!newTodoText.trim()}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-medium
+              className="px-4 py-2 touch:min-h-11 rounded-lg bg-emerald-500 text-white text-sm font-medium
                        hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed
                        transition-colors"
             >

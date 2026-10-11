@@ -6,11 +6,11 @@ import { useRecurringStore } from '@/hooks/useRecurring';
 import { useHolidayStore } from '@/hooks/useHolidays';
 import { MandalartData } from '@/types/mandalart';
 import { Block6Data } from '@/types/block6';
-import { MonthlyData } from '@/types/monthly';
+import { MonthlyData, isValidWeeklyFocusWeeks } from '@/types/monthly';
 import { DailyData } from '@/types/daily';
 import { RecurringTodo } from '@/types/recurring';
 import { ManualHolidayMap } from '@/lib/holidays';
-import { PlannerData, PlannerDocument, PlannerKind, PlannerSyncError } from '@/lib/plannerSync';
+import { canonicalJson, PlannerData, PlannerDocument, PlannerKind, PlannerSyncError, RefreshImpact } from '@/lib/plannerSync';
 import { PLANNER_STORAGE_KEYS, scopedKey } from '@/lib/plannerStorage';
 import { sanitizeInput } from '@/lib/sanitize';
 
@@ -64,15 +64,20 @@ function validateDocument(document: PlannerDocument): void {
     } else if (kind === 'monthly') {
       require(integer(data.year) && integer(data.month) && text(data.memo)
         && list(data.goals, (goal) => text(goal.id) && text(goal.text) && typeof goal.progress === 'number' && typeof goal.completed === 'boolean' && optionalText(goal.sourceMandalartId) && optionalText(goal.sourceCellId))
-        && list(data.weeklyFocus, (focus) => integer(focus.weekNumber) && text(focus.text)));
+        && list(data.weeklyFocus, (focus) => integer(focus.weekNumber) && text(focus.text))
+        && isValidWeeklyFocusWeeks((data.weeklyFocus as PlannerData[]).map((focus) => focus.weekNumber)));
     } else {
       require(integer(data.year) && integer(data.month) && integer(data.day) && text(data.memo) && list(data.todos, todo));
     }
   }
 }
 
-export function applyPlannerDocuments(documents: PlannerDocument[]): void {
+export function validatePlannerDocuments(documents: PlannerDocument[]): void {
   documents.forEach(validateDocument);
+}
+
+export function applyPlannerDocuments(documents: PlannerDocument[]): void {
+  validatePlannerDocuments(documents);
   const byKind = (kind: PlannerKind) => documents.filter((document) => document.kind === kind).map((document) => document.data);
   const mandalarts = byKind('mandalart') as unknown as MandalartData[];
   const block6Plans = byKind('block6') as unknown as Block6Data[];
@@ -86,6 +91,54 @@ export function applyPlannerDocuments(documents: PlannerDocument[]): void {
   useDailyStore.setState((state) => ({ dailyPlans, currentDailyId: exists(dailyPlans, state.currentDailyId) }));
   useRecurringStore.setState({ todos: (byKind('recurring')[0]?.todos ?? []) as RecurringTodo[] });
   useHolidayStore.setState({ manualHolidays: (byKind('holidays')[0]?.manualHolidays ?? {}) as ManualHolidayMap });
+}
+
+const byId = (items: { id: string }[]) => canonicalJson(Object.fromEntries(items.map((item) => [item.id, item])));
+const CURRENT_IDS = [
+  { kind: 'mandalart', current: () => useMandalartStore.getState().currentId },
+  { kind: 'block6', current: () => useBlock6Store.getState().currentBlock6Id },
+  { kind: 'monthly', current: () => useMonthlyStore.getState().currentMonthlyId },
+  { kind: 'daily', current: () => useDailyStore.getState().currentDailyId },
+] as const;
+
+/** Whether applying `documents` would close the plan open in this tab (deleted elsewhere). */
+export function plannerRefreshImpact(documents: PlannerDocument[]): RefreshImpact {
+  return {
+    selectionRemoved: CURRENT_IDS.some(({ kind, current }) => {
+      const id = current();
+      return !!id && !documents.some((document) => document.kind === kind && document.id === id);
+    }),
+  };
+}
+
+/**
+ * Refresh variant of applyPlannerDocuments: validates everything first, then replaces only stores whose content
+ * changed. Unchanged stores keep their identity, so open editors and the mandalart AI/import context are not reset.
+ */
+export function applyChangedPlannerDocuments(documents: PlannerDocument[]): void {
+  validatePlannerDocuments(documents);
+  const byKind = (kind: PlannerKind) => documents.filter((document) => document.kind === kind).map((document) => document.data);
+  const exists = (plans: { id: string }[], id: string | null) => id && plans.some((plan) => plan.id === id) ? id : null;
+  const mandalarts = byKind('mandalart') as unknown as MandalartData[];
+  const block6Plans = byKind('block6') as unknown as Block6Data[];
+  const monthlyPlans = byKind('monthly') as unknown as MonthlyData[];
+  const dailyPlans = byKind('daily') as unknown as DailyData[];
+  const todos = (byKind('recurring')[0]?.todos ?? []) as RecurringTodo[];
+  const manualHolidays = (byKind('holidays')[0]?.manualHolidays ?? {}) as ManualHolidayMap;
+  if (byId(mandalarts) !== byId(useMandalartStore.getState().mandalarts)) {
+    useMandalartStore.setState((state) => ({ mandalarts, currentId: exists(mandalarts, state.currentId), resetToken: {} }));
+  }
+  if (byId(block6Plans) !== byId(useBlock6Store.getState().block6Plans)) {
+    useBlock6Store.setState((state) => ({ block6Plans, currentBlock6Id: exists(block6Plans, state.currentBlock6Id) }));
+  }
+  if (byId(monthlyPlans) !== byId(useMonthlyStore.getState().monthlyPlans)) {
+    useMonthlyStore.setState((state) => ({ monthlyPlans, currentMonthlyId: exists(monthlyPlans, state.currentMonthlyId) }));
+  }
+  if (byId(dailyPlans) !== byId(useDailyStore.getState().dailyPlans)) {
+    useDailyStore.setState((state) => ({ dailyPlans, currentDailyId: exists(dailyPlans, state.currentDailyId) }));
+  }
+  if (canonicalJson(todos) !== canonicalJson(useRecurringStore.getState().todos)) useRecurringStore.setState({ todos });
+  if (canonicalJson(manualHolidays) !== canonicalJson(useHolidayStore.getState().manualHolidays)) useHolidayStore.setState({ manualHolidays });
 }
 
 /** Read-only import: all original keys/IDs/references remain untouched. */

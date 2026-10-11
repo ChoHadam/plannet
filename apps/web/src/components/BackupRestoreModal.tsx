@@ -53,9 +53,9 @@ export function BackupRestoreModal({ isOpen, onClose }: BackupRestoreModalProps)
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 overlay-safe bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] flex flex-col"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 max-h-[min(80vh,100%)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
@@ -130,11 +130,11 @@ export function BackupRestoreModal({ isOpen, onClose }: BackupRestoreModalProps)
 
       {confirmTarget && (
         <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]"
+          className="fixed inset-0 overlay-safe bg-black/40 flex items-center justify-center z-[60]"
           onClick={() => setConfirmTarget(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4"
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 max-h-full overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-slate-800 mb-2">정말 복원하시겠습니까?</h3>

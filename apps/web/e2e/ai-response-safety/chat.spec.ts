@@ -3,17 +3,17 @@ import { MandalartData } from '../../src/types/mandalart';
 import {
   ACCOUNT_A,
   ACCOUNT_B,
+  accountUserId,
   buildPlan,
   FIXED_TIME,
-  mandalartKey,
-  persistedMandalarts,
   TestAccount,
 } from './fixtures';
 
 /**
  * 지연 AI 응답 보호 (AIChatSidebar + lib/aiResponseSafety.ts).
  *
- * - 인증·AI는 브라우저에서 가로챈 모의 응답이다. /api/chat 요청은 붙잡아 두었다가 테스트가 원하는 시점에 돌려준다.
+ * - 인증·AI·서버 저장은 브라우저에서 가로챈 모의 응답이다. /api/chat 요청은 붙잡아 두었다가 테스트가 원하는 시점에 돌려준다.
+ * - 로그인한 서비스 모드라 기록은 모의 DB(계정별 Map)에만 저장된다. readPlan은 탭에 미저장 수정이 없을 때 DB를 읽는다.
  * - 채팅 패널은 화면 전체를 덮는 오버레이라 마우스로는 뒤의 그리드·사이드바를 누를 수 없다.
  *   패널이 열린 채로 일어나는 편집·전환은 키보드 사용자의 경로(focus + 키 입력)로 재현한다.
  */
@@ -66,34 +66,76 @@ class HeldChat {
   }
 }
 
+interface StoredRecord { kind: string; id: string; schemaVersion: 1; version: number; deleted: boolean; data: Record<string, unknown> | null; updatedAt: string }
+
 interface Harness {
   chat: HeldChat;
   setAccount: (account: TestAccount | null) => void;
+  /** 모의 DB에 계정의 플랜을 심는다 (다른 기기에서 저장한 것처럼) */
+  seed: (account: TestAccount, plans: MandalartData[]) => void;
+  /** 받은 commit 본문 */
+  commits: string[];
+}
+
+/** 계정별 모의 DB. 페이지 수명과 무관하게 테스트 동안 유지된다. */
+const databases = new WeakMap<Page, Map<string, Map<string, StoredRecord>>>();
+
+function database(page: Page, account: TestAccount) {
+  if (!databases.has(page)) databases.set(page, new Map());
+  const all = databases.get(page)!;
+  if (!all.has(account.subject)) all.set(account.subject, new Map());
+  return all.get(account.subject)!;
 }
 
 async function setup(page: Page, account: TestAccount, plans: MandalartData[], currentId: string): Promise<Harness> {
   let current: TestAccount | null = account;
   const chat = new HeldChat();
-
-  // 첫 로드에만 시드한다 (로그아웃 후 새로 불러올 때 다시 쓰지 않게)
-  await page.addInitScript(
-    ([key, value]) => {
-      if (sessionStorage.getItem('airs-seeded')) return;
-      localStorage.setItem(key, value);
-      sessionStorage.setItem('airs-seeded', '1');
-    },
-    [mandalartKey(account), persistedMandalarts(plans, currentId)] as const,
-  );
+  const commits: string[] = [];
+  const seed = (target: TestAccount, list: MandalartData[]) => {
+    const db = database(page, target);
+    for (const plan of list) {
+      db.set(`mandalart:${plan.id}`, {
+        kind: 'mandalart', id: plan.id, schemaVersion: 1, version: 1, deleted: false,
+        data: plan as unknown as Record<string, unknown>, updatedAt: FIXED_TIME,
+      });
+    }
+  };
+  seed(account, plans);
 
   await page.route('**/api/runtime-config', (route) => route.fulfill({ json: { authEnabled: true, backupEnabled: false } }));
   await page.route('**/api/v1/me', (route) =>
     current
       ? route.fulfill({
-          json: { authenticated: true, user: { authProvider: 'google', externalSubject: current.subject, name: current.name } },
+          json: {
+            authenticated: true, storageEnabled: true,
+            user: { authProvider: 'google', externalSubject: current.subject, name: current.name, userId: accountUserId(current) },
+          },
         })
       : route.fulfill({ status: 401, json: { authenticated: false } }),
   );
   await page.route('**/api/v1/csrf', (route) => route.fulfill({ json: { headerName: 'X-AIRS-CSRF', token: 'airs-test-token' } }));
+  await page.route('**/api/v1/planner', (route) => {
+    if (!current) return route.fulfill({ status: 401, json: { authenticated: false } });
+    if (route.request().headers()['x-plannet-user-id'] !== accountUserId(current)) return route.fulfill({ status: 409, json: { error: 'account_changed' } });
+    return route.fulfill({ json: { userId: accountUserId(current), records: [...database(page, current).values()] } });
+  });
+  await page.route('**/api/v1/planner/commit', (route) => {
+    const body = route.request().postData() ?? '';
+    commits.push(body);
+    if (!current) return route.fulfill({ status: 401, json: { authenticated: false } });
+    if (route.request().headers()['x-plannet-user-id'] !== accountUserId(current)) return route.fulfill({ status: 409, json: { error: 'account_changed' } });
+    const db = database(page, current);
+    const { changes } = JSON.parse(body) as { changes: { kind: string; id: string; expectedVersion: number; data: Record<string, unknown> | null }[] };
+    if (changes.some((change) => (db.get(`${change.kind}:${change.id}`)?.version ?? 0) !== change.expectedVersion)) {
+      return route.fulfill({ status: 409, json: { error: 'version_conflict', conflicts: [] } });
+    }
+    const records = changes.map((change): StoredRecord => ({
+      kind: change.kind, id: change.id, schemaVersion: 1, version: change.expectedVersion + 1,
+      deleted: change.data === null, data: change.data, updatedAt: FIXED_TIME,
+    }));
+    records.forEach((record) => db.set(`${record.kind}:${record.id}`, record));
+    return route.fulfill({ json: { records } });
+  });
   await page.route('**/api/v1/logout', (route) => {
     current = null;
     return route.fulfill({ status: 204, body: '' });
@@ -102,13 +144,29 @@ async function setup(page: Page, account: TestAccount, plans: MandalartData[], c
 
   await page.goto('/');
   await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
-  return { chat, setAccount: (next) => (current = next) };
+  // 선택 상태는 저장하지 않는다(서버 기록만 불러온다). 테스트 대상 플랜을 연다.
+  await openPlan(page, plans.find((plan) => plan.id === currentId)!.title);
+  // 모바일: 선택하면 사이드바가 닫힌다. 혹시 열려 있으면 배경을 눌러 닫는다.
+  const backdrop = page.locator('div.fixed.inset-0.z-30.md\\:hidden');
+  if (await backdrop.isVisible()) {
+    const width = page.viewportSize()!.width;
+    await backdrop.click({ position: { x: width - 5, y: 5 } });
+    await expect(backdrop).toHaveCount(0);
+  }
+  return { chat, setAccount: (next) => (current = next), seed, commits };
 }
 
+async function openPlan(page: Page, title: string) {
+  await selectPlanByKeyboard(page, title);
+  await expect(page.locator('input[placeholder="나의 만다라트"]')).toHaveValue(title);
+}
+
+/** 탭에 저장 전 수정이 없어질 때까지 기다린 뒤 모의 DB의 기록을 읽는다 (삭제면 undefined) */
 async function readPlan(page: Page, account: TestAccount, id: string): Promise<MandalartData | undefined> {
-  const raw = await page.evaluate((key) => localStorage.getItem(key), mandalartKey(account));
-  if (!raw) return undefined;
-  return (JSON.parse(raw).state.mandalarts as MandalartData[]).find((plan) => plan.id === id);
+  const status = page.getByTestId('storage-sync-status');
+  if (await status.count()) await expect(status).toHaveAttribute('data-dirty', 'false');
+  const record = database(page, account).get(`mandalart:${id}`);
+  return record && !record.deleted ? (record.data as unknown as MandalartData) : undefined;
 }
 
 function cellValue(plan: MandalartData | undefined, gridId: string, index: number): string | undefined {
@@ -140,6 +198,15 @@ const loadingDots = (page: Page) => chatPanel(page).locator('.animate-bounce');
 /** 사이드바의 플랜 선택 버튼 (메뉴 버튼 제외) */
 function planButton(page: Page, title: string) {
   return page.locator('aside').getByRole('button', { name: title }).filter({ hasText: title }).first();
+}
+
+/** 사이드바 플랜을 키보드로 연다. 모바일에서 접힌 사이드바는 inert라 열기 버튼을 먼저 누른다. */
+async function selectPlanByKeyboard(page: Page, title: string) {
+  // 로그아웃 배지는 DB 조회 중 화면에도 보이므로, 사이드바가 붙은 뒤에 접힘 여부를 본다.
+  await page.locator('aside').waitFor({ state: 'attached' });
+  const openSidebar = page.locator('button[title="사이드바 열기"]');
+  if (await openSidebar.isVisible()) await pressByKeyboard(page, openSidebar);
+  await pressByKeyboard(page, planButton(page, title));
 }
 
 /** 오버레이 뒤의 버튼을 키보드로 누른다 */
@@ -209,9 +276,9 @@ for (const action of ['set_core_goal', 'generate_actions'] as const) {
     await expect(chatPanel(page).getByText('토큰:', { exact: false })).toHaveCount(0);
     await expect(loadingDots(page)).toHaveCount(0);
     await expect(page.getByPlaceholder(CHAT_INPUT)).toBeEnabled();
-    // The cancellation token is transient; the persisted schema stays unchanged.
-    const persistedKeys = await page.evaluate((key) => Object.keys(JSON.parse(localStorage.getItem(key)!).state).sort(), mandalartKey(ACCOUNT_A));
-    expect(persistedKeys).toEqual(['currentId', 'mandalarts']);
+    // The cancellation token is transient: it never reaches the DB record, and nothing is written to browser storage.
+    expect(Object.keys(plan ?? {})).not.toContain('resetToken');
+    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('plannet')))).toEqual([]);
   });
 }
 
@@ -299,7 +366,7 @@ test('요청 중 다른 플랜으로 전환하면 이전 응답은 두 플랜과
   const stale = await chat.next();
 
   // 패널을 연 채로 키보드로 플랜 B 선택
-  await pressByKeyboard(page, planButton(page, 'AIRS 플랜 B'));
+  await selectPlanByKeyboard(page, 'AIRS 플랜 B');
   await expect(chatPanel(page).getByText("'커리어' 목표가 이미 설정되어 있네요!", { exact: false })).toBeVisible();
   await expect(loadingDots(page)).toHaveCount(0);
 
@@ -324,10 +391,10 @@ test('A→B→A로 다시 선택해도 이전 요청의 응답은 적용되지 �
   await sendChat(page, '운동');
   const stale = await chat.next();
 
-  // 모바일은 사이드바가 접혀 있어도 키보드 focus 경로는 같다
-  await pressByKeyboard(page, planButton(page, 'AIRS 플랜 B'));
+  // 모바일은 접힌 사이드바가 초점을 받지 않으므로 열기 버튼을 먼저 누른다 (selectPlanByKeyboard)
+  await selectPlanByKeyboard(page, 'AIRS 플랜 B');
   await expect(chatPanel(page).getByText("'커리어' 목표가", { exact: false })).toBeVisible();
-  await pressByKeyboard(page, planButton(page, 'AIRS 플랜 A'));
+  await selectPlanByKeyboard(page, 'AIRS 플랜 A');
   await expect(chatPanel(page).getByText("'건강' 목표가", { exact: false })).toBeVisible();
   await expect(chatPanel(page).getByText('운동', { exact: true })).toHaveCount(0);
 
@@ -450,23 +517,12 @@ test('두 번째 도움으로 끝난 대화를 새로 시작한 뒤에는 진행
 });
 
 test('요청 중 로그아웃하면 페이지 이동 전 도착한 응답도 이전 계정 기록을 바꾸지 않는다', async ({ page }) => {
-  const { chat } = await setup(page, ACCOUNT_A, [PLAN_A()], 'airs-plan-a');
+  const { chat, commits } = await setup(page, ACCOUNT_A, [PLAN_A()], 'airs-plan-a');
   await openChat(page);
   await sendChat(page, '운동');
   const stale = await chat.next();
 
-  // 이전 페이지에서 A 계정 키에 쓰는 순간을 콘솔로 기록한다 (이동이 붙잡힌 동안은 page.evaluate가 멈춘다).
-  const writesDuringNavigation: string[] = [];
-  page.on('console', (message) => {
-    if (message.text().startsWith('[airs-write]')) writesDuringNavigation.push(message.text());
-  });
-  await page.evaluate((key) => {
-    const original = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (name: string, value: string) {
-      if (name === key && value.includes('실천 계획 표식')) console.log(`[airs-write] ${name}`);
-      return original.call(this, name, value);
-    };
-  }, mandalartKey(ACCOUNT_A));
+  // 이전 페이지가 A 계정 기록에 응답을 반영해 저장하려 하면 commit 본문에 표식이 나타난다.
 
   // 로그아웃 후 '/'로 이동하는 문서 요청을 붙잡아, 이전 페이지가 살아 있는 동안 응답을 돌려준다.
   let releaseNavigation: () => void = () => {};
@@ -490,25 +546,24 @@ test('요청 중 로그아웃하면 페이지 이동 전 도착한 응답도 이
   releaseNavigation();
 
   await expect(page.getByRole('button', { name: 'Google 로그인' }).first()).toBeVisible();
-  expect(writesDuringNavigation).toEqual([]);
+  expect(commits.filter((body) => body.includes('실천 계획 표식'))).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('plannet')))).toEqual([]);
   expect(cellValue(await readPlan(page, ACCOUNT_A, 'airs-plan-a'), 'center', 0)).toBe('');
 });
 
 test('다른 계정으로 전환된 뒤에는 새 계정 범위에서만 요청·적용된다', async ({ page }) => {
-  const { chat, setAccount } = await setup(page, ACCOUNT_A, [PLAN_A()], 'airs-plan-a');
+  const { chat, setAccount, seed } = await setup(page, ACCOUNT_A, [PLAN_A()], 'airs-plan-a');
   await openChat(page);
   await sendChat(page, '운동');
   const stale = await chat.next();
 
   // 모의 인증에서 B로 바꾸고 새로 불러오면(로그인 전환과 같은 경로) 이전 페이지의 요청은 사라진다
   setAccount(ACCOUNT_B);
-  await page.evaluate(
-    ([key, value]) => localStorage.setItem(key, value),
-    [mandalartKey(ACCOUNT_B), persistedMandalarts([PLAN_B()], 'airs-plan-b')] as const,
-  );
+  seed(ACCOUNT_B, [PLAN_B()]);
   await page.reload();
   await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
   await chat.release(stale, generateActionsReply('운동'));
+  await openPlan(page, 'AIRS 플랜 B');
 
   await openChat(page);
   await sendChat(page, '영어');

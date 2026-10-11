@@ -8,6 +8,8 @@
  * - GET  /api/v1/me                   → 200 { authenticated: true, user } | 401 { authenticated: false }
  * - GET  /api/v1/csrf                 → 200 { headerName, token } (세션에 묶임, 없으면 익명 세션 생성)
  * - POST /api/v1/logout               → 세션의 토큰과 헤더가 같으면 204, 아니면 403 { error: 'csrf_invalid' }
+ * - GET  /api/v1/planner, POST /api/v1/planner/commit
+ *                                     → docs/contracts/planner-storage-v1.md 흉내(메모리 DB). 계정 헤더·CSRF·버전·requestId 재전송 검사
  * - POST /mock-ai/v1/chat/completions → tool call 응답. 호출 횟수를 센다.
  * - /__mock/*                         → 테스트 제어용 (edge를 거치지 않고 직접 호출)
  */
@@ -31,10 +33,34 @@ function initialState() {
     meMode: 'ok', // ok | error | slow | down | invalid
     loginMode: 'ok', // ok | login_failed
     aiMode: 'ok', // ok | malformed
-    stats: { aiCalls: 0, meCalls: 0, logoutCalls: 0, logoutRejected: 0 },
+    storageMode: 'ok', // ok | disabled(me.storageEnabled=false) | error(저장 API 503)
+    stats: { aiCalls: 0, meCalls: 0, logoutCalls: 0, logoutRejected: 0, plannerReads: 0, commits: 0 },
     lastAiRequest: null,
+    /** userId → Map(kind:id → record) */
+    planner: new Map(),
+    /** `${userId}:${requestId}` → { body, records } */
+    receipts: new Map(),
+    /** 받은 commit requestId 순서 (중복 전송 확인용) */
+    commitRequests: [],
   };
 }
+
+/** 외부 subject를 고정된 내부 UUID로 바꾼다 (Spring의 사용자 테이블 흉내) */
+export function mockUserId(sub) {
+  const hex = crypto.createHash('sha256').update(`plannet-mock:${sub}`).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function plannerOf(userId) {
+  if (!state.planner.has(userId)) state.planner.set(userId, new Map());
+  return state.planner.get(userId);
+}
+
+const canonical = (value) => Array.isArray(value)
+  ? `[${value.map(canonical).join(',')}]`
+  : value && typeof value === 'object'
+    ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
+    : JSON.stringify(value);
 
 let state = initialState();
 
@@ -114,7 +140,24 @@ async function handle(req, res) {
     if (body.aiMode) state.aiMode = body.aiMode;
     if (body.loginMode) state.loginMode = body.loginMode;
     if (body.nextUser) state.nextUser = body.nextUser;
+    if (body.storageMode) state.storageMode = body.storageMode;
     return send(res, 200, { ok: true });
+  }
+  // 메모리 DB 조회·직접 수정 (다른 기기에서 바뀐 서버 기록 흉내)
+  if (pathname === '/__mock/planner' && req.method === 'GET') {
+    const userId = mockUserId(url.searchParams.get('sub') ?? '');
+    return send(res, 200, { userId, records: [...plannerOf(userId).values()], commitRequests: state.commitRequests });
+  }
+  if (pathname === '/__mock/planner' && req.method === 'POST') {
+    const body = await readBody(req);
+    const records = plannerOf(mockUserId(body.sub));
+    for (const { kind, id, data } of body.documents ?? []) {
+      const previous = records.get(`${kind}:${id}`);
+      records.set(`${kind}:${id}`, {
+        kind, id, schemaVersion: 1, version: (previous?.version ?? 0) + 1, deleted: data === null, data, updatedAt: new Date().toISOString(),
+      });
+    }
+    return send(res, 200, { records: [...records.values()] });
   }
   if (pathname === '/__mock/expire-sessions' && req.method === 'POST') {
     state.sessions.clear();
@@ -160,10 +203,45 @@ async function handle(req, res) {
     const session = currentSession(req);
     if (!session?.user) return send(res, 401, { authenticated: false });
     const { sub, email, name } = session.user;
+    const storageEnabled = state.storageMode !== 'disabled';
     return send(res, 200, {
       authenticated: true,
-      user: { authProvider: 'google', externalSubject: sub, name, email, image: null },
+      storageEnabled,
+      user: { authProvider: 'google', externalSubject: sub, name, email, image: null, ...(storageEnabled ? { userId: mockUserId(sub) } : {}) },
     });
+  }
+
+  if (pathname === '/api/v1/planner' || pathname === '/api/v1/planner/commit') {
+    const session = currentSession(req);
+    if (!session?.user) return send(res, 401, { authenticated: false });
+    if (state.storageMode === 'disabled') return send(res, 503, { error: 'storage_disabled' });
+    if (state.storageMode === 'error') return send(res, 503, { error: 'storage_unavailable' });
+    const userId = mockUserId(session.user.sub);
+    if (req.headers['x-plannet-user-id'] !== userId) return send(res, 409, { error: 'account_changed' });
+    const records = plannerOf(userId);
+    if (pathname === '/api/v1/planner' && req.method === 'GET') {
+      state.stats.plannerReads += 1;
+      return send(res, 200, { userId, records: [...records.values()] });
+    }
+    if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
+    if (req.headers[CSRF_HEADER_NAME.toLowerCase()] !== session.csrf) return send(res, 403, { error: 'csrf_invalid' });
+    const body = await readBody(req);
+    state.commitRequests.push(body.requestId);
+    const receiptKey = `${userId}:${body.requestId}`;
+    const receipt = state.receipts.get(receiptKey);
+    if (receipt) {
+      return receipt.body === canonical(body) ? send(res, 200, { records: receipt.records }) : send(res, 409, { error: 'idempotency_conflict' });
+    }
+    const conflicts = body.changes.filter((change) => (records.get(`${change.kind}:${change.id}`)?.version ?? 0) !== change.expectedVersion);
+    if (conflicts.length) return send(res, 409, { error: 'version_conflict', conflicts: conflicts.map((change) => `${change.kind}:${change.id}`) });
+    const saved = body.changes.map((change) => ({
+      kind: change.kind, id: change.id, schemaVersion: 1, version: change.expectedVersion + 1,
+      deleted: change.data === null, data: change.data, updatedAt: new Date().toISOString(),
+    }));
+    saved.forEach((record) => records.set(`${record.kind}:${record.id}`, record));
+    state.receipts.set(receiptKey, { body: canonical(body), records: saved });
+    state.stats.commits += 1;
+    return send(res, 200, { records: saved });
   }
 
   if (pathname === '/api/v1/csrf' && req.method === 'GET') {

@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
-import { PlannerCommit, PlannerRecord, recordKey, syncStorageKey } from '../../src/lib/plannerSync';
-import { createPlan } from '../support/helpers';
+import fs from 'node:fs';
+import { PlannerCommit, PlannerRecord, recordKey } from '../../src/lib/plannerSync';
 
 const USER = '10000000-0000-4000-8000-000000000001';
 const OTHER = '20000000-0000-4000-8000-000000000002';
@@ -61,6 +61,14 @@ async function mockStorage(page: Page, initial: PlannerRecord[] = [daily()]) {
   };
 }
 const status = (page: Page) => page.getByTestId('storage-sync-status');
+/** 로그인 서비스 모드에서는 플래너 관련 키가 하나도 생기지 않는다 (미리 심은 원본 제외) */
+async function plannerKeys(page: Page) {
+  return page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('plannet')).sort());
+}
+/** 저장 전 변경분 임시 보관(sessionStorage)의 키 */
+async function sessionKeys(page: Page) {
+  return page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('plannet')).sort());
+}
 async function openDaily(page: Page, title = '서버 플랜') {
   await expect(page.locator('aside')).toBeVisible();
   await page.locator('aside').getByText(title, { exact: true }).click();
@@ -83,7 +91,7 @@ test('initial GET gates editors, restores server data, and does not invent an em
   expect(api.requests).toHaveLength(0);
 });
 
-test('cached account reload also keeps editors gated until its fresh GET completes', async ({ page }) => {
+test('reload keeps editors gated until its fresh GET completes (no browser cache to show)', async ({ page }) => {
   const api = await mockStorage(page);
   await page.goto('/');
   await openDaily(page);
@@ -95,11 +103,12 @@ test('cached account reload also keeps editors gated until its fresh GET complet
   await expect(page.getByPlaceholder('오늘의 메모...')).toHaveCount(0);
   expect(api.requests).toHaveLength(0);
   release();
+  await openDaily(page);
   await expect(status(page)).toHaveAttribute('data-phase', 'saved');
-  await expect(page.getByPlaceholder('나의 투두리스트')).toHaveValue('서버 플랜');
+  expect(await plannerKeys(page)).toEqual([]);
 });
 
-test('lost ACK reload replays same request and restores server data after local cache is removed', async ({ page }) => {
+test('lost ACK: retry in the living tab re-sends the same request; a reload reads the DB value', async ({ page }) => {
   const api = await mockStorage(page);
   await page.goto('/');
   await openDaily(page);
@@ -107,11 +116,12 @@ test('lost ACK reload replays same request and restores server data after local 
   await page.getByPlaceholder('오늘의 메모...').fill('응답이 유실된 수정');
   await expect(status(page)).toHaveAttribute('data-phase', 'error');
   const first = api.requests[0];
-  await page.reload();
+  await page.getByRole('button', { name: '서버 저장 다시 시도' }).click();
   await expect(status(page)).toHaveAttribute('data-phase', 'saved');
+  expect(api.requests).toHaveLength(2);
   expect(api.requests[1]).toEqual(first);
-  await expect(page.getByPlaceholder('오늘의 메모...')).toHaveValue('응답이 유실된 수정');
-  await page.evaluate(() => localStorage.clear());
+  expect(api.records.get('daily:daily-one')?.version).toBe(2);
+  expect(await plannerKeys(page)).toEqual([]);
   await page.reload();
   await openDaily(page);
   await expect(page.getByPlaceholder('오늘의 메모...')).toHaveValue('응답이 유실된 수정');
@@ -135,7 +145,7 @@ test('new typing during delayed ACK survives and becomes the next server version
   expect(api.records.get('daily:daily-one')?.version).toBe(3);
 });
 
-test('conflict draft is downloadable across reload and latest-server choice archives it', async ({ page }) => {
+test('conflict draft: file export, reload keeps it via the tab journal (still a conflict), and only a confirmed server choice discards it', async ({ page }) => {
   const api = await mockStorage(page);
   await page.goto('/');
   await openDaily(page);
@@ -144,14 +154,28 @@ test('conflict draft is downloadable across reload and latest-server choice arch
   await expect(status(page)).toHaveAttribute('data-phase', 'conflict');
   const download = page.waitForEvent('download');
   await page.getByTestId('storage-sync-download').click();
-  expect((await download).suggestedFilename()).toMatch(/^plannet-draft-/);
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^plannet-unsaved-/);
+  expect(fs.readFileSync(await file.path(), 'utf8')).toContain('이 기기 초안');
+  expect(await plannerKeys(page)).toEqual([]);
+  expect(await sessionKeys(page)).toEqual([`plannet-pending@${USER}`]);
+
+  // 새로고침: 확인 창 → 이 탭의 임시 보관에서 초안을 되살리고, 원래 기대 버전 그대로라 여전히 충돌이다 (DB 위로 자동 재기준하지 않음)
+  page.once('dialog', (dialog) => { expect(dialog.type()).toBe('beforeunload'); void dialog.accept(); });
   await page.reload();
   await expect(status(page)).toHaveAttribute('data-phase', 'conflict');
+  await openDaily(page);
   await expect(page.getByPlaceholder('오늘의 메모...')).toHaveValue('이 기기 초안');
+  expect(api.records.get('daily:daily-one')?.data?.memo).toBe('다른 기기 수정');
+
+  // 확인을 거쳐야만 버린다. 버리면 임시 보관도 비워진다
   await page.getByTestId('storage-sync-use-server').click();
+  await expect(page.getByPlaceholder('오늘의 메모...')).toHaveValue('이 기기 초안');
+  await page.getByTestId('storage-sync-confirm-use-server').click();
   await expect(status(page)).toHaveAttribute('data-phase', 'saved');
   await expect(page.getByPlaceholder('오늘의 메모...')).toHaveValue('다른 기기 수정');
-  expect(await page.evaluate(() => Object.entries(localStorage).some(([key, value]) => key.includes(':backup:') && value.includes('이 기기 초안')))).toBe(true);
+  expect(await plannerKeys(page)).toEqual([]);
+  expect(await sessionKeys(page)).toEqual([]);
 });
 
 test('an offline first load stays gated; retry loads data and account switch rejects stale-tab writes', async ({ page }) => {
@@ -168,7 +192,12 @@ test('an offline first load stays gated; retry loads data and account switch rej
   await expect(status(page)).toHaveAttribute('data-phase', 'error');
   await expect(status(page)).toContainText('로그인 계정이 바뀌었어요');
   expect(api.records.get('daily:daily-one')?.data?.memo).toBe('');
-  expect(await page.evaluate((key) => localStorage.getItem(key), syncStorageKey(USER))).toContain('계정 전환 후 남은 초안');
+  // 다른 계정으로는 보내지 않았고(헤더는 원래 계정), 초안은 메모리에만 있어 파일로 받을 수 있다
+  expect(api.requests.every((request) => request.changes.every((change) => change.id === 'daily-one'))).toBe(true);
+  expect(await plannerKeys(page)).toEqual([]);
+  const download = page.waitForEvent('download');
+  await page.getByTestId('storage-sync-download').click();
+  expect(fs.readFileSync(await (await download).path(), 'utf8')).toContain('계정 전환 후 남은 초안');
 });
 
 test('explicit imports retain original keys and references; collisions do not overwrite', async ({ page }) => {
@@ -192,15 +221,18 @@ test('explicit imports retain original keys and references; collisions do not ov
   expect(await page.evaluate(() => localStorage.getItem('plannet-daily@acct:google%3Aalice'))).toContain('이전 계정의 같은 ID');
   await page.getByTestId('storage-sync-import-local').click();
   await expect(page.getByText(/같은 내용 1개는 건너뛰었어요/)).toBeVisible();
+  // 원본 키만 남고 새 키는 생기지 않는다
+  expect(await plannerKeys(page)).toEqual(['plannet-daily', 'plannet-daily@acct:google%3Aalice']);
 });
 
-test('missing storage flag preserves existing account-local behavior', async ({ page }) => {
+test('login without server storage never falls back to account LocalStorage', async ({ page }) => {
   const api = await mockStorage(page, []);
   api.legacyMode();
   await page.goto('/');
-  await createPlan(page, '투두리스트', 3);
-  await page.getByPlaceholder('나의 투두리스트').fill('기존 로컬 모드');
-  await expect(status(page)).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('계정 저장소에 연결할 수 없어요');
+  await expect(page.getByRole('button', { name: '다시 시도' })).toBeVisible();
+  await expect(page.locator('aside')).toHaveCount(0);
+  await expect(page.locator('button[title="새로 만들기"]')).toHaveCount(0);
   expect(api.requests).toHaveLength(0);
-  expect(await page.evaluate(() => localStorage.getItem('plannet-daily@acct:google%3Aalice'))).toContain('기존 로컬 모드');
+  expect(await plannerKeys(page)).toEqual([]);
 });

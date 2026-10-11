@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
-import { WeeklyFocus, getDaysInMonth, getFirstDayOfMonth } from '@/types/monthly';
+import { WeeklyFocus, getWeeklyFocusRows } from '@/types/monthly';
 import { useHolidayStore } from '@/hooks/useHolidays';
 import { getHolidaysInMonth, toIsoDate } from '@/lib/holidays';
+import { getWeeksOfMonth, isDateInMonth, SATURDAY_INDEX, SUNDAY_INDEX, WEEKDAY_LABELS } from '@/lib/weekUtils';
+import { RETAINED_WEEK_NOTE } from './WeeklyFocus';
 
 interface CompactCalendarProps {
   year: number;
@@ -11,46 +13,15 @@ interface CompactCalendarProps {
   weeklyFocus: WeeklyFocus[];
 }
 
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
-
 export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarProps) {
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDayOfMonth = getFirstDayOfMonth(year, month);
   const manualHolidays = useHolidayStore((s) => s.manualHolidays);
   const toggleManualHoliday = useHolidayStore((s) => s.toggleManualHoliday);
   const holidayMap = getHolidaysInMonth(year, month, manualHolidays);
+  // 행은 공통 주차 규칙(월~일, 1일이 든 주 = W1)과 같다. 다른 달 날짜는 빈 칸
+  const weeks = getWeeksOfMonth(year, month);
+  const focusRows = getWeeklyFocusRows({ year, month, weeklyFocus });
 
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
-  const todayDate = isCurrentMonth ? today.getDate() : null;
-
-  // Create calendar grid organized by weeks
-  const weeks: (number | null)[][] = [];
-  let currentWeek: (number | null)[] = [];
-
-  for (let i = 0; i < firstDayOfMonth; i++) {
-    currentWeek.push(null);
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    currentWeek.push(day);
-    if (currentWeek.length === 7) {
-      weeks.push(currentWeek);
-      currentWeek = [];
-    }
-  }
-
-  if (currentWeek.length > 0) {
-    while (currentWeek.length < 7) {
-      currentWeek.push(null);
-    }
-    weeks.push(currentWeek);
-  }
-
-  const getWeekFocusText = (weekIndex: number): string => {
-    const focus = weeklyFocus.find((w) => w.weekNumber === weekIndex + 1);
-    return focus?.text || '';
-  };
+  const todayIso = toIsoDate(new Date());
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -58,12 +29,12 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
       <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-1 items-center">
         {/* Header: empty + day labels */}
         <div />
-        {DAY_LABELS.map((day, idx) => (
+        {WEEKDAY_LABELS.map((day, idx) => (
           <div
             key={day}
             className={`
               text-center text-xs font-medium py-1
-              ${idx === 0 ? 'text-red-400' : idx === 6 ? 'text-blue-400' : 'text-slate-500'}
+              ${idx === SUNDAY_INDEX ? 'text-red-400' : idx === SATURDAY_INDEX ? 'text-blue-400' : 'text-slate-500'}
             `}
           >
             {day}
@@ -71,25 +42,24 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
         ))}
 
         {/* Calendar rows: W{n} label + 7 days */}
-        {weeks.map((week, weekIndex) => (
-          <React.Fragment key={`week-${weekIndex}`}>
+        {weeks.map(({ weekOfMonth, dates }) => (
+          <React.Fragment key={`week-${weekOfMonth}`}>
             {/* Week label */}
-            <div className="text-[10px] font-semibold text-slate-400 px-1 text-center">
-              W{weekIndex + 1}
+            <div className="text-xs font-semibold text-slate-400 px-1 text-center">
+              W{weekOfMonth}
             </div>
 
             {/* Days */}
-            {week.map((day, dayIndex) => {
-              if (day === null) {
-                return <div key={`empty-${weekIndex}-${dayIndex}`} className="h-7" />;
+            {dates.map((date, dayIndex) => {
+              if (!isDateInMonth(date, year, month)) {
+                return <div key={`empty-${weekOfMonth}-${dayIndex}`} className="h-7" />;
               }
 
-              const isToday = day === todayDate;
-              const dayOfWeek = (firstDayOfMonth + day - 1) % 7;
-              const isSunday = dayOfWeek === 0;
-              const isSaturday = dayOfWeek === 6;
-              const date = new Date(year, month - 1, day);
+              const day = date.getDate();
               const iso = toIsoDate(date);
+              const isToday = iso === todayIso;
+              const isSunday = dayIndex === SUNDAY_INDEX;
+              const isSaturday = dayIndex === SATURDAY_INDEX;
               const holiday = holidayMap[iso];
               const isAuto = holiday?.source === 'auto';
               const isManual = holiday?.source === 'manual';
@@ -103,11 +73,12 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
 
               return (
                 <button
-                  key={`day-${weekIndex}-${day}`}
+                  key={`day-${day}`}
                   type="button"
                   onClick={handleClick}
                   disabled={isAuto}
                   title={title}
+                  data-week={weekOfMonth}
                   className={`
                     h-7 rounded-md flex items-center justify-center
                     text-xs font-medium
@@ -131,25 +102,23 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
       </div>
 
       {/* Weekly Focus list (vertical) */}
-      <div className="mt-4 pt-3 border-t border-slate-100 space-y-1.5">
-        {weeks.map((_, weekIndex) => {
-          const focusText = getWeekFocusText(weekIndex);
-          return (
-            <div key={`focus-${weekIndex}`} className="flex items-start gap-2">
-              <span className="text-[10px] font-semibold text-slate-400 flex-shrink-0 mt-0.5 w-5">
-                W{weekIndex + 1}
+      <ul aria-label="주차별 포커스" className="mt-4 pt-3 border-t border-slate-100 space-y-1.5">
+        {focusRows.map(({ weekNumber, text, inMonth }) => (
+          <li key={`focus-${weekNumber}`} className="flex items-start gap-2">
+            <span className="text-xs font-semibold text-slate-400 flex-shrink-0 w-6">
+              W{weekNumber}
+            </span>
+            {text ? (
+              <span className="text-xs text-slate-600 leading-snug break-words">
+                {text}
+                {!inMonth && <span className="ml-1 text-amber-700">· {RETAINED_WEEK_NOTE}</span>}
               </span>
-              {focusText ? (
-                <span className="text-xs text-slate-600 leading-snug break-words">
-                  {focusText}
-                </span>
-              ) : (
-                <span className="text-xs text-slate-300 italic">미설정</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            ) : (
+              <span className="text-xs text-slate-300 italic">미설정</span>
+            )}
+          </li>
+        ))}
+      </ul>
 
       {/* Legend */}
       <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -165,8 +134,8 @@ export function CompactCalendar({ year, month, weeklyFocus }: CompactCalendarPro
           <span className="w-4 h-4 rounded bg-red-100" />
           <span>수동 휴일</span>
         </div>
-        <div className="text-[10px] text-slate-400 w-full">
-          날짜 클릭으로 수동 휴일 토글 (공휴일은 잠금)
+        <div className="text-xs text-slate-400 w-full">
+          날짜 클릭으로 수동 휴일 토글 (공휴일은 잠금) · 주는 월~일, 1일이 든 주가 W1
         </div>
       </div>
     </div>

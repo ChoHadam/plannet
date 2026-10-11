@@ -1,6 +1,7 @@
 'use client';
 
-import { ComponentType } from 'react';
+import { ComponentType, createElement } from 'react';
+import type { LazyComponent } from '@/lib/lazyComponent';
 import { MandalartData, TemplateType, PlanCategory } from '@/types/mandalart';
 import { Block6Data } from '@/types/block6';
 import { MonthlyData } from '@/types/monthly';
@@ -10,11 +11,28 @@ import { useMandalartStore, useHydration } from '@/hooks/useMandalart';
 import { useBlock6Store, useBlock6Hydration } from '@/hooks/useBlock6';
 import { useMonthlyStore, useMonthlyHydration } from '@/hooks/useMonthly';
 import { useDailyStore, useDailyHydration } from '@/hooks/useDaily';
-import { MandalartGrid } from '@/components/Mandalart';
-import { MandalartGuide } from '@/components/MandalartGuide';
-import { Block6Grid, Block6Guide } from '@/components/Block6';
-import { MonthlyGrid, MonthlyGuide } from '@/components/Monthly';
-import { DailyGrid, DailyGuide } from '@/components/Daily';
+import { lazyComponent } from '@/lib/lazyComponent';
+import { TemplateLoading } from '@/components/TemplateLoading';
+import { LazyLoadDialog } from '@/components/LazyLoadDialog';
+
+// 편집기·사용법은 템플릿별로 처음 열 때 받는다(작업 공간 첫 로딩에 4개 편집기를 모두 싣지 않는다).
+// 사용법은 받는 동안·실패 시 닫기·다시 시도가 있는 대화상자를 먼저 띄우고, 코드가 도착하면 사용법으로 바뀐다.
+type GridProps = object;
+type GuideProps = { onStart: () => void; onClose: () => void; startLabel?: string };
+const gridLoading = createElement(TemplateLoading);
+const gridFailed = (_: GridProps, retry: () => void) => createElement(TemplateLoading, { onRetry: retry });
+const guideLoading = ({ onClose }: GuideProps) => createElement(LazyLoadDialog, { title: '사용법', onClose });
+const guideFailed = ({ onClose }: GuideProps, retry: () => void) => createElement(LazyLoadDialog, { title: '사용법', onClose, onRetry: retry });
+const lazyGrid = (load: () => Promise<ComponentType<GridProps>>) => lazyComponent(load, gridLoading, gridFailed);
+const lazyGuide = (load: () => Promise<ComponentType<GuideProps>>) => lazyComponent(load, guideLoading, guideFailed);
+const MandalartGrid = lazyGrid(() => import('@/components/Mandalart/MandalartGrid').then((m) => m.MandalartGrid));
+const MandalartGuide = lazyGuide(() => import('@/components/MandalartGuide').then((m) => m.MandalartGuide));
+const Block6Grid = lazyGrid(() => import('@/components/Block6/Block6Grid').then((m) => m.Block6Grid));
+const Block6Guide = lazyGuide(() => import('@/components/Block6/Block6Guide').then((m) => m.Block6Guide));
+const MonthlyGrid = lazyGrid(() => import('@/components/Monthly/MonthlyGrid').then((m) => m.MonthlyGrid));
+const MonthlyGuide = lazyGuide(() => import('@/components/Monthly/MonthlyGuide').then((m) => m.MonthlyGuide));
+const DailyGrid = lazyGrid(() => import('@/components/Daily/DailyGrid').then((m) => m.DailyGrid));
+const DailyGuide = lazyGuide(() => import('@/components/Daily/DailyGuide').then((m) => m.DailyGuide));
 
 // ---- 모든 플랜 타입의 공통 필드 ----
 export interface BasePlanData {
@@ -58,8 +76,9 @@ export interface TemplateEntry {
   useHydration: () => boolean;
 
   // 컴포넌트
-  GuideComponent: ComponentType<{ onStart: () => void; onClose: () => void }>;
-  GridComponent: ComponentType;
+  /** startLabel: 생성 전 안내는 기본 '시작하기', 헤더 사용법처럼 읽기만 할 때는 닫는 문구 */
+  GuideComponent: ComponentType<GuideProps>;
+  GridComponent: LazyComponent<GridProps>;
 }
 
 interface DateParams {

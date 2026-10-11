@@ -73,6 +73,7 @@ export function TodoItem({ todo, onToggle, onUpdate, onDelete }: TodoItemProps) 
           ref={inputRef}
           type="text"
           value={editText}
+          data-local-draft
           onChange={(e) => setEditText(e.target.value)}
           onBlur={handleSave}
           onKeyDown={handleKeyDown}

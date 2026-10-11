@@ -97,8 +97,12 @@ test('sanitizes HTML and migrates legacy daily flag without losing schedule', as
 test('editing while overwrite confirmation is open prevents stale import', async ({ page }) => {
   await importFile(page, JSON.stringify({ ...planFixture(), title: '오래된 가져오기' }));
   await expect(page.getByText('현재 플랜을 덮어쓰시겠습니까?')).toBeVisible();
-  // A second local editor or a keyboard-accessible background input can change the plan.
-  await titleInput(page).fill('방금 수정한 제목', { force: true });
+  // The confirm is modal (keyboard focus stays inside), so change the plan without focusing the
+  // background input, as another local editor would.
+  await titleInput(page).evaluate((el: HTMLInputElement) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '방금 수정한 제목');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   await page.getByRole('button', { name: '덮어쓰기', exact: true }).click();
   await expect(titleInput(page)).toHaveValue('방금 수정한 제목');
 });

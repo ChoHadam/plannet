@@ -1,6 +1,19 @@
 'use client';
 
-import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
+import type { EmojiClickData } from 'emoji-picker-react';
+import { lazyComponent } from '@/lib/lazyComponent';
+
+const EMOJI_PICKER_WIDTH = 350;
+const EMOJI_PICKER_HEIGHT = 400;
+const PICKER_BOX = { width: EMOJI_PICKER_WIDTH, height: EMOJI_PICKER_HEIGHT };
+const PICKER_STATUS = 'flex items-center justify-center text-xs text-slate-400';
+
+// 이모지 데이터(가장 큰 의존성)는 선택 창을 처음 열 때 받는다. 도착하면 검색창에 초점이 간다.
+const EmojiPicker = lazyComponent(
+  () => import('emoji-picker-react').then((m) => m.default),
+  <div role="status" style={PICKER_BOX} className={PICKER_STATUS}>이모지를 불러오는 중...</div>,
+  <div role="status" style={PICKER_BOX} className={PICKER_STATUS}>이모지를 불러오지 못했어요. 닫았다가 다시 열어주세요.</div>,
+);
 
 interface EmojiPickerWrapperProps {
   currentEmoji?: string;
@@ -24,12 +37,12 @@ export function EmojiPickerWrapper({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 overlay-safe z-50 flex items-center justify-center">
       <div
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-h-full flex flex-col animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-slate-600">이모지 선택</span>
@@ -59,9 +72,8 @@ export function EmojiPickerWrapper({
         </div>
         <EmojiPicker
           onEmojiClick={handleEmojiClick}
-          theme={Theme.LIGHT}
-          width={350}
-          height={400}
+          width={EMOJI_PICKER_WIDTH}
+          height={EMOJI_PICKER_HEIGHT}
           searchPlaceholder="이모지 검색..."
           previewConfig={{ showPreview: false }}
         />

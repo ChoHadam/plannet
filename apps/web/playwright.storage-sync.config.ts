@@ -9,7 +9,7 @@ export default defineConfig({
     reuseExistingServer: false, timeout: 300_000, stdout: 'pipe', stderr: 'pipe',
   },
   projects: [
-    { name: 'logic', testMatch: 'logic.spec.ts' },
-    { name: 'browser', testMatch: 'browser.spec.ts', use: { ...devices['Desktop Chrome'], baseURL, viewport: { width: 1440, height: 1100 } } },
+    { name: 'logic', testMatch: ['logic.spec.ts', 'load-validation.spec.ts', 'conditional-read.spec.ts', 'refresh-logic.spec.ts'] },
+    { name: 'browser', testMatch: ['browser.spec.ts', 'refresh-browser.spec.ts'], use: { ...devices['Desktop Chrome'], baseURL, viewport: { width: 1440, height: 1100 } } },
   ],
 });

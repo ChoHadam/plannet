@@ -476,8 +476,15 @@ export const useMandalartStore = create<MandalartStore>()(
           if (mandalartIndex === -1) return state;
 
           const oldMandalart = state.mandalarts[mandalartIndex];
-          const newMandalart = createInitialMandalart(oldMandalart.category, oldMandalart.title);
-          newMandalart.id = oldMandalart.id; // Keep same ID
+          // 초기화는 칸 내용만 비운다. ID·제목·플랜 날짜는 유지한다.
+          const newMandalart: MandalartData = {
+            ...createInitialMandalart(oldMandalart.category, oldMandalart.title),
+            id: oldMandalart.id,
+            year: oldMandalart.year,
+            month: oldMandalart.month,
+            week: oldMandalart.week,
+            day: oldMandalart.day,
+          };
 
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = newMandalart;

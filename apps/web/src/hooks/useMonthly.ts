@@ -9,6 +9,7 @@ import {
   MonthlyData,
   MonthlyGoal,
   createInitialWeeklyFocus,
+  withWeeklyFocusText,
 } from '@/types/monthly';
 import { generateId, sanitizeInput } from '@/lib/sanitize';
 import { useMandalartStore } from './useMandalart';
@@ -334,11 +335,9 @@ export const useMonthlyStore = create<MonthlyStore>()(
           if (planIndex === -1) return state;
 
           const plan = state.monthlyPlans[planIndex];
-          const weekIndex = plan.weeklyFocus.findIndex((w) => w.weekNumber === weekNumber);
-          if (weekIndex === -1) return state;
-
-          const newWeeklyFocus = [...plan.weeklyFocus];
-          newWeeklyFocus[weekIndex] = { ...newWeeklyFocus[weekIndex], text: trimmedText };
+          // 이전 5주 플랜의 W6은 내용을 적을 때만 추가된다. 내용이 같으면 쓰지 않는다.
+          const newWeeklyFocus = withWeeklyFocusText(plan.weeklyFocus, weekNumber, trimmedText);
+          if (newWeeklyFocus === plan.weeklyFocus) return state;
 
           const newPlans = [...state.monthlyPlans];
           newPlans[planIndex] = {

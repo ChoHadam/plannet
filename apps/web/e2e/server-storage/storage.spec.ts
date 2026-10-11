@@ -44,8 +44,13 @@ async function device(browser: Browser, account: 'alice' | 'bob' = 'alice') {
   const userId = await login(page, account);
   return { context, page, userId };
 }
+/** Plan library search: independent of the sidebar's recent-5 limit and plans left by earlier tests. */
 async function openPlan(page: Page, title: string) {
-  await page.locator('aside').getByText(title, { exact: true }).click();
+  await page.getByRole('button', { name: /^전체 플랜 보기/ }).click();
+  const dialog = page.getByRole('dialog', { name: '전체 플랜' });
+  await dialog.getByRole('searchbox').fill(title);
+  await dialog.getByRole('list', { name: '플랜 목록' }).getByRole('button').filter({ hasText: title }).first().click();
+  await expect(dialog).toBeHidden();
   await expect(titleInput(page)).toHaveValue(title);
 }
 
@@ -55,6 +60,49 @@ async function createDaily(page: Page) {
   await page.getByRole('button', { name: '확인', exact: true }).click();
   await dismissGuide(page);
 }
+
+test('conditional reads cross the real proxy without browser persistence and old acknowledgements survive newer edits', async ({ page, browser }) => {
+  const userId = await login(page);
+  await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
+  const id = `conditional-${randomUUID()}`;
+  const requestId = randomUUID();
+  const changes = [{ kind: 'daily', id, schemaVersion: 1, expectedVersion: 0, data: daily(id) }];
+  const firstAck = await (await commit(page, userId, changes, requestId)).json();
+  const readInBrowser = (etag?: string) => page.evaluate(async ({ userId, etag }) => {
+    const response = await fetch('/api/v1/planner', {
+      cache: 'no-store', credentials: 'same-origin',
+      headers: { 'X-Plannet-User-Id': userId, ...(etag ? { 'If-None-Match': etag } : {}) },
+    });
+    return { status: response.status, etag: response.headers.get('etag'), text: await response.text(), cacheControl: response.headers.get('cache-control') };
+  }, { userId, etag });
+  const first = await readInBrowser();
+  expect(first.status).toBe(200);
+  expect(first.etag).toBeTruthy();
+  expect(first.cacheControl).toContain('no-store');
+  const second = await readInBrowser(first.etag!);
+  expect(second).toMatchObject({ status: 304, etag: first.etag, text: '' });
+  const updated = [{ ...changes[0], expectedVersion: 1, data: daily(id, 'later edit') }];
+  expect((await commit(page, userId, updated)).status()).toBe(200);
+  const changed = await readInBrowser(first.etag!);
+  expect(changed.status).toBe(200);
+  expect(changed.etag).not.toBe(first.etag);
+  expect(JSON.parse(changed.text).records.find((row: StoredRecord) => row.id === id)).toMatchObject({ version: 2, data: { title: 'later edit' } });
+  expect(await (await commit(page, userId, changes, requestId)).json()).toEqual(firstAck);
+  const other = await device(browser, 'bob');
+  try {
+    const wrongAccount = await other.page.request.get(`${ORIGIN}/api/v1/planner`, {
+      headers: { 'X-Plannet-User-Id': userId, 'If-None-Match': first.etag! },
+    });
+    expect(wrongAccount.status()).toBe(409);
+    const otherSnapshot = await other.page.request.get(`${ORIGIN}/api/v1/planner`, {
+      headers: { 'X-Plannet-User-Id': other.userId, 'If-None-Match': changed.etag! },
+    });
+    expect(otherSnapshot.status()).toBe(200);
+    expect(otherSnapshot.headers().etag).not.toBe(changed.etag);
+  } finally { await other.context.close(); }
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('plannet')))).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('plannet')))).toEqual([]);
+});
 
 test('UI autosave reaches PostgreSQL, a new browser restores it, another account cannot see it', async ({ page, browser }) => {
   const userId = await login(page);
@@ -83,7 +131,7 @@ test('UI autosave reaches PostgreSQL, a new browser restores it, another account
   } finally { await remote.context.close(); await other.context.close(); }
 });
 
-test('stale device edits cannot overwrite a newer server version and its draft remains downloadable', async ({ page, browser }) => {
+test('stale device edits cannot overwrite a newer server version; the tab-journaled draft survives reload as a conflict until explicitly discarded', async ({ page, browser }) => {
   const userId = await login(page);
   const id = `conflict-${randomUUID()}`;
   const initial = daily(id);
@@ -108,12 +156,24 @@ test('stale device edits cannot overwrite a newer server version and its draft r
     const chunks: Buffer[] = [];
     for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
     expect(Buffer.concat(chunks).toString()).toContain(loser);
+    // Only the pending change is kept, in this tab's sessionStorage; nothing in localStorage.
+    expect(await second.page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('plannet')))).toEqual([]);
+    expect(await second.page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('plannet')))).toEqual([`plannet-pending@${userId}`]);
+    second.page.once('dialog', dialog => { expect(dialog.type()).toBe('beforeunload'); void dialog.accept(); });
     await second.page.reload();
-    await expect(second.page.getByTestId('storage-sync-status')).toContainText(/충돌|다른 기기/);
+    // Restored with its original expected version: still a conflict, the DB winner is untouched.
+    await expect(second.page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'conflict');
+    await openPlan(second.page, loser);
+    expect((await records(page, userId)).find(record => record.id === id)?.data?.title).toBe(winner);
+    await second.page.getByTestId('storage-sync-use-server').click();
+    await second.page.getByTestId('storage-sync-confirm-use-server').click();
+    await expect(second.page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
+    await expect(titleInput(second.page)).toHaveValue(winner);
+    expect(await second.page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('plannet')))).toEqual([]);
   } finally { await second.context.close(); }
 });
 
-test('lost commit acknowledgement survives reload and replays once without duplicating a version', async ({ page }) => {
+test('lost commit acknowledgement is retried with the same request in the living tab without duplicating a version', async ({ page }) => {
   const userId = await login(page);
   await createDaily(page);
   const title = `응답 유실 ${randomUUID()}`;
@@ -129,14 +189,45 @@ test('lost commit acknowledgement survives reload and replays once without dupli
       await route.abort('failed');
     } else await route.continue();
   });
+  const sent: string[] = [];
+  page.on('request', request => {
+    if (request.url().endsWith('/api/v1/planner/commit') && (request.postData() ?? '').includes(title)) sent.push(request.postDataJSON().requestId);
+  });
   await titleInput(page).fill(title);
   await expect.poll(() => acknowledgedVersion).toBeDefined();
+  await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'error');
+  await page.getByRole('button', { name: '서버 저장 다시 시도', exact: true }).click();
+  await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
+  expect(sent).toEqual([lostRequest!.requestId, lostRequest!.requestId]);
   await page.reload();
   await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
   const saved = (await records(page, userId)).find(record => record.data?.title === title);
   expect(saved?.version).toBe(acknowledgedVersion);
   expect(saved?.id).toBe(lostRequest?.changes.find(change => change.id === saved?.id)?.id);
   expect((await records(page, userId)).filter(record => record.data?.title === title)).toHaveLength(1);
+});
+
+test('a reload inside the save debounce restores the pending change from the tab journal and saves it once to PostgreSQL', async ({ page }) => {
+  await page.clock.install();
+  const userId = await login(page);
+  await createDaily(page);
+  const title = `디바운스 새로고침 ${randomUUID()}`;
+  await titleInput(page).fill(`${title} 전`);
+  await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
+  const before = (await records(page, userId)).find(record => record.data?.title === `${title} 전`)!;
+  await page.clock.pauseAt(Date.now() + 60_000);
+  await titleInput(page).fill(title);
+  const journal = await page.evaluate(key => sessionStorage.getItem(key), `plannet-pending@${userId}`);
+  expect(JSON.parse(journal!)).toMatchObject({ inflight: null, drafts: [{ id: before.id, expectedVersion: before.version }] });
+  expect(journal).not.toContain('"base"');
+  page.once('dialog', dialog => { void dialog.accept(); });
+  await page.reload();
+  await page.clock.resume();
+  await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
+  const saved = (await records(page, userId)).find(record => record.id === before.id);
+  expect(saved?.data?.title).toBe(title);
+  expect(saved?.version).toBe(before.version + 1);
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('plannet')))).toEqual([]);
 });
 
 test('explicit local import preserves all templates, references and settings without removing the source', async ({ page }) => {

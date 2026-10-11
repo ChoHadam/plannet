@@ -5,6 +5,9 @@ export const PLANNER_API_PATH = '/api/v1/planner';
 export const EXPECTED_USER_HEADER = 'X-Plannet-User-Id';
 const REQUEST_TIMEOUT_MS = 15_000;
 const CSRF_ATTEMPTS = 2;
+const ETAG_HEADER = 'ETag';
+const IF_NONE_MATCH_HEADER = 'If-None-Match';
+const VALID_ETAG = /^(?:W\/)?"[\x21\x23-\x7e]{1,200}"$/;
 
 async function responseBody(response: Response): Promise<Record<string, unknown>> {
   if (response.status === 401 || response.type === 'opaqueredirect') throw new PlannerSyncError('unauthorized');
@@ -17,16 +20,35 @@ async function responseBody(response: Response): Promise<Record<string, unknown>
 
 export function plannerSyncApi(userId: string) {
   const options: RequestInit = { credentials: 'same-origin', cache: 'no-store', redirect: 'manual' };
+  // This verified snapshot lives only in this account's adapter memory, never browser storage.
+  let snapshot: { etag: string; records: PlannerRecord[] } | null = null;
   return {
     async read(): Promise<PlannerRecord[]> {
-      const response = await fetch(PLANNER_API_PATH, {
-        ...options, headers: { [EXPECTED_USER_HEADER]: userId, accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      const body = await responseBody(response);
-      if (body.userId !== userId) throw new PlannerSyncError('account_changed');
-      return validateRecords(body.records);
+      const previous = snapshot;
+      try {
+        const headers: Record<string, string> = { [EXPECTED_USER_HEADER]: userId, accept: 'application/json' };
+        if (previous) headers[IF_NONE_MATCH_HEADER] = previous.etag;
+        const response = await fetch(PLANNER_API_PATH, {
+          ...options, headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        if (response.status === 304) {
+          if (!previous || response.headers.get(ETAG_HEADER) !== previous.etag) throw new PlannerSyncError('invalid_response');
+          return structuredClone(previous.records);
+        }
+        const body = await responseBody(response);
+        if (body.userId !== userId) throw new PlannerSyncError('account_changed');
+        const records = validateRecords(body.records);
+        const etag = response.headers.get(ETAG_HEADER);
+        snapshot = etag && VALID_ETAG.test(etag) ? { etag, records: structuredClone(records) } : null;
+        return records;
+      } catch (error) {
+        snapshot = null;
+        throw error;
+      }
     },
     async commit(request: PlannerCommit): Promise<PlannerRecord[]> {
+      // A write may succeed even if its response is lost. Revalidate with a full read afterward.
+      snapshot = null;
       for (let attempt = 0; attempt < CSRF_ATTEMPTS; attempt++) {
         const csrfResponse = await fetch(AUTH_PATHS.csrf, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
         const csrf = await responseBody(csrfResponse);
