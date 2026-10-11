@@ -4,6 +4,43 @@
 
 핵심 결정은 단순하다. 지금은 DB와 회원 관리를 만들지 않고, API를 로컬 k8s에 올린 뒤 Spring Security 기본 OAuth2 흐름으로 Google 로그인만 먼저 붙인다.
 
+2026-09-23 갱신: Spring 인증 구현과 모의 검증 결과는 아래 "구현 현황"에 정리했다. 그 뒤의 단계별 계획·현재 상태 표는 구현 전 조사 기록이다. 전체 진행 상태는 [roadmap-status.md](../roadmap-status.md), Web Auth.js 제거·인증 전환은 [Web 연동 문서](../web-auth-integration.md)를 따른다. Spring 라우팅은 `/api/v1/**`와 OAuth 경로로 한정하며 기존 Next.js의 chat·backup 경로는 Web이 처리한다.
+
+서비스 공개 목표에 따라 인증은 최우선 작업으로 승격했다. 이 문서의 OAuth2 로그인 성공만으로 공개 준비가 완료되는 것은 아니다. Next.js에 남는 `/api/chat`의 서버 세션 검증·사용 제한과 `/api/backup`의 비활성화 또는 사용자 격리는 별도 구현이며, 로드맵의 단계별 실행 계획과 공개 기준에서 함께 추적한다. Spring 인증이 Web route를 자동으로 보호한다고 가정하지 않는다.
+
+## 구현 현황 (2026-09-23, Phase 2 API 측)
+
+`apps/api`에 Spring Security OAuth2 Login을 구현했다. 공유 계약은 [auth-v1](../contracts/auth-v1.md)이다. Web 연동과 기존 Next.js API 보호는 별도 작업이다.
+
+| 항목 | 구현 |
+| --- | --- |
+| 엔드포인트 | `/oauth2/authorization/google`, `/login/oauth2/code/google`, `GET /api/v1/me`, `GET /api/v1/csrf`, `POST /api/v1/logout`(CSRF, 204) |
+| 접근 정책 | health·me·csrf 공개. 그 외 `/api/v1/**`는 인증 필요, 미인증은 401 JSON(redirect 없음). 나머지 경로는 거부. Spring 기본 로그인 페이지 비활성 |
+| 세션 | Tomcat 메모리 세션, replica 1. 쿠키 `PLANNET_SESSION`(Path=/, HttpOnly, SameSite=Lax, prod Secure). 로그인 시 세션 id 교체. Google access token은 세션에만 저장 |
+| 설정 분리 | 기본(로컬): 프록시 헤더 무시, Secure 쿠키 끔. `prod` 프로필: 신뢰 프록시 정규식(`PLANNET_TRUSTED_PROXIES`)만 반영, Secure 쿠키, Google client·redirect URI 누락 시 기동 실패 |
+| 설정 누락 | 로컬에서 Google client가 없으면 로그인만 `authError=auth_unavailable`로 되돌린다. 보호 경로는 계속 닫혀 있다 |
+| 식별자 | `externalSubject`(Google `sub`)만 노출. 내부 userId 없음 |
+
+코드 위치: `auth/config`(SecurityConfig, GoogleClientRegistrationConfig, AuthProperties, 응답 핸들러, TrustedProxyGuard), `auth/adapter/web`(me·csrf 컨트롤러), `auth/domain/AuthenticatedUser`. 아래 "예상 파일 구조"의 `adapter/in/web`은 Kotlin 예약어(`in`) 때문에 `adapter/web`으로 바꿨다.
+
+검증 구분:
+
+- **자동 테스트(모의 인증)**: `./gradlew :apps:api:test`로 25개 통과. MockMvc 정책 테스트, 실제 HTTP와 테스트용 모의 OIDC provider를 쓰는 로그인→callback→Web 서버 쿠키 전달→CSRF logout 흐름, provider 장애, state 재사용, prod 프로필 신뢰/비신뢰 프록시 테스트를 포함한다.
+- **브라우저(모의 OIDC)**: 별도 포트에서 jar와 모의 provider를 띄워 확인했다. 로그인 전 401, 로그인 후 me 200, CSRF 없는 logout 403, logout 204 후 401, provider token 장애 시 `authError=login_failed`를 확인했다.
+- **Web + API 통합(모의 OIDC)**: 같은 origin 진입점(edge proxy) 뒤에 Web 프로덕션 빌드와 이 API를 붙여 확인했다.
+  - Web "Google 로그인" 버튼 → 로그인 → 사용자 표시
+  - 인증된 `/api/chat` 200 → Web 로그아웃(CSRF) → 같은 요청 401
+  - API 중단 중에는 `/api/chat` 503 `auth_unavailable`, 화면은 "로그인 상태를 확인할 수 없어요" 안내
+  - API 재시작 후에는 기존 세션 401, 화면은 다시 로그인 버튼
+- **실제 Google (2026-09-26, Web + API 통합)**: 개인 프로젝트 `plannet-502807`의 OAuth client에 `http://localhost:18180/login/oauth2/code/google`, `http://localhost:18080/login/oauth2/code/google`을 등록했다. 기존 `localhost:3000` Auth.js URI는 유지했다. 실제 Google 계정으로 다음을 확인했다.
+  - Web "Google 로그인" → Google 계정 선택·동의 → Web 복귀, 화면에 계정 이름 표시
+  - `/api/v1/me` 200: `authProvider`, `externalSubject`, `name`, `email`, `image` 모두 채워짐
+  - 새로고침 후 로그인 유지
+  - 인증된 `/api/chat` 200(모의 AI) → Web 로그아웃 → `me` 401, `/api/chat` 401
+  - 처음 시도는 `.env.local`의 client secret이 손상(`--`가 em dash `—`로 치환)되어 token 교환에서 `invalid_client`로 실패했다. 복원한 값을 API 환경변수로 넣어 통과했다. 원인 파악을 위해 로그인 실패 로그에 OAuth 오류 코드를 남기도록 했다.
+
+남은 제약: 메모리 세션이라 API 재시작 또는 replica 증가 시 로그인이 유지되지 않는다. 세션 수 상한이 없다(`/api/v1/csrf` 호출도 익명 세션을 만든다). returnTo는 미지원이다.
+
 ## 결론 요약
 
 요약:
@@ -55,7 +92,7 @@ Phase 1 이후에는 web과 api가 같은 로컬 진입점 뒤에 놓인다.
 flowchart LR
     Browser["Browser<br/>localhost:18080"] --> Router["local k8s routing"]
     Router -->|"/"| Web["apps/web<br/>Next.js :3000"]
-    Router -->|"/api/**"| Api["apps/api<br/>Spring Boot :8080"]
+    Router -->|"/api/v1/**"| Api["apps/api<br/>Spring Boot :8080"]
     Router -->|"/oauth2/**"| Api
     Router -->|"/login/oauth2/**"| Api
     Api --> Google["Google OAuth"]
@@ -78,7 +115,7 @@ flowchart LR
 - `apps/api`용 Dockerfile을 추가한다.
 - API 이미지를 로컬 k8s에서 사용할 수 있게 빌드한다.
 - web Deployment/Service와 api Deployment/Service를 분리한다.
-- 브라우저 진입점에서 `/`는 web으로, `/api/**`는 api로 라우팅한다.
+- 브라우저 진입점에서 `/`는 web으로, `/api/v1/**`는 api로 라우팅한다. `/api/chat`, `/api/backup`, 전환 전 `/api/auth/**`는 web이 처리한다.
 - OAuth2 기본 흐름을 위해 `/oauth2/**`, `/login/oauth2/**`도 api로 라우팅할 수 있게 준비한다.
 - `/api/v1/health`로 API 라우팅을 smoke test한다.
 
@@ -169,7 +206,8 @@ apps/api/src/main/kotlin/com/hadam/plannet/
 | --- | --- |
 | `/` | web service |
 | `/_next/**` | web service |
-| `/api/**` | api service |
+| `/api/chat`, `/api/backup`, 전환 전 `/api/auth/**` | web service |
+| `/api/v1/**` | api service |
 | `/oauth2/**` | api service |
 | `/login/oauth2/**` | api service |
 

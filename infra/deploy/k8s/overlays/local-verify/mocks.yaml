@@ -1,0 +1,73 @@
+# Google OIDC·AI 대역. 검증 클러스터에만 배포한다 (production overlay에는 없음).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plannet-mocks
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-external
+  namespace: plannet-mocks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mock-external
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mock-external
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mock
+          image: node:20-alpine
+          command: ["node", "/mock/mock-external.mjs"]
+          envFrom:
+            - configMapRef:
+                name: mock-external-config
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { port: http, path: /healthz }
+            periodSeconds: 5
+          volumeMounts:
+            - name: script
+              mountPath: /mock
+      volumes:
+        - name: script
+          configMap:
+            name: mock-external-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-external
+  namespace: plannet-mocks
+spec:
+  selector:
+    app.kubernetes.io/name: mock-external
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# 브라우저가 Google 동의 화면 대역에 접근하는 경로 (https://mock.test:19643/authorize)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mock-external
+  namespace: plannet-mocks
+spec:
+  parentRefs:
+    - name: plannet
+      namespace: plannet
+      sectionName: https-mock
+  hostnames:
+    - mock.test
+  rules:
+    - backendRefs:
+        - name: mock-external
+          port: 8080

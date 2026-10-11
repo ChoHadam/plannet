@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useModalDialog } from '@/hooks/useModalDialog';
 
 interface MonthlyGuideProps {
   onStart: () => void;
   onClose: () => void;
+  startLabel?: string;
 }
 
 // Mini calendar visual
@@ -181,7 +183,8 @@ function GuideStep5() {
 
 const STEPS = [GuideStep1, GuideStep2, GuideStep3, GuideStep4, GuideStep5];
 
-export function MonthlyGuide({ onStart, onClose }: MonthlyGuideProps) {
+export function MonthlyGuide({ onStart, onClose, startLabel = '시작하기' }: MonthlyGuideProps) {
+  const { dialogProps } = useModalDialog({ onClose, initialFocus: 'dialog' });
   const [currentStep, setCurrentStep] = useState(0);
 
   const handleNext = () => {
@@ -201,11 +204,13 @@ export function MonthlyGuide({ onStart, onClose }: MonthlyGuideProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 overlay-safe bg-black/30 flex items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-200"
+        {...dialogProps}
+        aria-label="월간 플래너 사용법"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 max-h-full overflow-y-auto animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -216,6 +221,8 @@ export function MonthlyGuide({ onStart, onClose }: MonthlyGuideProps) {
               <button
                 key={idx}
                 onClick={() => setCurrentStep(idx)}
+                aria-label={`${idx + 1}단계`}
+                aria-current={idx === currentStep ? 'step' : undefined}
                 className={`
                   w-2 h-2 rounded-full transition-colors
                   ${idx === currentStep ? 'bg-slate-700' : 'bg-slate-300 hover:bg-slate-400'}
@@ -226,6 +233,7 @@ export function MonthlyGuide({ onStart, onClose }: MonthlyGuideProps) {
           {/* Close button */}
           <button
             onClick={onClose}
+            aria-label="닫기"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -271,7 +279,7 @@ export function MonthlyGuide({ onStart, onClose }: MonthlyGuideProps) {
                 onClick={onStart}
                 className="px-6 py-2 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700 transition-colors"
               >
-                시작하기
+                {startLabel}
               </button>
             ) : (
               <button

@@ -1,0 +1,104 @@
+# 홈 클러스터(docker-desktop, context `home`) 배포 overlay.
+#
+# production overlay 와 다른 점 — 이 클러스터에 이미 있는 것을 쓴다:
+#   진입점   Gateway API/Envoy Gateway → ingress-nginx (ingress.yaml). Gateway 리소스는 뺀다.
+#   TLS      직접 준비한 plannet-tls → cert-manager 의 *.mhd-mhd.duckdns.org 와일드카드
+#   이미지   레지스트리 push → 노드 도커에서 직접 빌드 (imagePullPolicy: Never)
+#   DB       외부 사설 PostgreSQL → 클러스터 안 StatefulSet (postgres.yaml)
+#   Namespace 는 최초 1회만 사람이 적용한다 (배포 러너에 namespace 권한이 없다).
+#              infra/deploy/home/bootstrap.sh infra
+#
+# 적용:  kubectl --context home apply -k infra/deploy/k8s/overlays/home
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - public
+  - postgres.yaml
+  - ingress.yaml
+components:
+  - ../../components/public-host
+# 노드 도커에 빌드해 둔 태그. 배포 워크플로가 :local 로 태그하고 커밋 태그로 rollout 한다.
+images:
+  - name: plannet-web
+    newTag: local
+  - name: plannet-api
+    newTag: local
+# public.env 의 PUBLIC_HOST 를 Ingress host·TLS host 에 채운다 (Gateway 쪽은 공용 component 가 한다).
+replacements:
+  - source:
+      kind: ConfigMap
+      name: plannet-public
+      fieldPath: data.PUBLIC_HOST
+    targets:
+      - select: { kind: Ingress, name: plannet }
+        fieldPaths:
+          - spec.rules.0.host
+          - spec.tls.0.hosts.0
+configMapGenerator:
+  - name: plannet-db-init
+    namespace: plannet
+    files:
+      - postgres-init.sh
+patches:
+  # Namespace: 러너 ServiceAccount 는 namespace 권한이 없다. bootstrap.sh 가 최초 1회 적용한다.
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata: { name: plannet }
+  # Gateway API 세 리소스는 쓰지 않는다 (CRD 가 없고, 80/443 은 ingress-nginx 가 잡고 있다).
+  - patch: |-
+      $patch: delete
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: Gateway
+      metadata: { name: plannet }
+  - patch: |-
+      $patch: delete
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata: { name: plannet-app }
+  # HTTP→HTTPS 301 은 ingress-nginx 기본값(ssl-redirect)이 처리한다.
+  - patch: |-
+      $patch: delete
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata: { name: plannet-https-redirect }
+  # 진입점이 바뀌었으므로 허용할 프록시 pod 도 ingress-nginx 로 바꾼다.
+  # (docker-desktop 의 CNI 는 NetworkPolicy 를 강제하지 않는다. 기록·이식성 목적으로 함께 둔다.)
+  - target: { kind: NetworkPolicy, name: plannet-web-ingress }
+    patch: |-
+      - op: replace
+        path: /spec/ingress/0/from
+        value:
+          - namespaceSelector:
+              matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+            podSelector:
+              matchLabels: { app.kubernetes.io/component: controller }
+          # 배포 워크플로의 헬스 체크 pod (deploy-plannet.yml). DB 쪽 maintenance 라벨과 같은 방식.
+          - podSelector:
+              matchLabels: { app.kubernetes.io/name: plannet-deploy-check }
+  - target: { kind: NetworkPolicy, name: plannet-api-ingress }
+    patch: |-
+      - op: replace
+        path: /spec/ingress/0/from
+        value:
+          - namespaceSelector:
+              matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+            podSelector:
+              matchLabels: { app.kubernetes.io/component: controller }
+          - podSelector:
+              matchLabels: { app.kubernetes.io/name: plannet-web }
+          - podSelector:
+              matchLabels: { app.kubernetes.io/name: plannet-deploy-check }
+  # 레지스트리가 없다. 노드 도커에 있는 이미지만 쓴다 (없으면 바로 실패하게 둔다).
+  - target: { kind: Deployment, name: plannet-web }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target: { kind: Deployment, name: plannet-api }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never

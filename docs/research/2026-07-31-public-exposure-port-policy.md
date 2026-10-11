@@ -4,6 +4,8 @@
 
 핵심 결론은 단순하다. `18080`은 개발용 진입점으로 유지하고, 외부 공개는 `80` 직접 서비스가 아니라 `443 HTTPS`를 기준으로 설계한다. `80`은 필요하면 HTTPS redirect 용도로만 사용한다.
 
+2026-09-23 코드 대조: 공개 전에는 로그인뿐 아니라 기존 Web API의 접근 정책도 검증해야 한다. `/api/backup`의 공용 파일 저장과 `/api/chat`의 사용 제한은 [roadmap-status.md](../roadmap-status.md)의 단계별 실행 계획과 공개 기준에서 추적한다. Spring 라우팅은 `/api/v1/**`로 한정하고 기존 Web API는 별도로 유지하거나 비활성화한다.
+
 ## 결론 요약
 
 요약:
@@ -62,7 +64,7 @@ flowchart LR
     Browser["Browser<br/>https://domain"] --> Router["Home Router or Cloud Edge<br/>443"]
     Router --> Ingress["k8s Ingress/Gateway<br/>TLS termination"]
     Ingress -->|"/"| Web["web Service<br/>Next.js :3000"]
-    Ingress -->|"/api/**"| Api["api Service<br/>Spring Boot :8080"]
+    Ingress -->|"/api/v1/**"| Api["api Service<br/>Spring Boot :8080"]
     Ingress -->|"/oauth2/**"| Api
     Ingress -->|"/login/oauth2/**"| Api
 
@@ -97,7 +99,8 @@ flowchart LR
 - Ingress/Gateway에서 `443` TLS termination을 설정한다.
 - `80` 요청은 `443`으로 redirect한다.
 - `/`, `/_next/**`는 web service로 라우팅한다.
-- `/api/**`, `/oauth2/**`, `/login/oauth2/**`는 api service로 라우팅한다.
+- `/api/v1/**`, `/oauth2/**`, `/login/oauth2/**`는 api service로 라우팅한다.
+- `/api/chat`, `/api/backup`은 web 소유로 유지하거나 서버 측 정책으로 비활성화한다. 전환 전 `/api/auth/**`도 web이 처리한다.
 - Google OAuth redirect URI에 공개 HTTPS callback을 추가한다.
 - 운영 profile에서는 session cookie에 `Secure`, `HttpOnly`, `SameSite` 정책을 명확히 둔다.
 - health endpoint와 actuator/admin 계열 endpoint의 공개 범위를 점검한다.
@@ -136,7 +139,7 @@ Cookie:
 
 - web과 api는 같은 origin 뒤에 두는 편이 단순하다.
 - CORS를 넓게 열어 문제를 해결하지 않는다.
-- `/api/**`와 OAuth callback path만 API로 보낸다.
+- `/api/v1/**`와 OAuth 로그인 시작·callback path만 API로 보낸다. `/api/**` 전체를 넘기지 않는다.
 
 ## 리스크와 열린 질문
 

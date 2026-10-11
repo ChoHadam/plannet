@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Plannet 홈서버 배포 인계서</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+         font-size: 9.5pt; line-height: 1.17; color: #111; letter-spacing: -0.01em; }
+  .page { width: 186mm; margin: 0 auto; }
+  h1 { font-size: 12pt; margin: 0 0 0.6mm; }
+  .meta { margin: 0 0 1.6mm; }
+  h2 { font-size: 10pt; margin: 1.3mm 0 0.5mm; }
+  h2 small { font-weight: normal; font-size: 9.5pt; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 0.5pt solid #999; padding: 0.1mm 1.2mm; vertical-align: top; text-align: left; }
+  th { background: #eee; }
+  td:first-child { white-space: nowrap; font-weight: 600; }
+  code, pre { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; }
+  code { background: #f2f2f2; padding: 0 0.6mm; }
+  pre { margin: 0.8mm 0 0; padding: 0.8mm 1.6mm; background: #f4f4f4; border: 0.5pt solid #bbb; line-height: 1.18; white-space: pre-wrap; }
+  ol { margin: 0; padding-left: 5mm; }
+  li { margin: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+  .warn { font-weight: 700; }
+  p { margin: 0.8mm 0 0; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="page">
+<h1>Plannet 홈서버 배포 인계서 (Windows 호스트 + Kubernetes)</h1>
+<p class="meta">2026-10-05 · 공개 주소 <code>https://plannet-lab.duckdns.org</code> · <span class="warn">아직 배포 가능한 상태가 아님.</span> 0단계 자료를 받은 뒤 시작한다. 이 절차는 Gateway 컨트롤러·DB·디스크·cert-manager를 설치하지 않는다.</p>
+
+<h2>0. 보내는 사람이 먼저 넘길 것 <small>(사전 준비 중 받고, 최종 전환 전까지 모두 전달)</small></h2>
+<table>
+<tr><th>항목</th><th>내용</th></tr>
+<tr><td>코드</td><td><code>github.com/ChoHadam/plannet</code> <code>feat/web-spring-auth</code>의 <b>정확한 커밋 SHA</b> (최신 Web/infra 변경 push 후. <code>main</code>은 구버전) + 비공개 저장소 접근 권한</td></tr>
+<tr><td>이미지</td><td>서버 CPU에 맞는 <code>plannet-web</code>·<code>plannet-api</code> 고정 태그(또는 digest) + 레지스트리 pull 권한</td></tr>
+<tr><td>DB</td><td>쓰기 중지 후 만든 최종 custom-format dump (암호화/비공개 전달) + 파일 SHA-256 + <b>원본 4개 테이블 건수·내용 해시</b>(데이터 대조용)</td></tr>
+<tr><td>비밀값</td><td>Google client ID/secret, OpenGateway API 키·endpoint·model — 별도 안전 채널, Git·문서에 기록 금지</td></tr>
+<tr><td>Google</td><td>callback <code>https://plannet-lab.duckdns.org/login/oauth2/code/google</code> <b>등록·저장 완료(2026-10-05). 다시 등록하지 않음</b></td></tr>
+</table>
+
+<h2>1. 운영자 환경 확인 <small>(실제 값은 운영자가 결정: context·스토리지·레지스트리·endpoint)</small></h2>
+<table>
+<tr><th>항목</th><th>기준 / 확인 방법</th></tr>
+<tr><td>노드</td><td>Windows 호스트라도 <b>Linux 워커 노드 필수</b>. <code>kubectl get nodes -L kubernetes.io/os,kubernetes.io/arch</code>로 OS·arch(이미지와 일치), <code>kubectl get storageclass</code></td></tr>
+<tr><td>작업 셸</td><td>WSL2 Ubuntu Bash에서 <b>같은 클러스터</b>의 kubectl context 사용 (<code>kubectl config get-contexts</code>)</td></tr>
+<tr><td>도구</td><td>kubectl, Python 3.9+ + PyYAML, curl, Docker Linux 엔진(<code>--strict</code> 스키마 검사), PostgreSQL 18 클라이언트(<code>pg_restore</code>). 이미지를 못 받을 때만 JDK 21·Git·rsync·Docker로 <code>infra/deploy/scripts/build-images.sh</code></td></tr>
+<tr><td>Gateway</td><td>Gateway API CRD + <b>Envoy Gateway</b> 기존 구성 기준. 외부 IP/LoadBalancer → Windows/WSL → 공유기 80/443 경로가 실제로 연결돼야 함</td></tr>
+<tr><td>네트워크</td><td>NetworkPolicy를 <b>실제로 강제하는 CNI</b></td></tr>
+<tr><td>DNS·TLS</td><td>DuckDNS가 현재 공인 IP를 가리키고 자동 갱신. namespace <code>plannet</code>에 신뢰된 인증서 Secret <code>plannet-tls</code> + 갱신 수단</td></tr>
+<tr><td>DB</td><td>PostgreSQL 18.6 별도 구축, <b>API Pod에서 닿는 private endpoint</b>, 영구 디스크, superuser 아닌 앱 역할 <code>plannet_app</code>. production overlay에 DB 없음, <code>local-verify</code>를 운영에 쓰지 않음</td></tr>
+</table>
+
+<h2>2. DB 이전 <small>— 상세 명령: <code>docs/guides/home-server-migration.md</code> · <code>docs/postgresql-operations.md</code></small></h2>
+<ol>
+<li>보내는 쪽: 모든 탭 저장 완료 → 기존 API 쓰기 중지 → 최종 dump. 원본 DB·dump는 이전 완료까지 보존.</li>
+<li>받는 쪽: 파일 SHA-256 일치 확인, 디렉터리 700·파일 600, 별도 장치에 사본.</li>
+<li><code>plannet_app</code> 소유의 <b>새 빈 DB</b>(예 <code>plannet_live_YYYYMMDD</code>)에 복원: <code>pg_restore --no-owner --no-privileges --exit-on-error --single-transaction -h &lt;db&gt; -U plannet_app -d &lt;새DB&gt; &lt;dump&gt;</code>. 기존 DB 덮어쓰기 금지, 실패 시 새 이름.</li>
+<li>앱 기동 전 받은 원본 건수·내용 해시와 대조: <code>plannet_user</code>·<code>planner_record</code>·<code>planner_commit_receipt</code>·<code>flyway_schema_history</code> 건수 + 계정 UUID·플랜 JSON·삭제 표식·버전·영수증 내용 (V4 migration 전).</li>
+<li>JDBC는 <code>jdbc:postgresql://&lt;private-endpoint&gt;:5432/&lt;새DB&gt;</code>. <b>localhost 금지</b>(Pod 자신을 가리킴).</li>
+</ol>
+
+<h2>3. 수정할 설정 <small>(비밀값은 Git에 넣지 않음)</small></h2>
+<table>
+<tr><th>파일 (<code>infra/deploy/k8s/…</code>)</th><th>할 일</th></tr>
+<tr><td><code>overlays/production/kustomization.yaml</code></td><td><code>images</code>의 <code>newName</code>/<code>newTag</code>를 받은 레지스트리·고정 태그로</td></tr>
+<tr><td><code>overlays/production/public/public.env</code></td><td>host·origin·callback은 이미 맞음(유지). <code>PLANNET_TRUSTED_PROXIES</code>를 실제 Envoy 프록시 pod IP 정규식으로 교체</td></tr>
+<tr><td><code>base/web.env</code></td><td><code>OPENGATEWAY_BASE_URL</code>·<code>OPENGATEWAY_MODEL</code>을 받은 값으로</td></tr>
+<tr><td>비공개 레지스트리</td><td><code>imagePullSecrets</code>는 운영자가 직접 구성 (매니페스트에 없음)</td></tr>
+</table>
+
+<h2>4. 적용 <small>(WSL Bash, 저장소 루트) — API·Web 각 1개, <code>Recreate</code> 전략이라 재배포 시 짧게 중단</small></h2>
+<pre>CTX='&lt;실제 context&gt;'; D=infra/deploy
+$D/scripts/create-secrets.sh --context "$CTX" --apply   # Google·AI 키·DB URL/USER/PW 비표시 입력
+#   TLS를 직접 넣을 때만: … --tls-cert &lt;fullchain.pem&gt; --tls-key &lt;privkey.pem&gt;
+$D/scripts/validate-manifests.sh --strict production
+kubectl --context "$CTX" apply -k "$D/k8s/overlays/production"
+kubectl --context "$CTX" -n plannet rollout status deployment/plannet-api
+kubectl --context "$CTX" -n plannet rollout status deployment/plannet-web
+$D/scripts/check-public.sh https://plannet-lab.duckdns.org</pre>
+
+<div class="two">
+<div>
+<h2>5. 완료 기준</h2>
+<table>
+<tr><th>검사</th><th>기대 결과</th></tr>
+<tr><td>HTTPS·로그인</td><td>유효 인증서, Google 로그인·로그아웃 정상</td></tr>
+<tr><td>계정·데이터</td><td>기존 두 계정 각자 플랜만 보임(격리). 저장 → 새로고침 → API 재시작 후에도 유지</td></tr>
+<tr><td>DB·AI</td><td>Flyway V1~V4 성공, 실제 AI 요청 성공</td></tr>
+<tr><td>백업</td><td>실제 운영 DB명으로 백업 → 다른 새 DB에 복원 확인, 매일 및 migration 직전 백업, 호스트 밖 사본 보관</td></tr>
+</table>
+<p>비공개 저장소 ≠ 비공개 서비스. 접속 제한은 별도 과제.</p>
+</div>
+<div>
+<h2>6. 복귀 · 회신</h2>
+<table>
+<tr><th>시점</th><th>방법</th></tr>
+<tr><td>홈서버 수정 전</td><td>기존 API 쓰기 재개 (원본 DB 그대로)</td></tr>
+<tr><td>홈서버 수정 후</td><td>양쪽 쓰기 중지 → <b>새 DB부터 백업</b>. 옛 DB만 재개하면 새 수정 유실</td></tr>
+</table>
+<p><b>운영자 회신:</b> 공개 URL · 배포한 커밋 SHA/이미지 태그 · DB 백업 위치(운영 DB명 포함) · 5단계 검사 결과</p>
+</div>
+</div>
+</div>
+</body>
+</html>

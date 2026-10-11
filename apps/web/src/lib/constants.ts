@@ -105,3 +105,30 @@ export const MONTHLY_COLORS = {
   goalComplete: '#22C55E', // green-500
   today: '#EF4444',        // red-500
 };
+
+// Tailwind md 경계. 이보다 좁으면 사이드바가 편집 화면을 덮는 모바일 배치다.
+export const MOBILE_BREAKPOINT_PX = 768;
+export const isMobileViewport = () =>
+  typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT_PX;
+
+/** 전역 CSS가 기본 outline을 지우므로 조작 요소의 키보드 초점을 indigo 링으로 표시한다 */
+export const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2';
+
+/**
+ * 행에 마우스를 올렸을 때만 보이던 조작. 키보드 초점이 행 안에 있거나 터치 기기(`touch:` 변형, globals.css)면 항상 보인다.
+ * 부모에 `group`이 있어야 한다.
+ */
+export const TOUCH_REVEAL = 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100';
+
+/** 자주 누르는 독립 버튼: 터치 기기에서 최소 44px. 밀집 그리드는 대신 `touch-hit`(globals.css)을 쓴다. */
+export const TOUCH_TARGET = 'touch:min-h-11 touch:min-w-11';
+
+/** 홈 화면 앱 색·아이콘 크기 (app/manifest.ts, layout viewport, lib/brandIcon.tsx) */
+export const BRAND_COLORS = {
+  background: '#f8fafc', // slate-50 (본문 바탕·manifest background/theme)
+  frame: '#c7d2fe', // indigo-200
+  cell: '#ffffff',
+  center: '#4f46e5', // indigo-600
+} as const;
+export const MANIFEST_ICON_SIZES = { 'icon-192.png': 192, 'icon-512.png': 512 } as const;
+export const APPLE_ICON_SIZE = 180;

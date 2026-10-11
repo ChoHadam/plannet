@@ -1,0 +1,25 @@
+# HTTPS 배포용. SPRING_PROFILES_ACTIVE=prod 로 켠다.
+# 필수 환경변수: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, PLANNET_TRUSTED_PROXIES
+server:
+  # TLS를 끝내는 Ingress/프록시가 보낸 X-Forwarded-* 헤더를 신뢰 프록시에서 온 경우에만 반영한다.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # 신뢰할 프록시 IP 정규식(예: "10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"). 기본값 없이 누락 시 기동 실패.
+      internal-proxies: ${PLANNET_TRUSTED_PROXIES}
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+      host-header: X-Forwarded-Host
+      port-header: X-Forwarded-Port
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+plannet:
+  storage:
+    enabled: ${PLANNET_STORAGE_ENABLED:true}
+  auth:
+    require-google-client: true
+    google:
+      redirect-uri: ${GOOGLE_REDIRECT_URI:}

@@ -1,10 +1,14 @@
 # 월간 플래너 (Monthly Compass)
 
+**저장·인증:** 서버 저장 활성화 시 계정별 PostgreSQL에 기록과 출처를 보존하고, 브라우저에는 캐시·미전송 초안을 남긴다. 기존 로컬 기록은 명시적으로 가져온다. 현재 선택·조회 기간은 기기별 상태다. [공통 저장 정책](../web-auth-integration.md)을 참고한다.
+
 ## 개요
 
 **컨셉: "Monthly Compass (월간 나침반)"**
 
 Mandalart(목표 설정)와 Block 6(일일 실행)를 연결하는 전략적 월간 대시보드.
+
+**플랜 탐색:** 사이드바는 카테고리별 최근 만든 5개를 보여준다. 이전 플랜은 `전체 플랜 · 검색` 또는 `더보기`에서 제목으로 찾아 다시 열 수 있다. [전체 목록 사용법](../plan-library.md)을 참고한다.
 
 | 템플릿 | 역할 |
 |--------|------|
@@ -26,8 +30,8 @@ Mandalart(목표 설정)와 Block 6(일일 실행)를 연결하는 전략적 월
 │   (30%)           │   (70%)                                     │
 │                   │                                             │
 │  ┌─────────────┐  │   ┌─────────────────────────────────────┐   │
-│  │ 일 월 화 수 │  │   │ 이달의 목표 (3~5개)                  │   │
-│  │ 목 금 토    │  │   │ ☐ 목표 1  ────────────── [50%]     │   │
+│  │ 월 화 수 목 │  │   │ 이달의 목표 (3~5개)                  │   │
+│  │ 금 토 일    │  │   │ ☐ 목표 1  ────────────── [50%]     │   │
 │  │             │  │   │ ☐ 목표 2  ────────────── [30%]     │   │
 │  │  1  2  3  4 │  │   │ ☐ 목표 3  ────────────── [0%]      │   │
 │  │  5  6  7  8 │  │   └─────────────────────────────────────┘   │
@@ -39,7 +43,8 @@ Mandalart(목표 설정)와 Block 6(일일 실행)를 연결하는 전략적 월
 │  └─────────────┘  │   │ W3: ____________________________    │   │
 │                   │   │ W4: ____________________________    │   │
 │   (주간 포커스가  │   │ W5: ____________________________    │   │
-│    캘린더에 표시) │   └─────────────────────────────────────┘   │
+│    캘린더에 표시) │   │ W6: (6주인 달)                      │   │
+│                   │   └─────────────────────────────────────┘   │
 │                   │                                             │
 │                   │   ┌─────────────────────────────────────┐   │
 │                   │   │ 메모                                 │   │
@@ -63,11 +68,12 @@ export interface MonthlyGoal {
   text: string;
   progress: number; // 0-100
   completed: boolean;
-  sourceMandalartId?: string; // 만다라트에서 불러온 경우 출처 ID
+  sourceMandalartId?: string; // 만다라트에서 불러온 경우 실제 원본 플랜 ID
+  sourceCellId?: string; // 원본 셀 ID (플랜 ID와 함께 식별)
 }
 
 export interface WeeklyFocus {
-  weekNumber: number; // 1-5
+  weekNumber: number; // 1..6 (MAX_WEEKS_IN_MONTH)
   text: string;
 }
 
@@ -78,25 +84,17 @@ export interface MonthlyData {
   template: 'monthly';
   year: number;
   month: number; // 1-12
-  goals: MonthlyGoal[]; // 최대 5개
-  weeklyFocus: WeeklyFocus[]; // 5개 (W1-W5)
+  goals: MonthlyGoal[]; // 목표 목록 (가져오기 UI는 5개까지 안내)
+  weeklyFocus: WeeklyFocus[]; // W1~W5(이전 플랜) 또는 W1~W6(새 플랜·W6 작성 후)
   memo: string;
   createdAt: string;
   updatedAt: string;
 }
 ```
 
-### 수정 파일: `src/types/mandalart.ts`
+### 공통 템플릿 타입과 등록
 
-```typescript
-export type TemplateType = 'mandalart' | 'block6' | 'monthly';
-
-export const TEMPLATE_LABELS: Record<TemplateType, string> = {
-  mandalart: '만다라트',
-  block6: 'Block 6',
-  monthly: '월간 플래너',
-};
-```
+`src/types/mandalart.ts`의 `TemplateType`은 `mandalart`, `block6`, `monthly`, `daily`를 포함한다. 각 템플릿의 표시 이름, 허용 카테고리, store 액션, 가이드·그리드 컴포넌트는 `src/lib/templateRegistry.ts`에서 관리한다. Monthly는 월간 카테고리의 기본 템플릿이다.
 
 ---
 
@@ -104,8 +102,8 @@ export const TEMPLATE_LABELS: Record<TemplateType, string> = {
 
 ### 신규 파일: `src/hooks/useMonthly.ts`
 
-- localStorage key: `'plannet-monthly'`
-- persist 미들웨어 + skipHydration (기존 패턴)
+- 비로그인 localStorage key: `'plannet-monthly'`. 로그인 시 계정별 캐시를 사용하며 서버 저장 활성화 시 PostgreSQL에 동기화한다. 기존 비로그인 기록은 명시적으로 가져오고 원본을 보존한다. [공통 저장 정책](../web-auth-integration.md)을 따른다.
+- persist 미들웨어 + skipHydration. 인증 상태와 저장 범위를 확인한 뒤 복원한다.
 
 **주요 액션:**
 
@@ -113,6 +111,7 @@ export const TEMPLATE_LABELS: Record<TemplateType, string> = {
 interface MonthlyStore {
   monthlyPlans: MonthlyData[];
   currentMonthlyId: string | null;
+  viewedMonth: { category: PlanCategory; year: number; month: number } | null;
 
   // CRUD
   createMonthlyPlan: (category: PlanCategory, year: number, month: number) => string;
@@ -125,7 +124,7 @@ interface MonthlyStore {
   updateGoalProgress: (goalId: string, progress: number) => void;
   toggleGoalCompleted: (goalId: string) => void;
   deleteGoal: (goalId: string) => void;
-  importActionPlans: (actionPlans: string[], sourceMandalartId?: string) => void;
+  importActionPlans: (items: Array<{ text: string; cellId: string; sourceMandalartId?: string }>, legacySourceId?: string) => void;
 
   // Weekly Focus
   updateWeeklyFocus: (weekNumber: number, text: string) => void;
@@ -135,6 +134,7 @@ interface MonthlyStore {
 
   // Navigation
   navigateMonth: (direction: 'prev' | 'next') => void;
+  updatePlanDate: (year?: number, month?: number) => void;
 }
 ```
 
@@ -158,13 +158,14 @@ interface MonthlyStore {
 ### 컴포넌트 상세
 
 **CompactCalendar.tsx:**
-- 7열 x 5~6행 그리드 (주 단위로 구성)
-- 각 주(row) 옆에 주간 포커스 텍스트 표시
+- 7열(월~일) x 4~6행. 행·W 번호는 공통 주차 규칙(`getWeeksOfMonth`)과 같고 다른 달 날짜는 빈 칸
+- 토요일 파랑·일요일 빨강(공휴일 색이 우선), W 라벨·안내는 `text-xs`
+- 캘린더 아래에 주차별 포커스 목록(이 달에 없는 주의 보관 내용 포함)
 - 오늘 날짜 강조
 - WeeklyFocus 컴포넌트에서 입력한 내용이 캘린더에 반영
 
 **MonthlyGoals.tsx:**
-- 최대 5개 목표
+- 직접 목표 추가 및 가져오기 (가져오기 UI는 총 5개까지 선택)
 - 각 목표: 텍스트 + 진행률 바 (0-100%)
 - 드래그로 진행률 조절 또는 직접 입력
 - 체크박스로 완료 토글
@@ -177,8 +178,19 @@ interface MonthlyStore {
 - 선택된 항목을 평면적인 월간 목표로 추가
 
 **WeeklyFocus.tsx:**
-- W1~W5 라벨 + 텍스트 입력
-- 해당 주의 핵심 과업/집중 영역 기입
+- 그 달의 주 수(4·5·6)만큼 W 라벨 + 텍스트 입력. 행은 키보드로 열 수 있는 버튼
+- Enter 저장·Esc 취소, 한글 조합 중 Enter는 `isImeComposing`으로 거른다
+- 내용이 같으면 저장하지 않는다
+
+### 주차와 W6 (2026-10-04)
+
+| 규칙 | 내용 |
+|---|---|
+| 주차 | 월~일, 그 달 1일이 든 주가 W1. 한 달은 4·5·6주. Monthly·Block6·Daily·날짜 선택기·이번 주 포커스가 `lib/weekUtils.ts` 하나를 쓴다 |
+| 새 플랜 | `weeklyFocus` W1~W6 6개 |
+| 이전 플랜(5개) | 그대로 읽고 저장한다. 불러오기·주소 이동·날짜 변경만으로 바꾸지 않는다. W6에 내용을 적을 때만 끝에 `{ weekNumber: 6 }`을 추가(기존 5개는 그대로) |
+| 날짜 변경·복제 | `weeklyFocus`를 그대로 둔다. 새 달에 없는 주(4주 달의 W5·W6, 5주 달의 W6)에 내용이 있으면 `이 달에 없는 주 · 보관된 내용` 안내와 함께 편집 가능한 행으로 보여 준다. 빈 행은 숨긴다. 원래 달로 돌아오면 다시 일반 행 |
+| 저장 계약 | 5개(1~5) 또는 6개(1~6), 빠짐·중복 없음 — [저장 계약](../contracts/planner-storage-v1.md) |
 
 ---
 
@@ -213,43 +225,15 @@ export function extractGroupedActionPlans(mandalartData: MandalartData): Grouped
 
 ## UI 통합
 
-### 수정 파일: `src/components/Sidebar.tsx`
+### 레지스트리와 사이드바
 
-```typescript
-// templates 배열에 추가
-{ type: 'monthly', description: '월간 목표와 주간 계획', hasGuide: true }
+`src/lib/templateRegistry.ts`의 Monthly 항목은 `MonthlyGrid`, `MonthlyGuide`, store의 생성·선택·날짜 변경 액션을 연결한다. `Sidebar`는 `useAllPlansReactive()`로 네 템플릿의 플랜을 모아 카테고리별로 표시하며, 템플릿별 목록을 직접 합치는 별도 분기를 두지 않는다. `selectExclusive()`는 다른 템플릿의 선택을 해제하고 Monthly/Daily의 빈 기간 조회 상태도 지운다.
 
-// useMonthlyStore import 및 플랜 표시
-const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
+### 복원과 화면 선택
 
-// getPlansByCategory에 monthly 추가
-const getPlansByCategory = (category: PlanCategory): PlanData[] => {
-  const mandalartPlans = mandalarts.filter((m) => m.category === category);
-  const block6Plans = block6PlansData.filter((p) => p.category === category);
-  const monthlyPlansList = monthlyPlans.filter((p) => p.category === category);
-  return [...mandalartPlans, ...block6Plans, ...monthlyPlansList];
-};
-```
+`src/app/page.tsx`는 `useAllHydrated()`가 완료될 때까지 로딩 화면을 보여준다. 실제 복원은 `usePlannerStorageHydration()`이 인증과 저장 범위를 확인한 뒤 시작한다.
 
-### 수정 파일: `src/app/page.tsx`
-
-```typescript
-import { MonthlyGrid } from '@/components/Monthly';
-import { useMonthlyStore, useMonthlyHydration } from '@/hooks/useMonthly';
-
-// hydration
-useMonthlyHydration();
-
-// 현재 템플릿 결정
-const currentMonthlyId = useMonthlyStore((state) => state.currentMonthlyId);
-const currentTemplate = currentMandalartId ? 'mandalart'
-  : currentBlock6Id ? 'block6'
-  : currentMonthlyId ? 'monthly'
-  : null;
-
-// 렌더링
-{currentTemplate === 'monthly' && <MonthlyGrid />}
-```
+복원 후에는 `useAllPlansReactive()`의 `currentTemplate`을 우선 표시한다. 선택한 플랜이 없으면 `viewedMonth` 또는 `viewedDay`로 빈 기간의 템플릿을 유지하고, 선택과 조회 기간이 모두 없을 때 플랜 선택 안내를 보여준다. 그리드는 `templateRegistry[displayedTemplate].GridComponent`로 렌더링한다.
 
 ### 수정 파일: `src/lib/constants.ts`
 
@@ -271,7 +255,13 @@ export const MONTHLY_COLORS = {
 1. **월간 나침반 소개**: 한 달의 방향을 설정하는 도구
 2. **이달의 목표**: 3~5개의 핵심 목표 설정
 3. **주간 포커스**: 각 주에 집중할 영역 기입 (캘린더에 표시됨)
-4. **시작하기** 버튼
+4. **시작하기** 버튼: 템플릿 선택에서 연 경우 날짜 선택으로 이어진다. 편집 헤더의 `사용법`으로 연 경우 버튼 이름은 `확인`이며 닫기만 한다
+
+가이드는 생성 필수 단계가 아니다. 새 플랜은 템플릿 → 날짜 확인으로 바로 만들어진다. 사용법은 템플릿 선택의 `월간 플래너 사용법 보기` 또는 편집 헤더의 `사용법` 버튼으로 연다.
+
+키보드: 이름이 `월간 플래너 사용법`인 dialog로 열리고 초점이 대화상자에 들어온다. Tab은 안에서 순환하고 Esc는 닫기(템플릿 선택에서 열었으면 템플릿 선택으로 복귀, 헤더에서 열었으면 `사용법` 버튼으로 초점 복귀)와 같다. 다른 가이드(만다라트·Block 6·투두리스트)도 같은 `useModalDialog` 동작을 쓴다.
+
+**작업 복귀·사용법:** 선택한 플랜은 주소 `?template=monthly&plan=<ID>`(선택 정보만, 제목·내용 없음)로 새로고침·새 탭·뒤로/앞으로에서 다시 열린다. 이 계정에서 불러온 목록에 없는 ID는 열지 않고 안내한다. 새 플랜 생성은 템플릿 → 날짜 확인으로 끝나며 가이드가 끼어들지 않는다. `월간 플래너 사용법`은 편집 헤더의 `사용법` 버튼이나 템플릿 선택의 `월간 플래너 사용법 보기` 버튼으로 연다. [작업 복귀 보고](../session-reports/work-resumption.md)
 
 ---
 
@@ -328,3 +318,27 @@ export const MONTHLY_COLORS = {
 - 습관 트래커 추가
 - 월말 회고 섹션
 - 월간 리포트 생성
+
+
+## 기간 탐색과 날짜 변경
+
+- 그리드의 `이전 달` / `다음 달`은 조회 기간을 이동한다. 원래 플랜의 날짜, 목표, 주간 포커스, 메모, `updatedAt`을 수정하지 않는다.
+- 같은 카테고리·연월의 플랜이 있으면 그 플랜을 선택한다. 복사본 등 여러 개가 있으면 `createdAt`이 최신인 플랜을 열고, 시각이 같으면 ID 오름차순으로 결정한다. 다른 복사본은 사이드바·전체 목록에서 각각 열 수 있으며 합치지 않는다.
+- 플랜이 없는 달에는 빈 화면과 `이 달의 플랜 만들기` 버튼을 표시한다. 버튼을 눌러야 새 플랜이 생긴다. 기존 제목과 편집 헤더는 표시하지 않는다.
+- 빈 조회 기간은 `viewedMonth`로 저장한다. 기존 저장 데이터에 이 필드가 없어도 복원할 수 있다. 조회 상태는 브라우저에만 보관하고 플랜 내용은 활성 저장 모드에 따라 계정별로 복원한다.
+- 다른 템플릿·플랜을 선택하거나 새 플랜을 만들면 조회 기간을 해제한다. 목표 입력·가져오기·완료 동기화 등은 선택된 플랜이 있을 때만 동작한다.
+- 헤더의 날짜 버튼(`플랜 날짜 변경`)은 **현재 선택한 플랜 자체의 날짜를 재지정**한다. 같은 달의 다른 플랜은 보존하며, 같은 날짜를 다시 확인해도 `updatedAt`을 바꾸지 않는다.
+
+## 여러 만다라트에서 가져오기
+
+- `이번 달 추천`은 모든 만다라트의 대상 셀을 모아 보여주며 항목마다 원본 제목을 표시한다. 선택한 드롭다운 플랜이 비어 있어도 다른 플랜의 추천 항목을 가져올 수 있다.
+- 선택·중복 판정은 `원본 플랜 ID + 셀 ID` 조합을 쓴다. 서로 다른 만다라트의 `top-left-0`은 각각 선택할 수 있다. 같은 셀이 추천과 세부 목표 목록에 함께 나와도 한 번만 추가한다.
+- 새 목표는 항목별 `sourceMandalartId`와 `sourceCellId`를 저장한다. 같은 출처를 이미 가져왔다면 재선택을 막으며, store도 동일 출처 중복을 거른다.
+- 완료 체크는 사용자가 `둘 다 완료`를 선택한 경우에만 저장된 원본 플랜·셀에 반영한다. `월간만 완료`는 원본을 수정하지 않는다. 슬라이더·진행률 버튼은 월간 목표만 변경한다.
+- 기존 단일 출처 호출(`importActionPlans(items, sourceId)`)과 저장된 목표는 계속 지원한다. 출처 없는 목표도 독립적으로 사용할 수 있다. 과거 오류로 잘못 저장된 출처를 추측해서 바꾸지는 않는다.
+
+전용 회귀 테스트: `cd apps/web && ../../node_modules/.bin/playwright test --config playwright.period-and-import.config.ts`.
+
+## API 저장 호환 (2026-10-05)
+
+서버는 `weeklyFocus` 5개(주 번호 1~5) 또는 6개(1~6)를 받으며, 중복·누락·범위 밖 번호는 거부한다. 이전 5개 기록을 읽기만으로 6개로 바꾸지 않는다. W6 화면 변경은 별도이며 API를 먼저 또는 함께 반영한다.

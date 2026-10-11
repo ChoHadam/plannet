@@ -1,0 +1,120 @@
+# Disposable rehearsal database, never included by the production overlay.
+apiVersion: v1
+kind: Service
+metadata:
+  name: plannet-db
+  namespace: plannet
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: plannet-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: plannet-db
+  namespace: plannet
+spec:
+  serviceName: plannet-db
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plannet-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plannet-db
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: postgres:18.6-bookworm
+          env:
+            - { name: PGDATA, value: /var/lib/postgresql/18/docker }
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_DB, value: postgres }
+            - { name: POSTGRES_PASSWORD_FILE, value: /run/plannet/admin_password }
+            - { name: POSTGRES_INITDB_ARGS, value: "--auth-host=scram-sha-256 --auth-local=scram-sha-256" }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          # TCP on loopback: the entrypoint's temporary init server listens on the Unix socket only,
+          # so the pod stays unready until the final server that API connections use is accepting.
+          startupProbe:
+            exec: { command: [pg_isready, -h, 127.0.0.1, -p, "5432", -U, postgres, -d, postgres] }
+            periodSeconds: 2
+            failureThreshold: 90
+          readinessProbe:
+            exec: { command: [pg_isready, -h, 127.0.0.1, -p, "5432", -U, postgres, -d, postgres] }
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          volumeMounts:
+            # PG18 layout: PGDATA lives under the mount, matching the image VOLUME /var/lib/postgresql.
+            - { name: data, mountPath: /var/lib/postgresql }
+            - { name: credentials, mountPath: /run/plannet, readOnly: true }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            - { name: socket, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+            - { name: shm, mountPath: /dev/shm }
+      volumes:
+        - name: credentials
+          secret:
+            secretName: plannet-db-secret
+            defaultMode: 0440
+            items:
+              - { key: ADMIN_PASSWORD, path: admin_password }
+              - { key: APP_PASSWORD, path: app_password }
+        - name: init
+          # Executable so the entrypoint runs it in a child shell instead of sourcing it.
+          configMap: { name: plannet-db-init, defaultMode: 0555 }
+        - name: socket
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 128Mi }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: { storage: 1Gi }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plannet-db-ingress
+  namespace: plannet
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plannet-db
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: plannet-api }
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: plannet-db-maintenance }
+      ports:
+        - { protocol: TCP, port: 5432 }

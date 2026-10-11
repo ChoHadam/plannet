@@ -2,6 +2,7 @@
 
 import { Cell } from './Cell';
 import { CellData, GridPosition } from '@/types/mandalart';
+import { FOCUS_RING } from '@/lib/constants';
 
 interface SubGridProps {
   gridId: GridPosition;
@@ -16,8 +17,8 @@ interface SubGridProps {
   onColorClick?: () => void;
   isCenter?: boolean;
   disabled?: boolean;
-  /** 셀 탭 시 호출. 모바일에서 중앙 셀 → 외곽 그리드 펼치기 같은 용도. */
-  onCellTap?: (cellIndex: number) => void;
+  /** disabled여도 편집할 수 있는 셀. 모바일 상세에서 빈 하위 목표(외곽 가운데 칸)를 입력하는 용도. */
+  editableCellIndex?: number;
 }
 
 export function SubGrid({
@@ -32,7 +33,7 @@ export function SubGrid({
   onColorClick,
   isCenter = false,
   disabled = false,
-  onCellTap,
+  editableCellIndex,
 }: SubGridProps) {
   return (
     <div
@@ -42,7 +43,7 @@ export function SubGrid({
         p-1 rounded-lg
         transition-all duration-300
         ${isCenter ? 'ring-2 ring-amber-400/50 shadow-xl' : 'shadow-md'}
-        ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}
+        ${disabled && editableCellIndex === undefined ? 'opacity-50 grayscale cursor-not-allowed' : ''}
       `}
       style={{ backgroundColor: color }}
     >
@@ -61,7 +62,7 @@ export function SubGrid({
             isSubGoal={isSubGoal}
             backgroundColor={cellBgColor}
             placeholder={isMainGoal ? '핵심 목표' : isSubGoal ? '하위 목표' : ''}
-            disabled={disabled}
+            disabled={disabled && index !== editableCellIndex}
             completed={cell.completed ?? false}
             onToggleCompleted={onToggleCellCompleted ? () => onToggleCellCompleted(index) : undefined}
             icon={cell.icon}
@@ -73,30 +74,31 @@ export function SubGrid({
                 ? () => onScheduleClick(index)
                 : undefined
             }
-            onTap={onCellTap ? () => onCellTap(index) : undefined}
           />
         );
       })}
 
-      {/* 팔레트 버튼 (우측 상단) */}
+      {/* 팔레트 버튼 (우측 상단). 터치에서는 늘 보이는 셀 이모지 버튼(히트 영역 44px)과 겹치지 않게
+          그리드 바깥 여백(그리드 사이 gap-2·모바일 p-3)으로 8px 내보내고 위에 둔다. */}
       {!disabled && onColorClick && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             onColorClick();
           }}
-          className="
-            absolute top-0 right-0
-            w-7 h-7 rounded-full
+          aria-label="색상 변경"
+          className={`
+            absolute top-0 right-0 touch:-top-2 touch:-right-2
+            w-7 h-7 rounded-full ${FOCUS_RING}
             bg-white hover:bg-slate-50
-            opacity-0 group-hover:opacity-100
-            max-sm:opacity-80
+            opacity-0 group-hover:opacity-100 group-focus-within:opacity-100
+            touch:opacity-80
             transition-all duration-200
             hover:scale-110
             flex items-center justify-center
             shadow-lg border border-slate-200
-            z-10
-          "
+            z-10 touch:z-30
+          `}
           title="색상 변경"
         >
           <div className="grid grid-cols-2 gap-0.5">

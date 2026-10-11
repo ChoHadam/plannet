@@ -2,7 +2,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage } from '@/lib/plannerStorage';
 import {
   MandalartData,
   SubGridData,
@@ -23,6 +24,8 @@ interface MandalartStore {
   // Multiple plans support
   mandalarts: MandalartData[];
   currentId: string | null;
+  // Transient identity for destructive replacement; excluded from persisted planner data.
+  resetToken: object | null;
 
   // Computed getter
   data: MandalartData | null;
@@ -42,6 +45,7 @@ interface MandalartStore {
   updateTitle: (title: string) => void;
   updatePlanDate: (year?: number, month?: number, week?: number, day?: number) => void;
   resetCurrent: () => void;
+  replaceCurrentMandalart: (data: MandalartData) => boolean;
 
   // Cell schedule
   updateCellSchedule: (gridId: GridPosition, cellIndex: number, schedule: CellSchedule | undefined) => void;
@@ -88,6 +92,7 @@ export const useMandalartStore = create<MandalartStore>()(
     (set, get) => ({
       mandalarts: [],
       currentId: null,
+      resetToken: null,
 
       get data() {
         const state = get();
@@ -471,14 +476,37 @@ export const useMandalartStore = create<MandalartStore>()(
           if (mandalartIndex === -1) return state;
 
           const oldMandalart = state.mandalarts[mandalartIndex];
-          const newMandalart = createInitialMandalart(oldMandalart.category, oldMandalart.title);
-          newMandalart.id = oldMandalart.id; // Keep same ID
+          // 초기화는 칸 내용만 비운다. ID·제목·플랜 날짜는 유지한다.
+          const newMandalart: MandalartData = {
+            ...createInitialMandalart(oldMandalart.category, oldMandalart.title),
+            id: oldMandalart.id,
+            year: oldMandalart.year,
+            month: oldMandalart.month,
+            week: oldMandalart.week,
+            day: oldMandalart.day,
+          };
 
           const newMandalarts = [...state.mandalarts];
           newMandalarts[mandalartIndex] = newMandalart;
 
-          return { mandalarts: newMandalarts };
+          return { mandalarts: newMandalarts, resetToken: {} };
         });
+      },
+
+      // Import has already validated the data. Preserve the selected local identity and
+      // invalidate pending work in the same notification as the complete replacement.
+      replaceCurrentMandalart: (data: MandalartData) => {
+        let replaced = false;
+        set((state) => {
+          const index = state.mandalarts.findIndex((plan) => plan.id === state.currentId);
+          if (index === -1) return state;
+
+          const mandalarts = [...state.mandalarts];
+          mandalarts[index] = { ...data, id: mandalarts[index].id, updatedAt: new Date().toISOString() };
+          replaced = true;
+          return { mandalarts, resetToken: {} };
+        });
+        return replaced;
       },
 
       updateCellSchedule: (gridId: GridPosition, cellIndex: number, schedule: CellSchedule | undefined) => {
@@ -566,6 +594,8 @@ export const useMandalartStore = create<MandalartStore>()(
     }),
     {
       name: STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
       version: 3,
       skipHydration: true,
       partialize: (state) => ({
@@ -600,14 +630,5 @@ export const useMandalartStore = create<MandalartStore>()(
   )
 );
 
-// Hydration hook for Next.js
-export const useHydration = () => {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    useMandalartStore.persist.rehydrate();
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useHydration = (): boolean => usePersistHydrated(useMandalartStore);

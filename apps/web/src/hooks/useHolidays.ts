@@ -2,10 +2,11 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useEffect, useState } from 'react';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated';
+import { plannerStorage, PLANNER_STORAGE_KEYS } from '@/lib/plannerStorage';
 import { ManualHoliday, ManualHolidayMap, toIsoDate } from '@/lib/holidays';
 
-const STORAGE_KEY = 'plannet-holidays';
+const STORAGE_KEY = PLANNER_STORAGE_KEYS.holidays;
 
 interface HolidayStore {
   manualHolidays: ManualHolidayMap;
@@ -53,6 +54,8 @@ export const useHolidayStore = create<HolidayStore>()(
     }),
     {
       name: STORAGE_KEY,
+      // 계정 범위가 정해진 뒤 usePlannerStorageHydration에서 한 번에 복원한다.
+      storage: plannerStorage,
       version: 1,
       skipHydration: true,
       partialize: (state) => ({
@@ -62,11 +65,5 @@ export const useHolidayStore = create<HolidayStore>()(
   ),
 );
 
-export const useHolidayHydration = (): boolean => {
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    useHolidayStore.persist.rehydrate();
-    setHydrated(true);
-  }, []);
-  return hydrated;
-};
+// 복원 완료 여부 (복원 시작은 usePlannerStorageHydration 담당)
+export const useHolidayHydration = (): boolean => usePersistHydrated(useHolidayStore);

@@ -1,4 +1,5 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { createPlan } from './support/helpers';
 
 // 각 테스트는 격리된 브라우저 컨텍스트 (빈 localStorage)에서 실행
 // 카테고리 순서: 연간(0), 월간(1), 주간(2), 일간(3)
@@ -145,7 +146,9 @@ test.describe('템플릿 공통 플로우', () => {
     await expect(page.locator('text=플랜을 삭제하시겠습니까?')).toBeVisible();
     await page.locator('button:has-text("삭제")').last().click();
 
-    await expect(page.locator('text=플랜을 선택하거나 새로 만들어주세요')).toBeVisible({ timeout: 3000 });
+    // 선택이 사라지면 빈 작업 공간(오늘 할 일·최근 작업)으로 돌아간다.
+    await expect(page.getByRole('heading', { name: '오늘 할 일' })).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('input[placeholder="나의 투두리스트"]')).toHaveCount(0);
   });
 
   test('제목 편집', async ({ page }) => {
@@ -160,43 +163,6 @@ test.describe('템플릿 공통 플로우', () => {
     await expect(page.locator('text=오늘의 할 일')).toBeVisible();
   });
 });
-
-// 헬퍼: 플랜 생성 (카테고리 인덱스로 적합한 + 버튼 클릭)
-async function createPlan(page: Page, templateName: string, categoryIndex: number) {
-  // 해당 카테고리의 + 버튼 클릭
-  const createBtn = page.locator('button[title="새로 만들기"]').nth(categoryIndex);
-  await createBtn.click();
-
-  // 템플릿 선택 모달에서 클릭
-  await expect(page.locator('text=템플릿을 선택하세요')).toBeVisible({ timeout: 3000 });
-  await page.locator(`button:has-text("${templateName}")`).first().click();
-
-  // DatePicker 모달 → 확인
-  const dateConfirm = page.getByRole('button', { name: '확인', exact: true });
-  await expect(dateConfirm).toBeVisible({ timeout: 3000 });
-  await dateConfirm.click();
-
-  // 가이드 모달 → "시작하기" 찾을 때까지 "다음" 클릭
-  await dismissGuide(page);
-}
-
-async function dismissGuide(page: Page) {
-  for (let i = 0; i < 10; i++) {
-    const startBtn = page.locator('button:has-text("시작하기")');
-    if (await startBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-      await startBtn.click();
-      return;
-    }
-
-    const nextBtn = page.locator('button:has-text("다음")');
-    if (await nextBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-      await nextBtn.click();
-      continue;
-    }
-
-    break;
-  }
-}
 
 function createTestSnapshot(overrides: Record<string, unknown> = {}) {
   return {

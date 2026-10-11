@@ -16,6 +16,7 @@ import {
 import { BlockCard } from './BlockCard';
 import { TodoBacklog } from './TodoBacklog';
 import { WeeklyFocusRef } from './WeeklyFocusRef';
+import { MoveTodoContext, MoveTodoDialog, MoveTodoRequest } from './MoveTodo';
 import { useHolidayStore } from '@/hooks/useHolidays';
 import { getHolidaysInWeek, toIsoDate } from '@/lib/holidays';
 import { getWeekDates } from '@/lib/weekUtils';
@@ -68,6 +69,7 @@ export function Block6GridMobile() {
   };
   const [selectedDay, setSelectedDay] = useState<DayOfWeek>(TODAY_INDEX_MAP[todayDayOfWeek] || 'mon');
   const [activeTodo, setActiveTodo] = useState<TodoItem | null>(null);
+  const [moveRequest, setMoveRequest] = useState<MoveTodoRequest | null>(null);
 
   // 아코디언 펼침 상태
   const [showSidebar, setShowSidebar] = useState(false);
@@ -151,165 +153,177 @@ export function Block6GridMobile() {
   };
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="w-full max-w-screen-md mx-auto px-2 flex flex-col gap-3">
-        {/* 아코디언 헤더: 주간 포커스 + 백로그 + 고정 할일 */}
-        <button
-          onClick={() => setShowSidebar((v) => !v)}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-lg
-                   bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-            주간 포커스 · 백로그 · 고정 할일
-          </span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`transition-transform ${showSidebar ? 'rotate-180' : ''}`}
+    <MoveTodoContext.Provider value={setMoveRequest}>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="w-full max-w-screen-md mx-auto px-2 flex flex-col gap-3">
+          {/* 아코디언 헤더: 주간 포커스 + 백로그 + 고정 할일 */}
+          <button
+            onClick={() => setShowSidebar((v) => !v)}
+            aria-expanded={showSidebar}
+            className="w-full flex items-center justify-between px-3 py-2 touch:min-h-11 rounded-lg
+                     bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition-colors"
           >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+            <span className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+              주간 포커스 · 백로그 · 고정 할일
+            </span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${showSidebar ? 'rotate-180' : ''}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
-        {showSidebar && (
-          <div className="flex flex-col gap-3 pb-2 border-b border-slate-200">
-            <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
-            {/* TodoBacklog는 데스크탑 사이드바 폭(w-48)을 가정하지만 모바일은 w-full로 확장 */}
-            <div className="w-full">
-              <TodoBacklog
-                todos={data.backlog}
-                onAddTodo={addBacklogTodo}
-                onToggleTodo={toggleBacklogTodo}
-                onUpdateTodo={updateBacklogTodo}
-                onDeleteTodo={deleteBacklogTodo}
-                onColorChange={updateBacklogTodoColor}
-                onDuplicate={duplicateBacklogTodo}
-              />
+          {showSidebar && (
+            <div className="flex flex-col gap-3 pb-2 border-b border-slate-200">
+              <WeeklyFocusRef planYear={data.year} planMonth={data.month} planWeek={data.week} />
+              {/* TodoBacklog는 데스크탑 사이드바 폭(w-48)을 가정하지만 모바일은 w-full로 확장 */}
+              <div className="w-full">
+                <TodoBacklog
+                  todos={data.backlog}
+                  onAddTodo={addBacklogTodo}
+                  onToggleTodo={toggleBacklogTodo}
+                  onUpdateTodo={updateBacklogTodo}
+                  onDeleteTodo={deleteBacklogTodo}
+                  onColorChange={updateBacklogTodoColor}
+                  onDuplicate={duplicateBacklogTodo}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 요일 탭 — 7일 가로 스크롤 가능 */}
+          <div className="overflow-x-auto -mx-2 px-2">
+            <div className="flex gap-1.5 min-w-min">
+              {DAYS_OF_WEEK.map((day) => {
+                const isSelected = selectedDay === day;
+                const isWeekend = day === 'sat' || day === 'sun';
+                const date = dateByDay[day];
+                const iso = date ? toIsoDate(date) : '';
+                const holiday = iso ? holidayMap[iso] : undefined;
+                const isHoliday = !!holiday;
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDay(day)}
+                    className={`
+                      flex-shrink-0 flex flex-col items-center justify-center
+                      min-w-[44px] h-14 rounded-lg
+                      text-xs font-bold transition-colors
+                      ${isSelected
+                        ? 'bg-slate-800 text-white'
+                        : isHoliday
+                        ? 'bg-red-50 text-red-600'
+                        : isWeekend
+                        ? 'bg-slate-100 text-slate-500'
+                        : 'bg-white text-slate-600 border border-slate-200'}
+                    `}
+                  >
+                    <span>{DAY_LABELS[day]}</span>
+                    {date && (
+                      <span className="text-[10px] font-normal opacity-80 leading-none mt-0.5">
+                        {date.getMonth() + 1}/{date.getDate()}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        )}
 
-        {/* 요일 탭 — 7일 가로 스크롤 가능 */}
-        <div className="overflow-x-auto -mx-2 px-2">
-          <div className="flex gap-1.5 min-w-min">
-            {DAYS_OF_WEEK.map((day) => {
-              const isSelected = selectedDay === day;
-              const isWeekend = day === 'sat' || day === 'sun';
-              const date = dateByDay[day];
-              const iso = date ? toIsoDate(date) : '';
-              const holiday = iso ? holidayMap[iso] : undefined;
-              const isHoliday = !!holiday;
+          {/* 선택된 요일의 휴일 표시 */}
+          {(() => {
+            const date = dateByDay[selectedDay];
+            if (!date) return null;
+            const iso = toIsoDate(date);
+            const holiday = holidayMap[iso];
+            if (!holiday) return null;
+            return (
+              <div
+                className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-xs flex items-center justify-between"
+                onClick={() => {
+                  if (holiday.source === 'auto') return;
+                  toggleManualHoliday(date);
+                }}
+              >
+                <span className="font-medium">{holiday.name || '휴일'}</span>
+                <span className="text-[10px] text-red-500">
+                  {holiday.source === 'auto' ? '공휴일' : '수동 · 탭하여 해제'}
+                </span>
+              </div>
+            );
+          })()}
+
+          {/* 선택된 요일의 6블록 세로 스택 */}
+          <div className="flex flex-col gap-2">
+            {BLOCK_NUMBERS.map((blockNumber) => {
+              const timeOfDay = BLOCK_TIME_OF_DAY[blockNumber];
+              const style = TIME_STYLES[timeOfDay];
+              const isFirstInGroup = blockNumber === 1 || blockNumber === 3 || blockNumber === 5;
+              const block = getBlock(selectedDay, blockNumber);
+              if (!block) return null;
+
               return (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDay(day)}
-                  className={`
-                    flex-shrink-0 flex flex-col items-center justify-center
-                    min-w-[44px] h-14 rounded-lg
-                    text-xs font-bold transition-colors
-                    ${isSelected
-                      ? 'bg-slate-800 text-white'
-                      : isHoliday
-                      ? 'bg-red-50 text-red-600'
-                      : isWeekend
-                      ? 'bg-slate-100 text-slate-500'
-                      : 'bg-white text-slate-600 border border-slate-200'}
-                  `}
-                >
-                  <span>{DAY_LABELS[day]}</span>
-                  {date && (
-                    <span className="text-[10px] font-normal opacity-80 leading-none mt-0.5">
-                      {date.getMonth() + 1}/{date.getDate()}
-                    </span>
+                <React.Fragment key={blockNumber}>
+                  {isFirstInGroup && (
+                    <div
+                      className={`
+                        flex items-center gap-2 px-3 py-1.5 rounded-lg
+                        ${style.bg} ${style.text}
+                      `}
+                    >
+                      <div className={`w-1 h-4 rounded-full ${style.bar}`} />
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        {TIME_OF_DAY_LABELS[timeOfDay]}
+                      </span>
+                      <span className="text-[10px] opacity-70 ml-auto">
+                        Block {blockNumber}–{blockNumber + 1}
+                      </span>
+                    </div>
                   )}
-                </button>
+                  <BlockCard
+                    block={block}
+                    onAddTodo={(text) => addTodo(block.id, text)}
+                    onToggleTodo={(todoId) => toggleTodo(block.id, todoId)}
+                    onUpdateTodo={(todoId, text) => updateTodo(block.id, todoId, text)}
+                    onDeleteTodo={(todoId) => deleteTodo(block.id, todoId)}
+                    onTodoColorChange={(todoId, color) => updateTodoColor(block.id, todoId, color)}
+                    onDuplicateTodo={(todoId) => duplicateTodo(block.id, todoId)}
+                  />
+                </React.Fragment>
               );
             })}
           </div>
         </div>
 
-        {/* 선택된 요일의 휴일 표시 */}
-        {(() => {
-          const date = dateByDay[selectedDay];
-          if (!date) return null;
-          const iso = toIsoDate(date);
-          const holiday = holidayMap[iso];
-          if (!holiday) return null;
-          return (
-            <div
-              className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-xs flex items-center justify-between"
-              onClick={() => {
-                if (holiday.source === 'auto') return;
-                toggleManualHoliday(date);
-              }}
-            >
-              <span className="font-medium">{holiday.name || '휴일'}</span>
-              <span className="text-[10px] text-red-500">
-                {holiday.source === 'auto' ? '공휴일' : '수동 · 탭하여 해제'}
-              </span>
+        <DragOverlay>
+          {activeTodo ? (
+            <div className="bg-white shadow-lg rounded-md px-3 py-2 text-sm text-slate-700 border border-slate-200 font-medium">
+              {activeTodo.text}
             </div>
-          );
-        })()}
-
-        {/* 선택된 요일의 6블록 세로 스택 */}
-        <div className="flex flex-col gap-2">
-          {BLOCK_NUMBERS.map((blockNumber) => {
-            const timeOfDay = BLOCK_TIME_OF_DAY[blockNumber];
-            const style = TIME_STYLES[timeOfDay];
-            const isFirstInGroup = blockNumber === 1 || blockNumber === 3 || blockNumber === 5;
-            const block = getBlock(selectedDay, blockNumber);
-            if (!block) return null;
-
-            return (
-              <React.Fragment key={blockNumber}>
-                {isFirstInGroup && (
-                  <div
-                    className={`
-                      flex items-center gap-2 px-3 py-1.5 rounded-lg
-                      ${style.bg} ${style.text}
-                    `}
-                  >
-                    <div className={`w-1 h-4 rounded-full ${style.bar}`} />
-                    <span className="text-xs font-bold uppercase tracking-wider">
-                      {TIME_OF_DAY_LABELS[timeOfDay]}
-                    </span>
-                    <span className="text-[10px] opacity-70 ml-auto">
-                      Block {blockNumber}–{blockNumber + 1}
-                    </span>
-                  </div>
-                )}
-                <BlockCard
-                  block={block}
-                  onAddTodo={(text) => addTodo(block.id, text)}
-                  onToggleTodo={(todoId) => toggleTodo(block.id, todoId)}
-                  onUpdateTodo={(todoId, text) => updateTodo(block.id, todoId, text)}
-                  onDeleteTodo={(todoId) => deleteTodo(block.id, todoId)}
-                  onTodoColorChange={(todoId, color) => updateTodoColor(block.id, todoId, color)}
-                  onDuplicateTodo={(todoId) => duplicateTodo(block.id, todoId)}
-                />
-              </React.Fragment>
-            );
-          })}
-        </div>
-      </div>
-
-      <DragOverlay>
-        {activeTodo ? (
-          <div className="bg-white shadow-lg rounded-md px-3 py-2 text-sm text-slate-700 border border-slate-200 font-medium">
-            {activeTodo.text}
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+      {moveRequest && (
+        <MoveTodoDialog
+          request={moveRequest}
+          blocks={data.blocks}
+          defaultDay={selectedDay}
+          onMove={(destType, destId) => moveTodo(moveRequest.todo.id, moveRequest.sourceType, moveRequest.sourceId, destType, destId)}
+          onClose={() => setMoveRequest(null)}
+        />
+      )}
+    </MoveTodoContext.Provider>
   );
 }

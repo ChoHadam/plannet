@@ -1,42 +1,34 @@
-import { MonthlyData, WeeklyFocus } from '@/types/monthly';
+import type { MonthlyData, WeeklyFocus } from '@/types/monthly';
 
 /**
- * Monday-anchored week-of-month → 7개 날짜(월~일) 배열 반환.
- * useBlock6.ts의 getWeekNumberInMonth와 정렬된 정의.
+ * 주차 공통 규칙 (Monthly·Block6·Daily·날짜 선택기 모두 이 파일만 쓴다)
+ * - 한 주는 월요일~일요일
+ * - 그 달 1일이 들어 있는 주가 W1. 1일이 화~일이면 W1의 월요일은 전월에 있다
+ * - 그 달 날짜가 하루라도 들어 있는 주까지 센다 → 한 달은 4·5·6주
  *
- * - Week 1의 월요일 = 해당 월의 첫 번째 월요일
- *   (단, 1일이 화~일이면 1일이 속한 주를 W1으로 보고 그 주의 월요일은 전월에 위치)
- * - 반환 배열은 [월, 화, 수, 목, 금, 토, 일] 순
- * - 월 경계를 넘는 날짜도 정확히 반환 (전/다음 월 날짜 포함 가능)
- *
- * 예: 2026-04은 4월 1일이 수요일이므로
- *   W1 월요일 = 2026-03-30, W2 = 2026-04-06 ...
+ * 예: 2026-03은 1일이 일요일이라 W1 = 2/23~3/1, 3/30~4/5가 W6
  */
+
+/** 한 달이 가질 수 있는 최대 주 수 */
+export const MAX_WEEKS_IN_MONTH = 6;
+const DAYS_PER_WEEK = 7;
+
+/** 월요일부터 시작하는 요일 이름. 인덱스는 mondayIndex()와 같다 */
+export const WEEKDAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'] as const;
+export const SATURDAY_INDEX = 5;
+export const SUNDAY_INDEX = 6;
+
+/** 월요일 = 0 … 일요일 = 6 */
+export function mondayIndex(date: Date): number {
+  return (date.getDay() + 6) % DAYS_PER_WEEK;
+}
+
+/** 해당 월 weekNumber 주의 7개 날짜 [월 … 일]. 전·다음 달 날짜도 실제 날짜로 들어 있다 */
 export function getWeekDates(year: number, month: number, weekNumber: number): Date[] {
-  // 월 1일의 요일 (0=일, 1=월, ..., 6=토)
   const firstOfMonth = new Date(year, month - 1, 1);
-  const firstDayOfWeek = firstOfMonth.getDay();
-  // 1일이 속한 주의 월요일 날짜 오프셋 (음수 가능 = 전월)
-  // 1일이 일(0) → 다음 주 월요일을 W1 첫날로? 한국 관습은 보통 그 주를 1주차로 봄.
-  // useBlock6의 getWeekNumberInMonth는 firstMondayDate를 1일 이후 첫 월요일로 계산.
-  // 그러나 1일이 화~일이면 1일이 W1에 속해야 자연스러움.
-  // 절충: 1일을 포함하는 주의 월요일 = W1 시작.
-  const daysToFirstMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
-  // daysToFirstMonday: 0이면 1일이 월요일, -1이면 1일이 화 → 월요일은 -1일 (전일)
-  const week1Monday = new Date(year, month - 1, 1 + daysToFirstMonday);
-
-  // weekNumber 만큼 7일씩 더한 월요일이 시작점
-  const startMonday = new Date(week1Monday);
-  startMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
-
-  // 월~일 7개
-  const dates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(startMonday);
-    d.setDate(startMonday.getDate() + i);
-    dates.push(d);
-  }
-  return dates;
+  const week1Monday = new Date(year, month - 1, 1 - mondayIndex(firstOfMonth));
+  return Array.from({ length: DAYS_PER_WEEK }, (_, i) =>
+    new Date(week1Monday.getFullYear(), week1Monday.getMonth(), week1Monday.getDate() + (weekNumber - 1) * DAYS_PER_WEEK + i));
 }
 
 export interface WeekOfMonthMeta {
@@ -50,36 +42,28 @@ export function getWeeksOfMonth(year: number, month: number): WeekOfMonthMeta[] 
   const lastOfMonth = new Date(year, month, 0);
   const weeks: WeekOfMonthMeta[] = [];
 
-  for (let weekOfMonth = 1; weekOfMonth <= 6; weekOfMonth += 1) {
+  for (let weekOfMonth = 1; weekOfMonth <= MAX_WEEKS_IN_MONTH; weekOfMonth += 1) {
     const dates = getWeekDates(year, month, weekOfMonth);
-    const hasCurrentMonthDate = dates.some(
-      (d) => d.getFullYear() === year && d.getMonth() + 1 === month
-    );
-
-    if (hasCurrentMonthDate) {
-      weeks.push({
-        weekOfMonth,
-        start: dates[0],
-        end: dates[6],
-        dates,
-      });
-    }
-
-    if (dates[6].getTime() >= lastOfMonth.getTime()) break;
+    weeks.push({ weekOfMonth, start: dates[0], end: dates[DAYS_PER_WEEK - 1], dates });
+    if (dates[DAYS_PER_WEEK - 1].getTime() >= lastOfMonth.getTime()) break;
   }
 
   return weeks;
 }
 
-/**
- * 날짜가 해당 월의 몇 번째 주인지 계산
- * 해당 월 1일이 속한 주를 W1으로 계산
- */
+/** 해당 월의 주 수 (4·5·6) */
+export function getWeekCountInMonth(year: number, month: number): number {
+  return getWeeksOfMonth(year, month).length;
+}
+
+export const isDateInMonth = (date: Date, year: number, month: number) =>
+  date.getFullYear() === year && date.getMonth() + 1 === month;
+
+/** 날짜가 그 날짜가 속한 달의 몇 번째 주인지 */
 export function getWeekOfMonth(date: Date): number {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const target = new Date(year, month - 1, day).getTime();
+  const target = new Date(year, month - 1, date.getDate()).getTime();
   const week = getWeeksOfMonth(year, month).find(
     (w) => w.start.getTime() <= target && target <= w.end.getTime()
   );

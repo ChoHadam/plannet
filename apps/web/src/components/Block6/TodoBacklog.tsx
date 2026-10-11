@@ -100,6 +100,7 @@ export function TodoBacklog({
         <input
           type="text"
           value={newTodoText}
+          data-local-draft
           onChange={(e) => setNewTodoText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="+ 새 할 일"

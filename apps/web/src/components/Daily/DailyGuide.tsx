@@ -1,18 +1,24 @@
 'use client';
 
+import { useModalDialog } from '@/hooks/useModalDialog';
+
 interface DailyGuideProps {
   onStart: () => void;
   onClose: () => void;
+  startLabel?: string;
 }
 
-export function DailyGuide({ onStart, onClose }: DailyGuideProps) {
+export function DailyGuide({ onStart, onClose, startLabel = '시작하기' }: DailyGuideProps) {
+  const { dialogProps } = useModalDialog({ onClose, initialFocus: 'dialog' });
   return (
     <div
-      className="fixed inset-0 bg-black/20 flex items-center justify-center z-50"
+      className="fixed inset-0 overlay-safe bg-black/20 flex items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 animate-in fade-in zoom-in duration-200"
+        {...dialogProps}
+        aria-label="투두리스트 사용법"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 max-h-full overflow-y-auto animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -90,7 +96,7 @@ export function DailyGuide({ onStart, onClose }: DailyGuideProps) {
                      hover:bg-emerald-600
                      transition-colors font-medium text-sm"
           >
-            시작하기
+            {startLabel}
           </button>
         </div>
       </div>

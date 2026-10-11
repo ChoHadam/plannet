@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { PlanCategory } from '@/types/mandalart';
-import { getWeekOfMonth, getWeeksOfMonth } from '@/lib/weekUtils';
-import type { WeekOfMonthMeta } from '@/lib/weekUtils';
+import { getWeekOfMonth, getWeeksOfMonth, isDateInMonth, mondayIndex, SATURDAY_INDEX, SUNDAY_INDEX, WEEKDAY_LABELS } from '@/lib/weekUtils';
+import { useModalDialog } from '@/hooks/useModalDialog';
 
 interface DatePickerProps {
   category: PlanCategory;
@@ -16,22 +16,17 @@ interface DatePickerProps {
 }
 
 const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+const weekdayColor = (column: number, sunday: string, saturday: string) =>
+  column === SUNDAY_INDEX ? sunday : column === SATURDAY_INDEX ? saturday : '';
 
-const getWeekOfDate = (date: Date, weeks: WeekOfMonthMeta[]) => {
-  const time = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  return weeks.find((w) => w.start.getTime() <= time && time <= w.end.getTime())?.weekOfMonth;
-};
-
-// Get days in month for calendar (Sunday start for display)
+// Get days in month for calendar (월요일 시작, 공통 주차 규칙과 같은 열)
 const getDaysInMonth = (year: number, month: number) => {
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
   const daysInMonth = lastDay.getDate();
-  const startDay = firstDay.getDay(); // 0=일요일
 
   const days: (number | null)[] = [];
-  for (let i = 0; i < startDay; i++) {
+  for (let i = 0; i < mondayIndex(firstDay); i++) {
     days.push(null);
   }
   for (let i = 1; i <= daysInMonth; i++) {
@@ -54,6 +49,8 @@ export function DatePicker({
   const [month, setMonth] = useState(initialMonth || now.getMonth() + 1);
   const [week, setWeek] = useState(initialWeek || getWeekOfMonth(now));
   const [day, setDay] = useState(initialDay || now.getDate());
+  const titleId = useId();
+  const { dialogProps } = useModalDialog({ onClose });
 
   const handleConfirm = () => {
     switch (category) {
@@ -64,7 +61,7 @@ export function DatePicker({
         onSelect(year, month, undefined, undefined);
         break;
       case 'weekly':
-        onSelect(year, month, week, undefined);
+        onSelect(year, month, selectedWeekNumber, undefined);
         break;
       case 'daily':
         onSelect(year, month, undefined, day);
@@ -74,12 +71,19 @@ export function DatePicker({
   };
 
   const daysInMonth = getDaysInMonth(year, month);
+  const monthWeeks = getWeeksOfMonth(year, month);
+  // 연도만 바꿔 W6이 없는 달이 되면 그 달의 마지막 주로 맞춘다
+  const selectedWeekNumber = Math.min(week, monthWeeks.length);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 overlay-safe z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl p-5 min-w-[300px] animate-in fade-in zoom-in duration-200">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4 text-center">
+      <div
+        {...dialogProps}
+        aria-labelledby={titleId}
+        className="relative bg-white rounded-2xl shadow-2xl p-5 min-w-[300px] max-h-full overflow-y-auto animate-in fade-in zoom-in duration-200"
+      >
+        <h3 id={titleId} className="text-lg font-semibold text-slate-800 mb-4 text-center">
           날짜 선택
         </h3>
 
@@ -173,89 +177,40 @@ export function DatePicker({
 
         {/* Week selector - calendar style for weekly (Monday-based weeks) */}
         {category === 'weekly' && (() => {
-          const monthWeeks = getWeeksOfMonth(year, month);
-
-          // Calculate previous month days to show
-          const firstDayDate = new Date(year, month - 1, 1);
-          const firstDayOfWeek = firstDayDate.getDay(); // 0=일요일
-          const prevMonthLastDay = new Date(year, month - 1, 0).getDate();
-
-          // Calculate next month days to show
-          const lastDayDate = new Date(year, month, 0);
-          const lastDayOfWeek = lastDayDate.getDay(); // 0=일
-          const nextMonthDays = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
-
-          // Build calendar array with prev/current/next month days
-          const calendarDays: { day: number; isPrevMonth?: boolean; isNextMonth?: boolean }[] = [];
-
-          // Add previous month days (to fill the first row)
-          for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-            calendarDays.push({ day: prevMonthLastDay - i, isPrevMonth: true });
-          }
-
-          // Add current month days
-          const currentMonthLastDay = lastDayDate.getDate();
-          for (let i = 1; i <= currentMonthLastDay; i++) {
-            calendarDays.push({ day: i });
-          }
-
-          // Add next month days (to fill the last row)
-          if (nextMonthDays > 0) {
-            for (let i = 1; i <= nextMonthDays; i++) {
-              calendarDays.push({ day: i, isNextMonth: true });
-            }
-          }
-
-          const selectedWeek = monthWeeks.find((w) => w.weekOfMonth === week);
+          const selectedWeek = monthWeeks.find((w) => w.weekOfMonth === selectedWeekNumber);
 
           return (
             <div className="mb-4">
               {/* Weekday headers */}
               <div className="grid grid-cols-7 gap-1 mb-1">
-                {WEEKDAYS.map((wd, i) => (
+                {WEEKDAY_LABELS.map((wd, i) => (
                   <div
                     key={wd}
                     className={`
                       text-center text-xs font-medium py-1
-                      ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}
+                      ${weekdayColor(i, 'text-red-400', 'text-blue-400') || 'text-slate-400'}
                     `}
                   >
                     {wd}
                   </div>
                 ))}
               </div>
-              {/* Calendar grid with Monday-based week selection */}
+              {/* 한 행 = 한 주(월~일). 앞뒤 다른 달 날짜도 그 주에 속하므로 함께 강조한다 */}
               <div className="grid grid-cols-7 gap-1">
-                {calendarDays.map(({ day: d, isPrevMonth, isNextMonth }, i) => {
-                  // Calculate the actual date
-                  let baseYear = year;
-                  let baseMonth = month;
-                  if (isPrevMonth) {
-                    baseMonth = month === 1 ? 12 : month - 1;
-                    baseYear = month === 1 ? year - 1 : year;
-                  } else if (isNextMonth) {
-                    baseMonth = month === 12 ? 1 : month + 1;
-                    baseYear = month === 12 ? year + 1 : year;
-                  }
-
-                  const dateObj = new Date(baseYear, baseMonth - 1, d);
-
-                  const weekOfMonth = getWeekOfDate(dateObj, monthWeeks);
-                  const belongsToMonth = weekOfMonth !== undefined;
-
-                  // Highlight if this day belongs to the selected week (even if prev/next month)
-                  const isInSelectedWeek = belongsToMonth && weekOfMonth === selectedWeek?.weekOfMonth;
-                  const isOtherMonthDay = isPrevMonth || isNextMonth;
+                {monthWeeks.flatMap(({ weekOfMonth, dates }) => dates.map((dateObj, column) => {
+                  const d = dateObj.getDate();
+                  const baseMonth = dateObj.getMonth() + 1;
+                  const isInSelectedWeek = weekOfMonth === selectedWeekNumber;
+                  const isOtherMonthDay = !isDateInMonth(dateObj, year, month);
 
                   return (
                     <button
-                      key={i}
+                      key={`${weekOfMonth}-${column}`}
                       onClick={() => {
-                        if (belongsToMonth && weekOfMonth && !isOtherMonthDay) {
-                          setWeek(weekOfMonth);
-                        }
+                        if (!isOtherMonthDay) setWeek(weekOfMonth);
                       }}
-                      disabled={!belongsToMonth || isOtherMonthDay}
+                      disabled={isOtherMonthDay}
+                      data-week={weekOfMonth}
                       className={`
                         aspect-square rounded-lg text-sm font-medium transition-colors
                         ${isInSelectedWeek
@@ -263,28 +218,21 @@ export function DatePicker({
                             ? 'bg-slate-600 text-white/80'
                             : 'bg-slate-800 text-white'
                           : isOtherMonthDay
-                            ? belongsToMonth
-                              ? 'text-slate-400 bg-slate-50'
-                              : 'text-slate-300'
-                            : !belongsToMonth
-                              ? 'text-slate-300 cursor-not-allowed'
-                              : 'hover:bg-slate-100 text-slate-600'
+                            ? 'text-slate-400 bg-slate-50'
+                            : 'hover:bg-slate-100 text-slate-600'
                         }
-                        ${!isInSelectedWeek && !isOtherMonthDay && belongsToMonth && i % 7 === 0 ? 'text-red-500' : ''}
-                        ${!isInSelectedWeek && !isOtherMonthDay && belongsToMonth && i % 7 === 6 ? 'text-blue-500' : ''}
+                        ${!isInSelectedWeek && !isOtherMonthDay ? weekdayColor(column, 'text-red-500', 'text-blue-500') : ''}
                       `}
                       title={
-                        belongsToMonth
-                          ? isOtherMonthDay
-                            ? `${baseMonth}월 ${d}일 · ${month}월 ${weekOfMonth ?? ''}주차`
-                            : `${month}월 ${weekOfMonth ?? ''}주차`
-                          : `${baseMonth}월 ${d}일`
+                        isOtherMonthDay
+                          ? `${baseMonth}월 ${d}일 · ${month}월 ${weekOfMonth}주차`
+                          : `${month}월 ${weekOfMonth}주차`
                       }
                     >
                       {d}
                     </button>
                   );
-                })}
+                }))}
               </div>
               {/* Week range indicator */}
               {selectedWeek ? (
@@ -312,12 +260,12 @@ export function DatePicker({
         {category === 'daily' && (
           <div className="mb-4">
             <div className="grid grid-cols-7 gap-1 mb-1">
-              {WEEKDAYS.map((wd, i) => (
+              {WEEKDAY_LABELS.map((wd, i) => (
                 <div
                   key={wd}
                   className={`
                     text-center text-xs font-medium py-1
-                    ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}
+                    ${weekdayColor(i, 'text-red-400', 'text-blue-400') || 'text-slate-400'}
                   `}
                 >
                   {wd}
@@ -337,8 +285,7 @@ export function DatePicker({
                       ? 'bg-slate-800 text-white'
                       : 'hover:bg-slate-100 text-slate-600'
                     }
-                    ${d && i % 7 === 0 ? 'text-red-500' : ''}
-                    ${d && i % 7 === 6 ? 'text-blue-500' : ''}
+                    ${d ? weekdayColor(i % WEEKDAY_LABELS.length, 'text-red-500', 'text-blue-500') : ''}
                     ${d === day ? '!text-white' : ''}
                   `}
                 >

@@ -4,3 +4,37 @@ spring:
 
 server:
   port: 8080
+  # 로컬 기본값: 프록시 헤더를 신뢰하지 않는다. 배포(prod 프로필)에서만 신뢰 프록시를 지정한다.
+  forward-headers-strategy: none
+  tomcat:
+    # 로그인 성공·실패 redirect를 상대 경로로 보내 프록시 뒤 내부 host가 새지 않게 한다.
+    use-relative-redirects: true
+  servlet:
+    session:
+      # 초기 단계는 DB 없는 단일 replica 메모리 세션이다. 재시작 시 재로그인이 필요하다.
+      timeout: ${PLANNET_SESSION_TIMEOUT:8h}
+      tracking-modes: cookie
+      cookie:
+        name: PLANNET_SESSION
+        # Web(Next.js) 경로에서도 브라우저가 쿠키를 보내야 Web 서버가 세션을 전달할 수 있다.
+        path: /
+        http-only: true
+        # Google callback은 top-level GET redirect라 Lax여야 state 검증용 세션이 유지된다.
+        same-site: lax
+        secure: ${PLANNET_SESSION_COOKIE_SECURE:false}
+
+plannet:
+  storage:
+    enabled: ${PLANNET_STORAGE_ENABLED:false}
+    url: ${PLANNET_DB_URL:}
+    username: ${PLANNET_DB_USERNAME:}
+    password: ${PLANNET_DB_PASSWORD:}
+  auth:
+    login-success-url: ${PLANNET_LOGIN_SUCCESS_URL:/}
+    login-failure-url: ${PLANNET_LOGIN_FAILURE_URL:/}
+    require-google-client: ${PLANNET_REQUIRE_GOOGLE_CLIENT:false}
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      # 기본값은 요청 host 기준. 배포에서는 GOOGLE_REDIRECT_URI로 공개 https 주소를 고정한다.
+      redirect-uri: ${GOOGLE_REDIRECT_URI:{baseUrl}/login/oauth2/code/{registrationId}}

@@ -1,20 +1,46 @@
-node_modules
-apps/*/node_modules
-.next
-apps/*/.next
-out
-apps/*/out
+# 루트 빌드 컨텍스트(apps/web/Dockerfile)에서 제외할 경로.
+# gitignore 대상이 아니어도 비밀값·사용자 데이터·검증 산출물은 이미지 빌더 단계에 들어가지 않게 한다.
+
+# 의존성·빌드 산출물
+**/node_modules
+**/.next
+**/out
+**/build
+**/.gradle
+**/.kotlin
+**/*.tsbuildinfo
 coverage
 apps/*/coverage
-test-results
-apps/*/test-results
-playwright-report
-apps/*/playwright-report
+
+# 테스트·검증 산출물
+**/test-results
+**/playwright-report
+**/blob-report
+**/*.log
+
+# 비밀값 후보: 환경 파일, 로컬 Kubernetes Secret, 키·인증서
+**/.env
+**/.env.*
+!**/.env.example
+k8s/local/
+**/*secret*.yaml
+**/*secret*.yml
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+
+# 사용자 데이터 백업 (dev 전용)
+**/.local-backup
+infra/storage/.local/
+
+# 작업 보고·로컬 도구·IDE
+docs/session-reports/
+.claude/
+.idea/
+.vscode/
+**/.DS_Store
 .git
 .gitignore
 *.md
-.env
-.env.*
-apps/*/.env
-apps/*/.env.*
-!apps/*/.env.example
+Dockerfile

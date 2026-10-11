@@ -1,18 +1,24 @@
 'use client';
 
+import { useModalDialog } from '@/hooks/useModalDialog';
+
 interface Block6GuideProps {
   onStart: () => void;
   onClose: () => void;
+  startLabel?: string;
 }
 
-export function Block6Guide({ onStart, onClose }: Block6GuideProps) {
+export function Block6Guide({ onStart, onClose, startLabel = '시작하기' }: Block6GuideProps) {
+  const { dialogProps } = useModalDialog({ onClose, initialFocus: 'dialog' });
   return (
     <div
-      className="fixed inset-0 bg-black/20 flex items-center justify-center z-50"
+      className="fixed inset-0 overlay-safe bg-black/20 flex items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto"
+        {...dialogProps}
+        aria-label="Block 6 사용법"
+        className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 animate-in fade-in zoom-in duration-200 max-h-[min(90vh,100%)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold text-slate-800 mb-4">
@@ -84,7 +90,7 @@ export function Block6Guide({ onStart, onClose }: Block6GuideProps) {
               transition-colors font-medium
             "
           >
-            시작하기
+            {startLabel}
           </button>
         </div>
       </div>

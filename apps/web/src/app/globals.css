@@ -12,11 +12,97 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * 터치 기기 판정은 이 하나만 쓴다 (폭이 아니라 입력 장치 기준).
+ * 호버가 없거나 거친 포인터(손가락)가 하나라도 있으면 숨김 조작을 보이고 히트 영역을 넓힌다.
+ */
+@custom-variant touch {
+  @media (hover: none) {
+    @slot;
+  }
+  @media (any-pointer: coarse) {
+    @slot;
+  }
+}
+
 body {
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
+  /* viewport-fit=cover: 노치·홈 표시줄 안쪽으로. 흐름 안의 화면은 여기 한 곳에서만 inset 한다. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* dvh 미지원 브라우저는 위 vh. 같은 규칙 안 두 줄은 CSS 압축이 앞줄을 지우므로 @supports로 나눈다. */
+@supports (height: 100dvh) {
+  body {
+    min-height: 100dvh;
+  }
+}
+
+/* 화상 키보드가 가린 높이 (lib/visualViewport.ts가 갱신). 없으면 0. */
+:root {
+  --keyboard-inset: 0px;
+}
+
+/* body padding을 뺀 화면 높이. dvh 미지원 브라우저는 vh. */
+@utility min-h-app {
+  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  @supports (height: 100dvh) {
+    min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+@utility h-app {
+  height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  @supports (height: 100dvh) {
+    height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+/* 화면 가장자리에 붙는 고정(fixed) 요소용 inset. body padding을 받지 않으므로 직접 넣는다. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+/* 아래쪽은 홈 표시줄과 화상 키보드 중 큰 쪽 */
+@utility pb-keyboard {
+  padding-bottom: max(env(safe-area-inset-bottom), var(--keyboard-inset));
+}
+
+/* 모달 바깥층(fixed inset-0): 안전 영역 + 키보드만큼 안쪽에서 가운데 정렬 */
+@utility overlay-safe {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) max(env(safe-area-inset-bottom), var(--keyboard-inset)) env(safe-area-inset-left);
+}
+
+/*
+ * 밀집 그리드의 작은 버튼: 보이는 크기·배치는 그대로, 터치 기기에서만 44px 히트 영역.
+ * 버튼이 위치 지정(relative/absolute)돼 있어야 한다. 이웃 버튼과 겹치는 곳은 나중 요소가 받는다.
+ */
+@utility touch-hit {
+  @variant touch {
+    &::after {
+      content: '';
+      position: absolute;
+      inset: min(0px, calc((100% - 44px) / 2));
+    }
+  }
+}
+
+/*
+ * iPhone은 16px 미만 입력란에 초점이 가면 화면을 확대한다. 확대 자체는 막지 않고(viewport 제한 없음)
+ * 모바일 폭·터치에서 작은 글씨 입력만 16px로 키운다. utilities보다 우선하도록 레이어 밖에 둔다.
+ */
+@media (max-width: 767px) and (any-pointer: coarse) {
+  :is(input, textarea, select):is(.text-xs, .text-sm) {
+    font-size: 16px;
+  }
 }
 
 /* Custom scrollbar */
@@ -67,4 +153,11 @@ textarea {
 /* Focus visible - removed blue outline */
 *:focus-visible {
   outline: none;
+}
+
+/* 모달 안 조작 요소의 키보드 초점 링. 개별 ring 클래스(utilities)가 있으면 그쪽이 우선한다. */
+@layer base {
+  :where([role="dialog"]) :where(button, a[href], input, select, textarea):focus-visible {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-indigo-500);
+  }
 }

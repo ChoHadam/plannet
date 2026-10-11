@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plannet
+  labels:
+    # 앱 컨테이너는 non-root·권한 상승 없음으로 실행한다.
+    pod-security.kubernetes.io/enforce: restricted

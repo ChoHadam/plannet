@@ -1,0 +1,98 @@
+# 공통 진입점 (Gateway API). 컨트롤러는 overlay의 GatewayClass가 정한다 (예: Envoy Gateway).
+#
+# 라우팅 계약 (docs/contracts/auth-v1.md §1):
+#   /api/v1/**, /oauth2/**, /login/oauth2/**  → Spring API
+#   그 외 전부 (/api/chat, /api/backup, /api/runtime-config 포함) → Next.js Web
+# `/api/**` 전체를 API로 넘기지 않는다. PathPrefix는 경로 요소 단위라 `/api/v1x`는 Web으로 간다.
+#
+# HOST_PLACEHOLDER 는 overlay의 public.env PUBLIC_HOST 값으로 치환된다 (replacements).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: plannet
+spec:
+  gatewayClassName: plannet
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: HOST_PLACEHOLDER
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: plannet-tls # overlay/운영자가 준비 (cert-manager 또는 kubectl create secret tls)
+      allowedRoutes:
+        namespaces:
+          from: Same
+    # 80은 HTTPS로 넘기는 용도로만 쓴다. 앱 경로를 붙이지 않는다.
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: HOST_PLACEHOLDER
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: plannet-app
+spec:
+  parentRefs:
+    - name: plannet
+      sectionName: https
+  hostnames:
+    - HOST_PLACEHOLDER
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: /api/v1 }
+        - path: { type: PathPrefix, value: /oauth2 }
+        - path: { type: PathPrefix, value: /login/oauth2 }
+      filters:
+        # 클라이언트가 보낸 host/port 계열 전달 헤더는 지운다. Host는 그대로 보존된다.
+        # (X-Forwarded-Proto/For는 Envoy가 실제 연결 기준으로 다시 쓴다)
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove: ["X-Forwarded-Host", "X-Forwarded-Port", "Forwarded"]
+      backendRefs:
+        - name: plannet-api
+          port: 8080
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove: ["X-Forwarded-Host", "X-Forwarded-Port", "Forwarded"]
+        # HTTPS 진입점의 HSTS를 적용하고, Next.js의 기본 보안 헤더와 같은 값을 set한다.
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - { name: Strict-Transport-Security, value: "max-age=31536000 ; includeSubDomains" }
+              - { name: X-Content-Type-Options, value: nosniff }
+              - { name: X-Frame-Options, value: DENY }
+              - { name: Referrer-Policy, value: strict-origin-when-cross-origin }
+            remove: ["X-Powered-By"] # Next.js 기본 헤더 (프레임워크 노출)
+      # /api/chat은 외부 AI timeout(20초)까지 기다린다. 프록시 기본 timeout(Envoy 15초)보다 길게 둔다.
+      timeouts:
+        request: 30s
+      backendRefs:
+        - name: plannet-web
+          port: 3000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: plannet-https-redirect
+spec:
+  parentRefs:
+    - name: plannet
+      sectionName: http
+  hostnames:
+    - HOST_PLACEHOLDER
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

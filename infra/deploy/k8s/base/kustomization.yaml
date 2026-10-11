@@ -1,0 +1,21 @@
+# Plannet 공개 배포 기본 구성 (비밀값 없음).
+# 공개 도메인·이미지 태그·신뢰 프록시 대역은 overlay가 채운다. 직접 apply하지 않는다.
+#   kubectl kustomize infra/deploy/k8s/overlays/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: plannet
+resources:
+  - namespace.yaml
+  - web.yaml
+  - api.yaml
+  - gateway.yaml
+  - network-policy.yaml
+configMapGenerator:
+  - name: plannet-web-config
+    envs: [web.env]
+  - name: plannet-api-config
+    envs: [api.env]
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: plannet
+    includeSelectors: false

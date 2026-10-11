@@ -16,8 +16,11 @@ export function MonthlyGrid() {
   const monthlyPlans = useMonthlyStore((state) => state.monthlyPlans);
   const data = monthlyPlans.find((p) => p.id === currentMonthlyId) || null;
   const navigateMonth = useMonthlyStore((state) => state.navigateMonth);
+  const viewedMonth = useMonthlyStore((state) => state.viewedMonth);
+  const createMonthlyPlan = useMonthlyStore((state) => state.createMonthlyPlan);
+  const period = data ?? viewedMonth;
 
-  if (!data) {
+  if (!period) {
     return (
       <div className="flex items-center justify-center h-96 text-slate-400">
         월간 플랜을 선택하거나 새로 만들어주세요
@@ -25,7 +28,7 @@ export function MonthlyGrid() {
     );
   }
 
-  const monthName = MONTH_NAMES[data.month - 1];
+  const monthName = MONTH_NAMES[period.month - 1];
 
   return (
     <div className="w-full max-w-6xl mx-auto px-2 py-2 md:p-4">
@@ -41,7 +44,7 @@ export function MonthlyGrid() {
           </svg>
         </button>
         <h2 className="text-xl font-semibold text-slate-700">
-          {data.year}년 {monthName}
+          {period.year}년 {monthName}
         </h2>
         <button
           onClick={() => navigateMonth('next')}
@@ -54,8 +57,18 @@ export function MonthlyGrid() {
         </button>
       </div>
 
-      {/* Main layout: Calendar + Dashboard (responsive) */}
-      <div className="flex flex-col lg:flex-row gap-3 md:gap-6">
+      {!data ? (
+        <div className="text-center py-16 text-slate-500">
+          <p className="mb-4">이 달에는 월간 플랜이 없습니다</p>
+          <button
+            onClick={() => createMonthlyPlan(period.category, period.year, period.month)}
+            className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700"
+          >
+            이 달의 플랜 만들기
+          </button>
+        </div>
+      ) : (
+      <div key={data.id} className="flex flex-col lg:flex-row gap-3 md:gap-6">
         {/* Left: Compact Calendar */}
         <div className="w-full lg:w-[30%] lg:min-w-[280px]">
           <CompactCalendar
@@ -71,12 +84,13 @@ export function MonthlyGrid() {
           <MonthlyGoals goals={data.goals} />
 
           {/* Weekly Focus */}
-          <WeeklyFocus weeklyFocus={data.weeklyFocus} />
+          <WeeklyFocus year={data.year} month={data.month} weeklyFocus={data.weeklyFocus} />
 
           {/* Memo */}
           <MemoSection memo={data.memo} />
         </div>
       </div>
+      )}
     </div>
   );
 }

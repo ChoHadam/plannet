@@ -67,9 +67,9 @@ export function CellSchedulePopover({ schedule, onSave, onClose }: CellScheduleP
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 overlay-safe bg-black/20 flex items-center justify-center z-50" onClick={onClose} data-refresh-hold>
       <div
-        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-80 max-w-[90vw]"
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-80 max-w-[90vw] max-h-full overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

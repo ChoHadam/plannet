@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useRecurringStore } from '@/hooks/useRecurring';
 import { TodoColor } from '@/types/block6';
-import { TODO_COLORS, TODO_COLOR_BAR, TODO_COLOR_LABELS } from '@/lib/constants';
+import { FOCUS_RING, TODO_COLORS, TODO_COLOR_BAR, TODO_COLOR_LABELS, TOUCH_REVEAL } from '@/lib/constants';
 
 interface RecurringTodosInlineProps {
   onAdd: (text: string, color?: TodoColor) => void;
@@ -118,8 +118,9 @@ export function RecurringTodosInline({ onAdd, layout = 'natural' }: RecurringTod
                   });
                   setColorPickerId(todo.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 w-3.5 h-3.5 rounded-full flex-shrink-0
-                         transition-all border border-slate-200"
+                className={`${TOUCH_REVEAL} w-3.5 h-3.5 touch:w-6 touch:h-6 rounded-full flex-shrink-0
+                         transition-all border border-slate-200 ${FOCUS_RING}`}
+                aria-label={`${todo.text} 색상 변경`}
                 style={{
                   backgroundColor: todoColor === 'none' ? '#F3F4F6' : barColor,
                 }}
@@ -129,9 +130,10 @@ export function RecurringTodosInline({ onAdd, layout = 'natural' }: RecurringTod
               {/* Delete */}
               <button
                 onClick={() => deleteTodo(todo.id)}
-                className="opacity-0 group-hover:opacity-100 w-3.5 h-3.5 rounded flex items-center justify-center
-                         text-slate-300 hover:text-red-500 transition-all flex-shrink-0"
+                className={`${TOUCH_REVEAL} w-3.5 h-3.5 touch:w-6 touch:h-6 rounded flex items-center justify-center
+                         text-slate-300 hover:text-red-500 transition-all flex-shrink-0 ${FOCUS_RING}`}
                 title="삭제"
+                aria-label={`${todo.text} 삭제`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -183,6 +185,7 @@ export function RecurringTodosInline({ onAdd, layout = 'natural' }: RecurringTod
           ref={inputRef}
           type="text"
           value={newText}
+          data-local-draft
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => setIsEditing(true)}
