@@ -50,10 +50,12 @@ fi
 
 k apply -f "$DEPLOY_DIR/k8s/base/namespace.yaml" >/dev/null
 # 값은 stdin(env 파일 형식)으로만 넘겨 프로세스 인자·셸 기록에 남지 않게 한다.
+# server-side apply: client-side apply는 값을 last-applied-configuration annotation에 복사한다 (describe에 노출).
+apply_secret() { k apply --server-side --force-conflicts --field-manager=plannet-secrets -f - >/dev/null; }
 apply_generic() {
   local secret="$1"; shift
   k -n "$APP_NAMESPACE" create secret generic "$secret" --from-env-file=/dev/stdin --dry-run=client -o yaml \
-    | k apply -f - >/dev/null
+    | apply_secret
 }
 printf 'GOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nPLANNET_DB_URL=%s\nPLANNET_DB_USERNAME=%s\nPLANNET_DB_PASSWORD=%s\n' \
   "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET" "$PLANNET_DB_URL" "$PLANNET_DB_USERNAME" "$PLANNET_DB_PASSWORD" \
@@ -61,6 +63,6 @@ printf 'GOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nPLANNET_DB_URL=%s\nPLANNET
 printf 'OPENGATEWAY_API_KEY=%s\n' "$OPENGATEWAY_API_KEY" | apply_generic plannet-web-secret
 if [[ -n "$tls_cert" ]]; then
   k -n "$APP_NAMESPACE" create secret tls plannet-tls --cert "$tls_cert" --key "$tls_key" --dry-run=client -o yaml \
-    | k apply -f - >/dev/null
+    | apply_secret
 fi
 log "Secret 적용 완료. 값이 바뀐 경우 kubectl rollout restart 로 pod를 다시 띄워야 반영됩니다."

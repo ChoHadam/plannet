@@ -1,24 +1,24 @@
 # 공개 배포 준비 (같은 origin · HTTPS)
 
-작성일: 2026-09-26 · 대상: 현재 작업 트리의 인증·PostgreSQL 저장 구현 · 배포 예제: [`infra/deploy`](../infra/deploy/README.md) · 계약: [auth-v1](./contracts/auth-v1.md), [planner-storage-v1](./contracts/planner-storage-v1.md), [Web 연동](./web-auth-integration.md)
+작성일: 2026-09-26 · 최근 반영: 2026-10-05 · 대상: 현재 작업 트리의 인증·PostgreSQL 저장 구현 · 배포 예제: [`infra/deploy`](../infra/deploy/README.md) · 계약: [auth-v1](./contracts/auth-v1.md), [planner-storage-v1](./contracts/planner-storage-v1.md), [Web 연동](./web-auth-integration.md)
 
-Web(Next.js)과 API(Spring)를 **하나의 HTTPS origin** 뒤에 두는 설정과 검증 절차다. 로컬 HTTPS 배포 검증을 마쳤으며, 공개 호스트는 사용자 제공 `plannet-lab.duckdns.org`로 준비했으며 공인 인증서·공개 callback 등록·운영 클러스터 적용은 아직 하지 않았다. 별도 인증 세션에서는 9월 26일 로컬 Web+API의 실제 Google 로그인·새로고침·로그아웃을 검증했다([인증 검증 기록](./research/2026-07-31-api-owned-auth-phase1.md)). 아래 미검증 항목은 공개 배포 환경을 뜻한다.
+Web(Next.js)과 API(Spring)를 **하나의 HTTPS origin** 뒤에 두는 설정과 검증 절차다. 로컬 자체 서명 HTTPS + PostgreSQL/PVC 배포 리허설(Google·AI 대역)을 마쳤으며, 공개 호스트는 사용자 제공 `plannet.mhd-mhd.duckdns.org`로 준비했다. 공개 callback은 2026-10-05 Google Console에 등록했으며, 공인 TLS 인증서·운영 클러스터 적용·공개 origin의 실제 로그인 확인은 아직 남아 있다. 별도 인증 세션에서는 9월 26일 로컬 Web+API의 실제 Google 로그인·새로고침·로그아웃을 검증했다([인증 검증 기록](./research/2026-07-31-api-owned-auth-phase1.md)). 아래 미검증 항목은 공개 배포 환경을 뜻한다.
 
-공개 API에는 PostgreSQL 연결이 필수다. 먼저 로컬 컴퓨터에서 실행한 뒤 홈서버로 이전하며, DB 운영 도구와 dump/restore 절차는 [PostgreSQL 운영 문서](./postgresql-operations.md)를 따른다. 이 Kubernetes 예제는 DB 자체를 배포하지 않는다. 기존 로컬 HTTPS 검증은 `storage=false`인 인증 전용 환경이며 운영 저장 검증과 구분한다.
+공개 API에는 PostgreSQL 연결이 필수다. 먼저 로컬 컴퓨터에서 실행한 뒤 홈서버로 이전하며, DB 운영 도구와 dump/restore 절차는 [PostgreSQL 운영 문서](./postgresql-operations.md)를 따른다. production 예제는 DB 자체를 배포하지 않는다. `local-verify`는 검증 전용 PostgreSQL StatefulSet/PVC를 함께 올려 `storage=true`로 검증한다(2026-09-27 리허설). 과거 `storage=false` 인증 전용 결과와 구분한다.
 
 ## 1. 상태
 
 | 구분 | 결과 | 근거 |
 |---|---|---|
-| **모의 인증 검증** (실제 Spring·Web 이미지 + Google·AI 대역, kind 클러스터, 자체 서명 HTTPS) | **기존 검증 통과** (E2E 12개, 공개 점검 18항목). local-verify는 storage=false이며 이번 DB 배포 설정 수정 뒤 클러스터 재배포는 하지 않음 | `scripts/verify-local.sh`, `scripts/check-public.sh` |
-| 매니페스트 정적 검증 (정책·스키마) | **통과** (production 저장 필수·DB Secret, local-verify 저장 off 검사 포함. production 예제는 placeholder 경고만) | `scripts/validate-manifests.sh` |
+| **최신 로컬 HTTPS·저장 리허설** (`3e08caa` + 미커밋 소스의 production Spring·Web 이미지, PostgreSQL 18.6/PVC, Google·AI 대역, kind, 자체 서명 HTTPS) | **통과** (2026-09-28, 최종 24개: 진입점 9·인증 3·랜딩 2·저장 10). 초회 23개 통과·테스트 대기 실패 1개 수정 후 전체 재검증. 비관리자 DB 역할·NetworkPolicy·migration 1·2·3 확인, V2→V3 데이터 보존·과거 ACK 재현. 과거 17개 리허설·storage=false 공개 점검 18항목과 구분 | [최신 결과](./session-reports/https-rehearsal-current.md), [이전 결과](./session-reports/release-rehearsal.md), `scripts/verify-local.sh` |
+| 매니페스트 정적 검증 (정책·스키마) | **통과** (production 저장 필수·DB Secret·검증 DB 미포함, local-verify 저장 on·검증 DB 정책. 변형 회귀 local 36·production 11개 거부. Docker 복구 후 production 15개·local-verify 27개 스키마 통과. production 예제 placeholder는 실제 배포 전 채워야 함) | `scripts/validate-manifests.sh` |
 | 로컬 PostgreSQL 운영 도구 | **통과**: 전용 DB 기동·재시작 영속성·신규 DB 백업 복원 일치·기존 데이터 덮어쓰기 거부 | [운영 도구 보고](./session-reports/storage-infra.md) |
 | 운영 Pod → PostgreSQL 연결·복구 | **미완료**. 홈서버 private endpoint·방화벽·영구 디스크·별도 장치 백업을 배포 시 확정 | [PostgreSQL 운영](./postgresql-operations.md), 6절 |
-| API 테스트 (스냅샷에서 실행) | **통과** | `build-images.sh` `RUN_API_TESTS=1` |
-| **공개 배포 origin의 실제 Google 로그인** | **미검증**. 공개 callback 등록과 운영 client 설정이 필요하다. 로컬 실제 로그인은 별도 검증 완료 | 5·6절 |
+| API 테스트 (스냅샷·일회용 PostgreSQL) | **56개 통과, 실패·건너뜀 0**. 최종 API 소스·빌드 입력 일치 확인. 이미지 빌드의 `RUN_API_TESTS=1` 실행만으로는 18개 DB 검사가 건너뛰어지므로 별도 실제 DB 연결 실행과 구분 | `api-postgres-results/`, `api-test-source-match.json` |
+| **공개 배포 origin의 실제 Google 로그인** | **미검증**. 공개 callback은 2026-10-05 등록 완료, 홈서버 배포·TLS 후 실제 로그인 확인 필요. 로컬 실제 로그인은 별도 검증 완료 | 5·6절 |
 | **실제 공개 HTTPS** (공인 인증서·도메인·공유기) | **미완료**. DuckDNS 확인, HTTPS는 자체 서명 인증서 검증 오류. 운영 대상·공인 TLS·외부 접근 검증 필요 | 8절 |
 
-이번 DB 배포 설정 검증에서 production 15개·local-verify 23개 리소스의 정책/스키마가 통과했다. 저장 비활성화·필수 DB 키 누락·optional 참조·리터럴 비밀번호 등 잘못된 정책 11개를 거부했고, Secret 스크립트는 가짜 kubectl로 stdin 주입·출력/명령 인수 미노출·줄바꿈/잘못된 JDBC URL 거부를 확인했다. 실제 Secret 생성이나 클러스터 적용은 하지 않았다.
+이전 서버 저장 구현 시점에는 production 15개·local-verify 23개 리소스의 정책/스키마와 잘못된 정책 11개 거부를 확인했다. 당시 Secret 스크립트는 가짜 kubectl로 stdin 주입·출력/명령 인수 미노출·줄바꿈/잘못된 JDBC URL 거부를 검사했다. 이번 리허설에서는 local-verify가 27개로 늘었고, 전용 클러스터에 검증용 Secret을 생성해 실제 배포와 브라우저 검증까지 마쳤다. 운영용 Secret과 홈서버 적용은 남아 있다.
 
 ## 2. 구조와 라우팅
 
@@ -54,7 +54,7 @@ flowchart LR
 | `AI_RATE_LIMIT_PER_MINUTE` / `_PER_DAY` / `AI_GLOBAL_LIMIT_PER_DAY` | `base/web.env` | 5 / 50 / 500 |
 | `OPENGATEWAY_BASE_URL`, `OPENGATEWAY_MODEL` | `base/web.env` | 기존 값 |
 | `SPRING_PROFILES_ACTIVE=prod`, `PLANNET_SESSION_TIMEOUT=8h` | `base/api.env` | 고정 |
-| `PLANNET_STORAGE_ENABLED=true` | `base/api.env` | 운영 필수. local-verify overlay만 false로 변경 |
+| `PLANNET_STORAGE_ENABLED=true` | `base/api.env` | 운영 필수. local-verify도 true이며 전용 DB 사용 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Secret `plannet-api-secret` | Google Console OAuth client |
 | `PLANNET_DB_URL`, `PLANNET_DB_USERNAME`, `PLANNET_DB_PASSWORD` | Secret `plannet-api-secret` | Pod에서 연결 가능한 PostgreSQL JDBC URL·비superuser 앱 역할·비밀번호. 세 값 모두 필수 |
 | `OPENGATEWAY_API_KEY` | Secret `plannet-web-secret` | AI 키 (Web만 받는다) |
@@ -77,7 +77,7 @@ infra/deploy/scripts/validate-manifests.sh --strict production
 
 - `build-images.sh`는 먼저 **현재 작업 트리 스냅샷**(추적 파일 + `.gitignore` 대상이 아닌 새 파일, 미커밋 변경 포함)을 `$TMPDIR/plannet-deploy/src`에 만든다. `.env*`, `k8s/local/`, `node_modules`, `.next`, `build`는 들어가지 않는다. 그다음 스냅샷에서 jar(`--no-daemon`)와 두 이미지를 만들고, Web 이미지에 `.env*`·백업 파일이 없는지 확인한다. 레지스트리 push는 하지 않는다: `docker tag`/`docker push`로 직접 올린다.
 - `PLATFORM`은 배포 노드 아키텍처에 맞춘다(Apple Silicon에서 amd64 노드용이면 `linux/amd64`).
-- `validate-manifests.sh --strict`는 렌더 결과를 검사한다: Secret 미포함, 인증 on·백업 off·prod 프로필, **운영 storage=true 및 DB 세 값의 필수 Secret 참조**, local-verify storage=false 및 DB 참조 제거, 세 공개 값의 일치(`APP_ORIGINS` = `https://PUBLIC_HOST`, callback = origin + `/login/oauth2/code/google`), replica 1·Recreate·ClusterIP, API 경로가 계약의 세 개뿐인지, HTTP는 redirect만인지, NetworkPolicy, placeholder·예제 도메인·태그 미고정. Docker가 있으면 kubeconform으로 Kubernetes·Gateway API 스키마도 확인한다. 렌더 결과는 `$TMPDIR/plannet-deploy/artifacts/rendered-production.yaml`에 남는다.
+- `validate-manifests.sh --strict`는 렌더 결과를 검사한다: Secret 미포함, 인증 on·백업 off·prod 프로필, **운영 storage=true 및 DB 세 값의 필수 Secret 참조**, local-verify storage=true·검증 DB(PVC·ClusterIP·DB 전용 NetworkPolicy·비밀번호 파일 주입), 세 공개 값의 일치(`APP_ORIGINS` = `https://PUBLIC_HOST`, callback = origin + `/login/oauth2/code/google`), replica 1·Recreate·ClusterIP, API 경로가 계약의 세 개뿐인지, HTTP는 redirect만인지, NetworkPolicy, placeholder·예제 도메인·태그 미고정. strict 모드에서는 kubeconform 스키마 검사도 필수이며 Docker가 응답하지 않으면 실패한다(`SKIP_SCHEMA=1`로 명시적 생략 가능). 렌더 결과는 `$TMPDIR/plannet-deploy/artifacts/rendered-production.yaml`에 남는다.
 
 ## 5. Google Console callback 규칙
 
@@ -92,7 +92,9 @@ infra/deploy/scripts/validate-manifests.sh --strict production
 
 1. DNS: 공개 host의 A/AAAA 레코드 → 공인 IP. 공유기는 **443(필수)·80(redirect·ACME용)**만 Gateway 노드로 포워딩한다. 개발 포트 및 DB 5432/15432는 열지 않는다.
 2. Envoy Gateway 설치: `helm install eg oci://docker.io/envoyproxy/gateway-helm --version 1.9.1 -n envoy-gateway-system --create-namespace`
-3. 인증서: cert-manager를 쓰면 Gateway API 지원(`config.enableGatewayAPI: true`)을 켜고, Gateway에 `cert-manager.io/cluster-issuer: <issuer>` 주석을 달아 `plannet-tls`를 발급받는다(HTTP-01이면 80이 열려 있어야 한다). 직접 넣으면 5단계에서 `--tls-cert/--tls-key`를 준다.
+3. 인증서: cert-manager를 쓰면 Gateway API 지원(`config.enableGatewayAPI: true`)을 켜고, Gateway에 `cert-manager.io/cluster-issuer: <issuer>` 주석을 달아 `plannet-tls`를 발급받는다. 직접 넣으면 5단계에서 `--tls-cert/--tls-key`를 준다.
+   - **HTTP-01 주의**: 현재 매니페스트의 `default-deny-ingress` NetworkPolicy는 cert-manager가 namespace `plannet`에 띄우는 임시 acmesolver pod로 가는 트래픽을 허용하지 않는다. 80을 여는 것만으로는 발급·갱신되지 않는다. HTTP-01을 쓰려면 운영자가 실제 cert-manager 설치에 맞춰 Gateway solver(HTTPRoute)와 Envoy proxy → 임시 solver pod·포트만 허용하는 좁은 NetworkPolicy를 직접 구성하고, 발급과 갱신을 모두 확인한다([cert-manager: NetworkPolicy 고려사항](https://cert-manager.io/docs/configuration/acme/http01/#network-policy-considerations)). 이 저장소는 그 정책·issuer를 자동으로 만들지 않는다.
+   - 대안: 사용하는 DNS 제공자에 맞는 DNS-01 issuer를 운영자가 따로 구성하거나(DuckDNS용 DNS-01 webhook은 기본 cert-manager에 포함되지 않으며 이 저장소가 설치하지 않는다), 갱신 수단이 있는 유효한 인증서를 직접 `plannet-tls`로 넣는다.
 4. PostgreSQL: 전용 영구 저장·비superuser 앱 계정·Pod에서 접근 가능한 private endpoint·DB 측 방화벽·별도 장치 백업을 준비한다. 이전 데이터가 있으면 쓰기 중지→dump→새 DB 복원→검증을 마친다. [홈서버 이전 절차](./postgresql-operations.md#홈서버-이전-순서)를 따른다.
 5. Secret: Google·AI·DB 세 값을 준비한 뒤 `infra/deploy/scripts/create-secrets.sh --context <ctx>`로 확인하고 `--apply`한다. DB URL/사용자/비밀번호를 출력하거나 명령행 인수로 넣지 않는다.
 6. `public.env`·이미지 태그 수정 → `validate-manifests.sh --strict production` 통과.
@@ -134,8 +136,8 @@ infra/deploy/scripts/verify-down.sh       # 검증 클러스터만 삭제
 
 - 전용 kind 클러스터와 전용 kubeconfig(`$TMPDIR/plannet-deploy/kubeconfig`)를 쓴다. 기본 kube context, Docker Desktop 클러스터, 다른 세션의 서버(3000, 18080 등)는 건드리지 않는다. 진입점은 `https://plannet.test:19643`, `http://plannet.test:19680`이다. 브라우저는 `--host-resolver-rules`로 `plannet.test`·`mock.test`를 127.0.0.1로 해석한다(`/etc/hosts` 수정 없음).
 - Google 대역(`mock-external`)은 등록된 redirect URI만 받고(아니면 `redirect_uri_mismatch`), token 요청의 client 인증과 redirect_uri를 확인하며, 서명된 id_token을 발급한다. AI 대역은 OpenAI 호환 응답을 준다. 실제 Google·유료 AI는 호출하지 않는다. 대역 자격 증명은 가짜 값이다.
-- `local-verify`는 `PLANNET_STORAGE_ENABLED=false`를 명시하고 DB 세 값의 Secret 참조를 이 overlay에서만 제거한다. 운영 참조를 optional로 낮추지 않는다. 이 환경의 HTTPS/인증 통과는 PostgreSQL migration·서버 저장·백업/복원을 검증하지 않는다. DB 운영 도구 검증은 `python3 infra/storage/verify.py`, 실제 앱 저장은 PostgreSQL을 연결한 API/브라우저 통합 검증으로 수행한다.
-- 산출물: `$TMPDIR/plannet-deploy/artifacts/` — `e2e/report`(HTML), `e2e/results.json`, 스크린샷, `cluster/`(리소스·이벤트·로그), `rendered-*.yaml`, `images.txt`, `source-snapshot.txt`, `public-check-*.txt`.
+- `local-verify`는 운영과 같은 `storage=true`다. 검증 전용 PostgreSQL 18.6 StatefulSet·PVC(`whenScaled/whenDeleted: Retain`)와 별도 앱 역할 `plannet_app`을 만들고, DB 접근은 API·`plannet-db-maintenance` label pod만 허용한다. DB 비밀번호는 `$PLANNET_WORK_DIR/db-secrets/`에서 생성·재사용하며 `verify-down.sh`는 클러스터 삭제가 확인된 뒤에만 지운다. 이 리허설은 PVC·재시작·계정 격리를 검증하지만 홈서버 디스크·백업 위치·운영 Secret은 검증하지 않는다.
+- 산출물: `$TMPDIR/plannet-deploy/artifacts/` — `e2e/report`(HTML), `e2e/results.json`, 스크린샷, `cluster/`(리소스·이벤트·로그), `rendered-*.yaml`, `images.txt`, `source-snapshot.txt`, `source-sha256.json`, `public-check-*.txt`. `PLANNET_ARTIFACTS_DIR`로 실행별 폴더를 지정할 수 있다. 미커밋 소스는 파일 해시로 구분하고, 실제 Pod 이미지 ID까지 대조한다. migration은 현재 소스의 전체 목록과 DB 성공 이력이 일치해야 한다.
 
 | E2E | 확인 내용 |
 |---|---|
@@ -148,6 +150,13 @@ infra/deploy/scripts/verify-down.sh       # 검증 클러스터만 삭제
 | 사용자 흐름 | 로그인 → me 200 → UI AI 응답 → 한도 3회 후 429 → Web 재시작 후 한도 초기화 → CSRF 없는 로그아웃 403 → UI 로그아웃 204 → 쿠키 삭제 → 이전 쿠키로 me·AI 401 |
 | 로그인 거부 | 동의 거부 → 실패 안내, 세션 없음 |
 | API 장애 | API 0 replica: me 503, Web 동작, AI 503 `auth_unavailable`(AI 호출 0), UI 안내. 복구 후 기존 세션 401 → 재로그인 |
+| DB 접근·역할 | 유지보수 label pod만 DB TCP 연결(대조군), 미허용 label·대역 namespace·Web pod 차단. 앱 역할 비superuser, `postgres` DB 접속·역할 생성 거부, API 실제 연결 역할 `plannet_app` |
+| 기기 간 복원·격리 | Daily UI 저장 → 다른 브라우저 복원, 두 번째 계정 조회 불가, 이전 계정 헤더 409, CSRF 없는 쓰기 403 |
+| 로그인 랜딩·계정 표시 | 로그인 전 가상 브라우저 기록·인증/DB 확인 실패 시 작업 공간 미노출. 로그인 후 자동 이전 없음. 이메일 표시·360px 가로 넘침 없음·로그아웃 후 랜딩 |
+| 충돌·응답 유실 | 서버 승자 보존·패자 초안 다운로드·새로고침 후 충돌 유지·명시적 수정 버리기. 응답 유실 직후 새로고침이 같은 요청 ID를 재전송하고 원래 ACK 반환, 버전 1회 증가 |
+| 자동 저장·임시 보관 | 650ms 대기 중 새로고침·전송 중 추가 수정 복구. 미확인 변경분만 sessionStorage에 보관하고 ACK 후 제거. 임시 보관 차단 시에도 DB 저장, 다른 계정 초안 미전송 |
+| 조건부 조회·영수증 | Gateway 경유 ETag·no-store·본문 없는 304, 변경/삭제 후 200. 계정/인증 오류는 304 불가. 영수증 본문 중복 없음, 수정·삭제 후 과거 요청의 원래 ACK 복원, ID에 다른 내용 재사용 시 409 |
+| DB·API 재시작 | DB 0 replica 중 오류·초안 보존·미저장 로그아웃 차단 → 복구 후 재시도 저장, PVC 유지. API 재시작 후 재로그인·같은 사용자·기록 유지, 저장 완료 후 로그아웃 성공. 실패해도 replica 복구 |
 
 ## 9. 발견한 문제와 후속 반영 (2026-09-26 갱신)
 
@@ -167,12 +176,12 @@ infra/deploy/scripts/verify-down.sh       # 검증 클러스터만 삭제
 
 ## 10. 남은 외부 결정과 실행
 
-첫 공개는 계정별 서버 저장으로 확정됐고 공개 주소는 `plannet-lab.duckdns.org`다. DB는 **PostgreSQL, 현재 로컬 컴퓨터에서 실행 후 홈서버로 이전**으로 확정했다. 홈서버/클러스터의 실제 배치·private DB endpoint·방화벽·영구 디스크·별도 장치 백업 위치는 배포 시 확정한다. 대상과 접근 권한이 정해지면 에이전트가 설정 준비·검증·브라우저 확인을 진행하며, 계정 로그인·추가 인증 등 사용자만 처리할 수 있는 단계에서만 개입을 요청한다. 실제 공개 적용 전에는 대상과 적용 내용을 확인할 수 있게 준비한다.
+첫 공개는 계정별 서버 저장으로 확정됐고 공개 주소는 `plannet.mhd-mhd.duckdns.org`다(이 주소의 Google callback은 2026-10-05 등록 완료, 실제 로그인은 미검증). DB는 **PostgreSQL, 현재 로컬 컴퓨터에서 실행 후 홈서버로 이전**으로 확정했다. 홈서버/클러스터의 실제 배치·private DB endpoint·방화벽·영구 디스크·별도 장치 백업 위치는 배포 시 확정한다. 대상과 접근 권한이 정해지면 에이전트가 설정 준비·검증·브라우저 확인을 진행하며, 계정 로그인·추가 인증 등 사용자만 처리할 수 있는 단계에서만 개입을 요청한다. 실제 공개 적용 전에는 대상과 적용 내용을 확인할 수 있게 준비한다.
 
 | 작업 | 필요 이유 |
 |---|---|
 | DuckDNS 대상 운영 장비 확인·주소 갱신 방식 설정 | 호스트와 DNS 조회는 확인. 영구 운영할 서버인지 확인 필요 |
-| Google Console(개인 프로젝트의 Plannet OAuth client)에 `https://DOMAIN/login/oauth2/code/google` 추가 | 없으면 `redirect_uri_mismatch` |
+| ~~Google Console(개인 프로젝트의 Plannet OAuth client)에 `https://plannet.mhd-mhd.duckdns.org/login/oauth2/code/google` 추가~~ **완료(2026-10-05)** | 없으면 `redirect_uri_mismatch`. 실제 로그인은 배포 후 확인 |
 | 운영 클러스터 선택, Envoy Gateway·(선택) cert-manager 설치, pod CIDR 확인 | `PLANNET_TRUSTED_PROXIES`, 인증서 |
 | 홈서버 PostgreSQL의 private endpoint·방화벽·영구 저장·별도 장치 백업 확정 | Pod DB 연결, 데이터 영속성, 장애 복구. localhost 호스트용 URL 그대로 적용 금지 |
 | 공유기 443/80 포트포워딩 | 외부 접근 |

@@ -1,0 +1,44 @@
+# 배포 러너(GitHub Actions self-hosted, land namespace 의 ServiceAccount `deployer`)가
+# plannet namespace 에만 배포할 수 있게 하는 권한.
+#
+# 러너는 클러스터 전체 권한을 갖지 않는다. 그래서 러너가 할 수 없는 일은 bootstrap.sh 가 사람 손으로 한다:
+#   namespace 생성 · 이 권한 부여 · Secret 주입 · 와일드카드 인증서 복제 허용
+# Secret 은 일부러 넣지 않는다. 러너는 Secret 을 읽지도 쓰지도 못한다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployer
+  namespace: plannet
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"] # rollout status 가 읽는다
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"] # StatefulSet 이 만든 것을 확인만 한다
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"] # 배포 확인용 임시 pod·로그
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: plannet
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: land # 러너 pod 가 쓰는 ServiceAccount (apps/land-buddy/deploy/k8s/runner/runner.yaml)
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployer

@@ -61,6 +61,8 @@ test('로그인 → 보호 API·AI 사용 → 호출 한도 → CSRF 로그아�
   expect((await pageFetch(page, '/api/v1/me')).status).toBe(200);
 
   // UI 로그아웃: /api/v1/csrf → POST /api/v1/logout (토큰 헤더) → 204
+  // AI 응답이 그리드에 반영된 변경분이 DB에 저장된 뒤 이동한다 (미저장 상태면 이탈 확인 창이 뜬다)
+  await expect(page.getByTestId('storage-sync-status')).toHaveAttribute('data-phase', 'saved');
   await page.goto('/'); // AI 패널을 닫고 헤더의 로그아웃 버튼으로 돌아간다
   const staleSession = cookie!.value;
   const logoutResponse = page.waitForResponse((res) => res.url().endsWith('/api/v1/logout') && res.request().method() === 'POST');
@@ -107,10 +109,12 @@ test('API 장애 시 보호 기능이 차단되고, 재시작 후에는 세션�
     expect(chat.json).toMatchObject({ error: 'auth_unavailable' });
     expect((await mockStats()).aiCalls).toBe(before.aiCalls);
 
+    // 로그인 확인에 실패하면 랜딩의 다시 시도만 보이고 플래너·AI 진입점은 열리지 않는다
     await page.reload();
     await expect(page.getByRole('status')).toContainText('로그인 상태를 확인할 수 없어요');
-    await openMandalartAssistant(page);
-    await expect(page.getByText('로그인 상태를 확인할 수 없어 AI 어시스턴트를 쓸 수 없어요.')).toBeVisible();
+    await expect(page.getByRole('button', { name: '다시 시도' })).toBeVisible();
+    await expect(page.locator('button[title="AI 어시스턴트"]')).toHaveCount(0);
+    await expect(page.locator('aside')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('03-api-outage.png') });
   } finally {
     scaleApi(1);

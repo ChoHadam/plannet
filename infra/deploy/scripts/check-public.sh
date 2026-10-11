@@ -65,10 +65,10 @@ expect "미인증 /api/chat" "$(request -X POST -H 'content-type: application/js
 
 # 5. 로그인 시작: callback 주소·세션 쿠키
 expect "로그인 시작 redirect" "$(request "$origin/oauth2/authorization/google")" 302
-location="$(header location)"
+location="$(header location || true)"
 redirect_uri="$(python3 -c 'import sys,urllib.parse as u; q=u.parse_qs(u.urlparse(sys.argv[1]).query); print(q.get("redirect_uri",[""])[0])' "$location")"
 expect "redirect_uri = 공개 callback" "$redirect_uri" "$callback"
-cookie="$(grep -i '^set-cookie: PLANNET_SESSION=' "$tmp/headers" | tr -d '\r')"
+cookie="$(grep -i '^set-cookie: PLANNET_SESSION=' "$tmp/headers" | tr -d '\r' || true)"
 for attr in Secure HttpOnly "SameSite=Lax" "Path=/"; do
   [[ "$cookie" == *"$attr"* ]] && pass "세션 쿠키 $attr" || bad "세션 쿠키 $attr 없음"
 done

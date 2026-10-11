@@ -2,7 +2,7 @@
 
 로컬 컴퓨터와 홈서버에서 같은 PostgreSQL 18 구성을 사용한다. 필요한 도구는 Docker Engine/Desktop + Compose v2 이상, Bash, Python 3.9 이상이다. `psql`과 PostgreSQL을 호스트에 설치할 필요는 없다.
 
-저장소 루트에서 실행:
+Plannet 프로젝트 루트(services 모노레포에서는 `apps/plannet`)에서 실행:
 
 ```sh
 ./infra/storage/db.sh init

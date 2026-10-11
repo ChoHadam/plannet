@@ -1,6 +1,6 @@
 # PostgreSQL 로컬 실행과 홈서버 이전
 
-2026-09-26 기준 Plannet의 서버 저장소는 PostgreSQL이다. 초기에는 현재 컴퓨터에서 실행하고, 홈서버를 준비하면 논리 백업으로 이전한다. 공개 웹 주소는 `https://plannet-lab.duckdns.org`이며 데이터베이스 주소로 사용하지 않는다. 저장 API 계약은 [planner-storage-v1](contracts/planner-storage-v1.md), 공개 인증·라우팅 정책은 [배포 준비 문서](deployment-readiness.md)를 따른다.
+2026-09-26 기준 Plannet의 서버 저장소는 PostgreSQL이다. 초기에는 현재 컴퓨터에서 실행하고, 홈서버를 준비하면 논리 백업으로 이전한다. 공개 웹 주소는 `https://plannet.mhd-mhd.duckdns.org`이며(이전 주소 `plannet-lab.duckdns.org`는 Google callback 등록만 유지) 데이터베이스 주소로 사용하지 않는다. 저장 API 계약은 [planner-storage-v1](contracts/planner-storage-v1.md), 공개 인증·라우팅 정책은 [배포 준비 문서](deployment-readiness.md)를 따른다.
 
 ## 저장 구성
 
@@ -24,7 +24,7 @@ Compose의 파일 secret은 호스트 파일의 권한과 UID를 유지할 수 �
 
 ## 처음 실행
 
-필수 도구: Docker Engine/Desktop와 Compose v2 이상, Bash, Python 3.9 이상. Compose의 `up --wait` 지원 버전이 필요하다. 모든 명령은 저장소 루트에서 실행한다.
+필수 도구: Docker Engine/Desktop와 Compose v2 이상, Bash, Python 3.9 이상. Compose의 `up --wait` 지원 버전이 필요하다. 모든 명령은 Plannet 프로젝트 루트(services 모노레포에서는 `apps/plannet`)에서 실행한다.
 
 ```sh
 ./infra/storage/db.sh init
@@ -89,7 +89,7 @@ PLANNET_DB_PASSWORD=<generated locally; never commit>
 3. **쓰기 정지.** 사용자 편집 저장이 끝나게 한 뒤 로컬 API와 다른 DB 쓰기 프로세스를 중지한다. PostgreSQL은 덤프를 위해 계속 실행한다. 점검 동안 브라우저가 새 데이터를 저장하지 않도록 서비스 접근을 막는다. 그 후 `backup --output <새 final 파일>`을 실행한다. 실행 중 덤프도 일관되지만 덤프 이후 새 쓰기는 최종본에 들어가지 않으므로 cutover 전에 쓰기 중지가 필요하다.
 4. **안전한 전달.** 사설망/VPN/SSH의 `scp` 등으로 final dump를 홈서버의 private 디렉터리에 전달한다. 다른 장치의 암호화된 백업 사본도 보존한다. 송신·수신 파일의 SHA-256을 비교한다. 예: `python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' /private/path/plannet-final.dump`.
 5. **새 최종 DB로 복원.** 홈서버에서 `restore /private/path/plannet-final.dump --target plannet_live_20260926`을 실행한다. 이미 존재하는 DB를 덮어쓰지 않는다. 같은 앱 버전을 연결해 위 복원 검증을 반복한 뒤 새 `api-env --database plannet_live_20260926`을 만든다.
-6. **연결과 공개 전환.** API에 홈서버에서 생성한 앱 계정과 복원 대상 JDBC URL을 전달하고 `PLANNET_STORAGE_ENABLED=true`를 명시한다. HTTPS gateway와 OAuth redirect origin을 `https://plannet-lab.duckdns.org`에 맞춘 뒤 계정별 저장·다른 브라우저 재접속·재시작 영속성을 확인한다. 이후 웹 트래픽을 홈서버로 전환한다. 공유기에서 공개하는 것은 필요한 웹 포트뿐이다. PostgreSQL의 `5432`와 호스트 `15432`는 포워딩하지 않는다.
+6. **연결과 공개 전환.** API에 홈서버에서 생성한 앱 계정과 복원 대상 JDBC URL을 전달하고 `PLANNET_STORAGE_ENABLED=true`를 명시한다. HTTPS gateway와 OAuth redirect origin을 `https://plannet.mhd-mhd.duckdns.org`에 맞춘 뒤 계정별 저장·다른 브라우저 재접속·재시작 영속성을 확인한다. 이후 웹 트래픽을 홈서버로 전환한다. 공유기에서 공개하는 것은 필요한 웹 포트뿐이다. PostgreSQL의 `5432`와 호스트 `15432`는 포워딩하지 않는다.
 7. **확인과 되돌리기.** 원본 DB와 final dump는 확인 기간 동안 보존하고 원본의 쓰기는 계속 막아 두어 두 DB가 따로 변경되지 않도록 한다. 홈서버에 새 쓰기가 들어오기 전에는 연결을 원본으로 되돌릴 수 있다. 새 쓰기를 받은 뒤라면 먼저 홈서버 쓰기를 중지하고 그 DB를 다시 백업·검증하여 반영해야 한다. 이전 원본으로 즉시 되돌리면 새 데이터가 유실된다.
 
 ### API 실행 위치별 주소

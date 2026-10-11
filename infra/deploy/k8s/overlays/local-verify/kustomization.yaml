@@ -1,6 +1,6 @@
 # 로컬 검증 전용 overlay. 실제 Spring·Web 이미지에 Google·AI 대역을 연결한다.
 # scripts/verify-local.sh 가 전용 kind 클러스터에 적용한다. 운영 클러스터에 적용하지 않는다.
-# 인증/HTTPS/라우팅 전용으로 storage=false. 실제 PostgreSQL 저장 검증은 별도로 수행한다.
+# 운영과 같은 storage=true. 검증 전용 PostgreSQL/PVC는 이 클러스터 안에서만 사용한다.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -8,6 +8,7 @@ resources:
   - public
   - gatewayclass.yaml
   - mocks.yaml
+  - postgres.yaml
 components:
   - ../../components/public-host
 images:
@@ -16,6 +17,10 @@ images:
   - name: plannet-api
     newTag: verify
 configMapGenerator:
+  - name: plannet-db-init
+    namespace: plannet
+    files:
+      - postgres-init.sh
   - name: mock-external-script
     namespace: plannet-mocks
     files:
@@ -40,30 +45,6 @@ configMapGenerator:
       - PLANNET_AUTH_GOOGLE_PROVIDER_JWKSETURI=http://mock-external.plannet-mocks.svc:8080/jwks
       - PLANNET_AUTH_GOOGLE_PROVIDER_USERINFOURI=http://mock-external.plannet-mocks.svc:8080/userinfo
 patches:
-  - target: { kind: ConfigMap, name: plannet-api-config }
-    patch: |-
-      - op: replace
-        path: /data/PLANNET_STORAGE_ENABLED
-        value: "false"
-  # DB 없는 인증 검증에만 DB Secret 참조를 제거한다. 운영 Secret을 optional로 바꾸지 않는다.
-  - target: { kind: Deployment, name: plannet-api }
-    patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: plannet-api
-      spec:
-        template:
-          spec:
-            containers:
-              - name: api
-                env:
-                  - name: PLANNET_DB_URL
-                    $patch: delete
-                  - name: PLANNET_DB_USERNAME
-                    $patch: delete
-                  - name: PLANNET_DB_PASSWORD
-                    $patch: delete
   - target: { kind: Deployment, name: plannet-api }
     patch: |-
       - op: add

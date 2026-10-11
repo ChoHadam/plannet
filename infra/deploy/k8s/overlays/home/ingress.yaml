@@ -1,0 +1,45 @@
+# 홈 클러스터 진입점. Gateway API/Envoy Gateway 대신 이미 깔려 있는 ingress-nginx 를 쓴다
+# (80/443 을 이미 이 컨트롤러가 잡고 있고, land·eng 서비스도 같은 방식이다).
+#
+# 라우팅은 base/gateway.yaml 의 계약과 같다 (docs/contracts/auth-v1.md §1):
+#   /api/v1/**, /oauth2/**, /login/oauth2/**  → Spring API
+#   그 외 전부 (/api/chat, /api/backup, /api/runtime-config 포함) → Next.js Web
+# pathType: Prefix 는 경로 요소 단위라 /api/v1x 는 Web 으로 간다 (Gateway PathPrefix 와 동일).
+#
+# HTTPS 로 올려 주는 값들:
+#   - TLS: cert-manager 가 발급한 *.mhd-mhd.duckdns.org 와일드카드 (secret 은 reflector 가 복제)
+#   - HTTP→HTTPS 301, HSTS: ingress-nginx 기본값
+#   - 나머지 보안 헤더는 Next.js 가 직접 붙인다 (apps/web/next.config.ts)
+#   - X-Forwarded-For/Proto/Host 는 nginx 가 실제 연결 기준으로 다시 쓰므로 클라이언트 값이 통하지 않는다
+#
+# HOST_PLACEHOLDER 는 overlay 의 public/public.env PUBLIC_HOST 로 치환된다 (kustomization.yaml replacements).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plannet
+  annotations:
+    # /api/chat 은 외부 AI 응답을 20초까지 기다린다. 기본 60초로도 되지만 Gateway 설정(30s)과 맞춘다.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - HOST_PLACEHOLDER
+      secretName: mhd-mhd-wildcard-tls
+  rules:
+    - host: HOST_PLACEHOLDER
+      http:
+        paths:
+          - path: /api/v1
+            pathType: Prefix
+            backend: { service: { name: plannet-api, port: { number: 8080 } } }
+          - path: /oauth2
+            pathType: Prefix
+            backend: { service: { name: plannet-api, port: { number: 8080 } } }
+          - path: /login/oauth2
+            pathType: Prefix
+            backend: { service: { name: plannet-api, port: { number: 8080 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: plannet-web, port: { number: 3000 } } }

@@ -1,0 +1,30 @@
+# API 이미지를 jar 빌드까지 한 번에 만든다 (빌드 머신에 Java 가 없어도 된다).
+#
+# apps/api/Dockerfile 은 미리 만들어 둔 jar 를 담기만 한다 — infra/deploy/scripts/build-images.sh 가
+# 호스트의 Java 로 bootJar 를 돌리는 전제다. 클러스터 안에서 도는 배포 러너에는 Java 가 없고,
+# 러너 작업 디렉터리를 도커에 바인드 마운트할 수도 없어서(러너 pod 와 도커 데몬의 경로가 다르다)
+# 여기서 빌드 단계를 함께 둔다.
+#
+# 런타임 단계는 apps/api/Dockerfile 과 같은 베이스·UID(10001)를 쓴다. 한쪽을 바꾸면 다른 쪽도 맞춘다.
+#   docker build -f infra/deploy/home/Dockerfile.api -t plannet-api:local .    # context: apps/plannet
+
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /src
+# 의존성만 먼저 받아 둔다. 소스만 바뀐 빌드는 이 레이어를 재사용한다.
+COPY gradlew settings.gradle.kts build.gradle.kts ./
+COPY gradle ./gradle
+COPY apps/api/build.gradle.kts ./apps/api/build.gradle.kts
+RUN ./gradlew --no-daemon --console=plain :apps:api:dependencies --configuration runtimeClasspath > /dev/null
+COPY apps/api/src ./apps/api/src
+RUN ./gradlew --no-daemon --console=plain :apps:api:bootJar
+
+FROM eclipse-temurin:21-jre
+# UID/GID 는 infra/deploy/k8s/base/api.yaml 의 runAsUser/runAsGroup 과 같아야 한다.
+RUN groupadd --system --gid 10001 plannet \
+ && useradd --system --uid 10001 --gid plannet --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plannet
+WORKDIR /app
+COPY --from=build /src/apps/api/build/libs/api-0.1.0-SNAPSHOT.jar app.jar
+EXPOSE 8080
+# 숫자 UID 로 지정해야 Kubernetes runAsNonRoot 가 이미지 사용자를 검증할 수 있다.
+USER 10001:10001
+ENTRYPOINT ["java", "-jar", "app.jar"]

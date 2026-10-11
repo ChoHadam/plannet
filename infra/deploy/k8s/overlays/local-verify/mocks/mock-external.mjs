@@ -24,6 +24,7 @@ const PROFILE = {
   name: '검증 사용자',
   email: 'verify-user@example.test',
 };
+const SECOND_PROFILE = { sub: 'verify-sub-0002', name: '두 번째 검증 사용자', email: 'verify-second@example.test' };
 const AI_ACTIONS = ['아침 스트레칭', '주3회 헬스장', '계단 이용하기', '만보 걷기', '홈트 루틴', '주말 등산', '수영 배우기', '운동 기록'];
 
 function required(name) {
@@ -37,7 +38,7 @@ const KEY_ID = crypto.randomUUID();
 const JWKS = { keys: [{ ...publicKey.export({ format: 'jwk' }), kid: KEY_ID, alg: 'RS256', use: 'sig' }] };
 
 const grants = new Map(); // code → { nonce, redirectUri }
-const accessTokens = new Set();
+const accessTokens = new Map();
 let stats;
 function resetStats() {
   stats = { authorizeRequests: 0, redirectMismatches: 0, tokensIssued: 0, tokenRejected: 0, aiCalls: 0, lastAuthorize: null };
@@ -46,18 +47,18 @@ resetStats();
 
 const b64url = (input) => Buffer.from(input).toString('base64url');
 
-function signIdToken(nonce) {
+function signIdToken(nonce, profile) {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT', kid: KEY_ID };
   const claims = {
     iss: ISSUER,
     aud: CLIENT_ID,
-    sub: PROFILE.sub,
+    sub: profile.sub,
     iat: now,
     exp: now + 300,
     nonce,
-    name: PROFILE.name,
-    email: PROFILE.email,
+    name: profile.name,
+    email: profile.email,
     email_verified: true,
   };
   const body = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(claims))}`;
@@ -104,6 +105,7 @@ function consentPage(params) {
 <p>계정: ${escapeHtml(PROFILE.name)} (${escapeHtml(PROFILE.email)})</p>
 <form method="post" action="/authorize/decision">${hidden}
 <button type="submit" name="decision" value="approve">테스트 계정으로 계속</button>
+<button type="submit" name="decision" value="approve-second">두 번째 계정으로 계속</button>
 <button type="submit" name="decision" value="deny">거부</button>
 </form></main></body></html>`;
 }
@@ -180,9 +182,10 @@ async function handle(req, res) {
     const redirectUri = form.get('redirect_uri') ?? '';
     if (!ALLOWED_REDIRECT_URIS.includes(redirectUri)) return send(res, 400, '<h1>Error 400: redirect_uri_mismatch</h1>');
     const state = form.get('state') ?? '';
-    if (form.get('decision') !== 'approve') return redirectTo(res, redirectUri, { error: 'access_denied', state });
+    const decision = form.get('decision');
+    if (!['approve', 'approve-second'].includes(decision)) return redirectTo(res, redirectUri, { error: 'access_denied', state });
     const code = crypto.randomUUID();
-    grants.set(code, { nonce: form.get('nonce') ?? '', redirectUri });
+    grants.set(code, { nonce: form.get('nonce') ?? '', redirectUri, profile: decision === 'approve-second' ? SECOND_PROFILE : PROFILE });
     return redirectTo(res, redirectUri, { code, state });
   }
 
@@ -196,13 +199,13 @@ async function handle(req, res) {
     }
     stats.tokensIssued += 1;
     const accessToken = crypto.randomUUID();
-    accessTokens.add(accessToken);
+    accessTokens.set(accessToken, grant.profile);
     return send(res, 200, {
       access_token: accessToken,
       token_type: 'Bearer',
       expires_in: 3600,
       scope: 'openid profile email',
-      id_token: signIdToken(grant.nonce),
+      id_token: signIdToken(grant.nonce, grant.profile),
     });
   }
 
@@ -210,8 +213,9 @@ async function handle(req, res) {
 
   if (pathname === '/userinfo') {
     const token = req.headers.authorization?.replace(/^Bearer /, '');
-    if (!token || !accessTokens.has(token)) return send(res, 401, { error: 'invalid_token' });
-    return send(res, 200, { sub: PROFILE.sub, name: PROFILE.name, email: PROFILE.email, email_verified: true });
+    const profile = accessTokens.get(token);
+    if (!profile) return send(res, 401, { error: 'invalid_token' });
+    return send(res, 200, { ...profile, email_verified: true });
   }
 
   if (pathname === '/v1/chat/completions' && req.method === 'POST') {
